@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "som-core",
+    "som-parser",
+    "som-lexer",
+    "som-compiler",
+]
