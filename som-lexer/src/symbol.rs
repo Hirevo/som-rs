@@ -29,5 +29,6 @@ pub enum Symbol {
     Double(f64),
     Str(String),
     Identifier(String),
+    Comment(String),
     Whitespace,
 }

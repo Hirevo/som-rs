@@ -1,5 +1,5 @@
 [package]
-name = "som-compiler"
+name = "som-interpreter"
 version = "0.1.0"
 authors = ["Nicolas Polomack <nmp21@kent.ac.uk>"]
 edition = "2018"

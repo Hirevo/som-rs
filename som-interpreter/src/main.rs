@@ -1,8 +1,8 @@
 use som_lexer::Lexer;
 
 static CODE: &str = r#"
-Fibonacci = (
-    fib: n = (
+Fibonacci = (          "defines a subclass of Object"
+    fib: n = (         "defines the fib method with the argument n"
         ^ n <= 1
             ifTrue:  1
             ifFalse: [ self fib: (n - 1) + (self fib: (n - 2)) ]

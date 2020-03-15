@@ -3,16 +3,30 @@ use crate::symbol::Symbol;
 /// The lexer for the Simple Object Machine.
 pub struct Lexer {
     pub(crate) chars: Vec<char>,
+    pub(crate) skip_comments: bool,
+    pub(crate) skip_whitespace: bool,
 }
 
 impl Lexer {
-    pub const SEPARATOR: &'static str = "----";
-    pub const PRIMITIVE: &'static str = "primitive";
+    const SEPARATOR: &'static str = "----";
+    const PRIMITIVE: &'static str = "primitive";
 
     pub fn new(input: &str) -> Lexer {
         Lexer {
             chars: input.chars().rev().collect(),
+            skip_comments: false,
+            skip_whitespace: false,
         }
+    }
+
+    pub fn skip_whitespace(mut self, value: bool) -> Lexer {
+        self.skip_whitespace = value;
+        self
+    }
+
+    pub fn skip_comments(mut self, value: bool) -> Lexer {
+        self.skip_comments = value;
+        self
     }
 
     pub fn text(self) -> String {
@@ -35,6 +49,32 @@ impl Lexer {
                         'r' => '\r',
                         'f' => '\x12',
                         '\'' => '\'',
+                        '\\' => '\\',
+                        _ => return None,
+                    };
+                    output.push(ch);
+                }
+                ch => output.push(ch),
+            }
+        }
+    }
+
+    fn lex_comment(&mut self) -> Option<Symbol> {
+        let mut output = String::new();
+        self.chars.pop()?;
+        loop {
+            let ch = self.chars.pop()?;
+            match ch {
+                '"' => break Some(Symbol::Comment(output)),
+                '\\' => {
+                    let ch = self.chars.pop()?;
+                    let ch = match ch {
+                        't' => '\t',
+                        'b' => '\x08',
+                        'n' => '\n',
+                        'r' => '\r',
+                        'f' => '\x12',
+                        '"' => '"',
                         '\\' => '\\',
                         _ => return None,
                     };
@@ -86,9 +126,14 @@ impl Iterator for Lexer {
                 for _ in 0..count {
                     self.chars.pop()?;
                 }
-                Some(Symbol::Whitespace)
+                if self.skip_whitespace {
+                    self.next()
+                } else {
+                    Some(Symbol::Whitespace)
+                }
             }
             '\'' => self.lex_string(),
+            '"' => self.lex_comment(),
             '[' => {
                 self.chars.pop()?;
                 Some(Symbol::NewBlock)
@@ -131,7 +176,7 @@ impl Iterator for Lexer {
             }
             ':' => {
                 iter.next()?;
-                if matches!(iter.peek().copied(), Some('=')) {
+                if let Some('=') = iter.peek().copied() {
                     self.chars.pop()?;
                     self.chars.pop()?;
                     Some(Symbol::Assign)
@@ -165,7 +210,7 @@ impl Iterator for Lexer {
                     let iter = self.chars.iter().rev().copied();
                     let int_part_len = iter.clone().take_while(|c| c.is_digit(10)).count();
                     let mut dec_iter = iter.clone().skip(int_part_len).peekable();
-                    if matches!(dec_iter.peek().copied(), Some('.')) {
+                    if let Some('.') = dec_iter.peek().copied() {
                         dec_iter.next()?;
                         let dec_part_len = dec_iter.clone().take_while(|c| c.is_digit(10)).count();
                         let total_len = int_part_len + dec_part_len + 1;
