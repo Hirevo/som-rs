@@ -1,0 +1,12 @@
+[package]
+name = "som-parser-symbols"
+version = "0.1.0"
+description = "A parser for the Simple Object Machine"
+authors = ["Nicolas Polomack <nmp21@kent.ac.uk>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+# internal
+som-core = { path = "../som-core", version = "0.1.0" }
+som-lexer = { path = "../som-lexer", version = "0.1.0" }

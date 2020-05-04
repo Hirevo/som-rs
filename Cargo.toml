@@ -1,7 +1,8 @@
 [workspace]
 members = [
     "som-core",
-    "som-parser",
-    "som-lexer",
     "som-interpreter",
+    "som-lexer",
+    "som-parser-text",
+    "som-parser-symbols",
 ]

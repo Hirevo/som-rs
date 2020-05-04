@@ -1,7 +1,9 @@
 [package]
 name = "som-core"
 version = "0.1.0"
+description = "Common types about the Simple Object Machine"
 authors = ["Nicolas Polomack <nmp21@kent.ac.uk>"]
 edition = "2018"
+publish = false
 
 [dependencies]

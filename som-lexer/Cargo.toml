@@ -1,5 +1,9 @@
 [package]
 name = "som-lexer"
 version = "0.1.0"
+description = "A lexical analyser for the Simple Object Machine"
 authors = ["Nicolas Polomack <nmp21@kent.ac.uk>"]
 edition = "2018"
+publish = false
+
+[dependencies]
