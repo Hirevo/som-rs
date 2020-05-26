@@ -26,6 +26,30 @@ pub struct ClassDef {
     pub static_methods: Vec<MethodDef>,
 }
 
+/// Represents a method's kind.
+///
+/// Example:
+/// ```text
+/// "unary method"       increment = ( self increment: 1 )
+/// "positional method"  increment: value = ( total := total + value )
+/// "operator method"    + value = ( self increment: value )
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub enum MethodKind {
+    /// A unary method definition.
+    Unary,
+    /// A positional method definition (keyword-based).
+    Positional {
+        /// The binding names for the method's parameters.
+        parameters: Vec<String>,
+    },
+    /// A binary operator method definiton.
+    Operator {
+        /// The binding name for the right-hand side.
+        rhs: String,
+    },
+}
+
 /// Represents a method definition.
 ///
 /// Example:
@@ -35,32 +59,13 @@ pub struct ClassDef {
 /// "operator method"    + value = ( self increment: value )
 /// ```
 #[derive(Debug, Clone, PartialEq)]
-pub enum MethodDef {
-    /// A unary method definition.
-    Unary {
-        /// The method's signature (eg. `println`).
-        signature: String,
-        /// The method's body.
-        body: MethodBody,
-    },
-    /// A positional method definition (keyword-based).
-    Positional {
-        /// The method's signature (eg. `at:put:`).
-        signature: String,
-        /// The binding names for the method's parameters.
-        parameters: Vec<String>,
-        /// The method's body.
-        body: MethodBody,
-    },
-    /// A binary operator method definiton.
-    Operator {
-        /// The method's operator (eg. `<>`).
-        op: String,
-        /// The binding name for the right-hand side.
-        rhs: String,
-        /// The method's body.
-        body: MethodBody,
-    },
+pub struct MethodDef {
+    /// The method's kind.
+    pub kind: MethodKind,
+    /// The method's signature (eg. `println`, `at:put:` or `==`).
+    pub signature: String,
+    /// The method's body.
+    pub body: MethodBody,
 }
 
 /// Represents a method's body.

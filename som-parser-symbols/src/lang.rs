@@ -334,7 +334,11 @@ pub fn unary_method_def<'a>() -> impl Parser<'a, MethodDef> {
         let (_, input) = exact(Symbol::Equal).parse(input)?;
         let (body, input) = primitive().or(method_body()).parse(input)?;
 
-        let method_def = MethodDef::Unary { signature, body };
+        let method_def = MethodDef {
+            kind: MethodKind::Unary,
+            signature,
+            body,
+        };
         Some((method_def, input))
     }
 }
@@ -356,9 +360,9 @@ pub fn positional_method_def<'a>() -> impl Parser<'a, MethodDef> {
             signature.push_str(keyword.as_str());
             parameters.push(value);
         }
-        let method_def = MethodDef::Positional {
+        let method_def = MethodDef {
+            kind: MethodKind::Positional { parameters },
             signature,
-            parameters,
             body,
         };
         Some((method_def, input))
@@ -367,12 +371,16 @@ pub fn positional_method_def<'a>() -> impl Parser<'a, MethodDef> {
 
 pub fn operator_method_def<'a>() -> impl Parser<'a, MethodDef> {
     move |input: &'a [Symbol]| {
-        let (op, input) = operator().parse(input)?;
+        let (signature, input) = operator().parse(input)?;
         let (rhs, input) = identifier().parse(input)?;
         let (_, input) = exact(Symbol::Equal).parse(input)?;
         let (body, input) = primitive().or(method_body()).parse(input)?;
 
-        let method_def = MethodDef::Operator { op, rhs, body };
+        let method_def = MethodDef {
+            kind: MethodKind::Operator { rhs },
+            signature,
+            body,
+        };
         Some((method_def, input))
     }
 }
