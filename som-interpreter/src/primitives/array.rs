@@ -19,7 +19,10 @@ fn at(universe: &mut Universe, args: Vec<Value>) -> Value {
 
 // TODO: properly convert `i64` (from `Value::Integer`) to `usize` (using `usize::try_from`)
 fn new(universe: &mut Universe, args: Vec<Value>) -> Value {
-    let arg = args.into_iter().next().expect("no arguments to 'Array>>#new:'");
+    let arg = args
+        .into_iter()
+        .next()
+        .expect("no arguments to 'Array>>#new:'");
     let length = match arg {
         Value::Integer(value) => value,
         _ => panic!("'Array>>#new:': invalid length type"),

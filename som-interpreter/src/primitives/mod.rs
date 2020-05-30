@@ -1,7 +1,7 @@
 pub mod array;
-pub mod object;
 pub mod double;
 pub mod integer;
+pub mod object;
 
 use crate::universe::Universe;
 use crate::value::Value;

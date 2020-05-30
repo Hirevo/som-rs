@@ -46,7 +46,6 @@ struct Options {
     // /// enable disassembling
     // #[structopt(short = "d")]
     // disassembling: bool,
-
     /// Enable verbose output (with timing information).
     #[structopt(short = "v")]
     verbose: bool,
