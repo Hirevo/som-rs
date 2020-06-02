@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 /// Defines a parser.
 ///
 /// It is basically a function that takes an input and returns a parsed result along with the rest of input (which can be parsed further).
@@ -21,6 +23,33 @@ pub trait Parser<'a, T>: Sized {
         Or {
             p1: self,
             p2: parser,
+        }
+    }
+
+    /// Maps a function over the output value of the parser.
+    fn map<F: Fn(T) -> U, U>(self, func: F) -> Map<Self, F, T> {
+        Map {
+            parser: self,
+            func,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Sequences two parsers, one after the other, but discards the output of the second one.
+    fn and_left<P: Parser<'a, U>, U>(self, parser: P) -> AndLeft<Self, P, U> {
+        AndLeft {
+            p1: self,
+            p2: parser,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Sequences two parsers, one after the other, but discards the output of the first one.
+    fn and_right<P: Parser<'a, U>, U>(self, parser: P) -> AndRight<Self, P, T> {
+        AndRight {
+            p1: self,
+            p2: parser,
+            _phantom: PhantomData,
         }
     }
 }
@@ -56,6 +85,62 @@ where
 {
     fn parse(&self, input: &'a [char]) -> Option<(T, &'a [char])> {
         self.p1.parse(input).or_else(|| self.p2.parse(input))
+    }
+}
+
+/// Maps a function over the output value of the parser.
+pub struct Map<P, F, T> {
+    parser: P,
+    func: F,
+    _phantom: PhantomData<T>,
+}
+
+impl<'a, P, T, F, U> Parser<'a, U> for Map<P, F, T>
+where
+    P: Parser<'a, T>,
+    F: Fn(T) -> U,
+{
+    fn parse(&self, input: &'a [char]) -> Option<(U, &'a [char])> {
+        let (value, input) = self.parser.parse(input)?;
+        Some(((self.func)(value), input))
+    }
+}
+
+/// Sequences two parsers, one after the other, but discards the output of the second one.
+pub struct AndLeft<A, B, U> {
+    p1: A,
+    p2: B,
+    _phantom: PhantomData<U>,
+}
+
+impl<'a, A, B, T, U> Parser<'a, T> for AndLeft<A, B, U>
+where
+    A: Parser<'a, T>,
+    B: Parser<'a, U>,
+{
+    fn parse(&self, input: &'a [char]) -> Option<(T, &'a [char])> {
+        let (value, input) = self.p1.parse(input)?;
+        let (_, input) = self.p2.parse(input)?;
+        Some((value, input))
+    }
+}
+
+/// Sequences two parsers, one after the other, but discards the output of the first one.
+pub struct AndRight<A, B, T> {
+    p1: A,
+    p2: B,
+    _phantom: PhantomData<T>,
+}
+
+impl<'a, A, B, T, U> Parser<'a, U> for AndRight<A, B, T>
+where
+    A: Parser<'a, T>,
+    B: Parser<'a, U>,
+{
+    fn parse(&self, input: &'a [char]) -> Option<(U, &'a [char])> {
+        let (_, input) = self.p1.parse(input)?;
+        let (value, input) = self.p2.parse(input)?;
+        Some((value, input))
     }
 }
 

@@ -1,43 +1,29 @@
 //!
-//! The SOM Interpreter
-//! ===================
-//!
 //! This is the interpreter for the Simple Object Machine.
 //!
-#![allow(dead_code, unused_variables, unused_imports)]
+// #![allow(dead_code, unused_variables, unused_imports)]
 
 use std::cell::RefCell;
-use std::fs;
-use std::io;
 use std::path::PathBuf;
-use std::rc::{Rc, Weak};
-use std::time::Instant;
+use std::rc::Rc;
 
 use structopt::StructOpt;
 
-use som_lexer::{Lexer, Symbol};
+mod shell;
 
-mod class;
-mod evaluate;
-mod frame;
-mod instance;
-mod interner;
-mod invokable;
-mod primitives;
-mod universe;
-mod value;
-
-use crate::universe::Universe;
-
-pub type SOMRef<T> = Rc<RefCell<T>>;
-pub type SOMWeakRef<T> = Weak<RefCell<T>>;
+use som_interpreter::invokable::Invoke;
+use som_interpreter::universe::Universe;
+use som_interpreter::value::Value;
 
 #[derive(Debug, Clone, PartialEq, StructOpt)]
 #[structopt(about, author)]
 struct Options {
     /// Files to evaluate.
-    #[structopt(name = "FILES")]
-    files: Vec<PathBuf>,
+    #[structopt(name = "FILE")]
+    file: Option<PathBuf>,
+
+    #[structopt(name = "ARGS")]
+    args: Vec<String>,
 
     /// Set search path for application classes.
     #[structopt(short, long)]
@@ -52,63 +38,46 @@ struct Options {
 }
 
 fn main() -> anyhow::Result<()> {
+    dbg!(std::mem::size_of::<som_core::ast::MethodDef>());
+    dbg!(std::mem::size_of::<som_core::ast::ClassDef>());
+    dbg!(std::mem::size_of::<som_interpreter::invokable::Invokable>());
+    dbg!(std::mem::size_of::<som_interpreter::value::Value>());
+    dbg!(std::mem::size_of::<som_interpreter::block::Block>());
+    dbg!(std::mem::size_of::<som_interpreter::class::Class>());
+    dbg!(std::mem::size_of::<som_interpreter::instance::Instance>());
+
+    // return Ok(());
+
     let opts: Options = Options::from_args();
 
-    let universe = Universe::from_classpath(opts.classpath)?;
+    let mut universe = Universe::from_classpath(opts.classpath)?;
+
+    match opts.file {
+        None => shell::interactive(&mut universe, opts.verbose)?,
+        Some(file) => {
+            let initialize = Value::System
+                .lookup_method(&universe, "initialize:")
+                .expect("could not find 'System>>#initialize:'");
+            initialize.invoke(
+                &mut universe,
+                vec![
+                    Value::System,
+                    Value::Array(Rc::new(RefCell::new(
+                        std::iter::once(
+                            file.file_stem()
+                                .and_then(|stem| stem.to_str())
+                                .map(String::from)
+                                .expect("no file stem ?"),
+                        )
+                        .chain(opts.args.iter().cloned())
+                        .map(Rc::new)
+                        .map(Value::String)
+                        .collect(),
+                    ))),
+                ],
+            );
+        }
+    }
 
     Ok(())
 }
-
-// fn main() -> io::Result<()> {
-//     let opts: Options = Options::from_args();
-
-//     let path = match opts.files.into_iter().next() {
-//         Some(file) => file,
-//         None => {
-//             eprintln!("error: missing file.");
-//             std::process::exit(1);
-//         }
-//     };
-
-//     let contents = fs::read_to_string(path.as_path())?;
-//     let lexer = Lexer::new(contents.as_str())
-//         .skip_comments(true)
-//         .skip_whitespace(true);
-
-//     let start = Instant::now();
-//     let symbols: Vec<Symbol> = lexer.collect();
-//     let elapsed = start.elapsed();
-//     if opts.verbose {
-//         println!(
-//             "Lexing time: {} ms ({} µs)",
-//             elapsed.as_millis(),
-//             elapsed.as_micros()
-//         );
-//     }
-
-//     let start = Instant::now();
-//     let results = som_parser::parse_file(symbols.as_slice());
-//     let elapsed = start.elapsed();
-//     if opts.verbose {
-//         println!(
-//             "Parsing time: {} ms ({} µs)",
-//             elapsed.as_millis(),
-//             elapsed.as_micros()
-//         );
-//     }
-
-//     println!();
-//     match results {
-//         Some(ast) => {
-//             println!("success: the file has been successfully parsed.");
-//             println!();
-//             println!("{:?}", ast);
-//         }
-//         None => {
-//             eprintln!("error: failed to parse input file.");
-//             std::process::exit(1);
-//         }
-//     }
-
-//     Ok(())
-// }

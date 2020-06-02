@@ -1,101 +1,144 @@
-use std::cell::RefCell;
-use std::fmt;
 use std::rc::Rc;
 
+use crate::block::Block;
 use crate::class::Class;
 use crate::instance::Instance;
+use crate::interner::Interned;
+use crate::invokable::Invokable;
 use crate::universe::Universe;
 use crate::SOMRef;
 
+/// Represents an SOM value.
 #[derive(Debug, Clone)]
 pub enum Value {
-    /// A nil value.
+    /// The **nil** value.
     Nil,
-    /// A boolean value.
+    /// The **system** value.
+    System,
+    /// A boolean value (**true** or **false**).
     Boolean(bool),
     /// An integer value.
     Integer(i64),
-    /// An integer value.
+    /// An floating-point value.
     Double(f64),
-    /// An symbol value (most likely an interned string ?).
-    Symbol(Rc<String>),
-    /// An string value.
+    /// An interned symbol value.
+    Symbol(Interned),
+    /// A string value.
     String(Rc<String>),
     /// An array of values.
-    Array(Vec<Value>),
-    /// A class instance object (most likely user-defined).
+    Array(SOMRef<Vec<Self>>),
+    /// A block value, ready to be evaluated.
+    Block(Block),
+    /// A generic (non-primitive) class instance.
     Instance(SOMRef<Instance>),
-    /// A class object (most likely user-defined).
+    /// A bare class object.
     Class(SOMRef<Class>),
 }
 
 impl Value {
+    /// Get the class of the current value.
     pub fn class(&self, universe: &Universe) -> SOMRef<Class> {
         match self {
-            Value::Nil => universe.nil_class(),
-            Value::Boolean(true) => universe.true_class(),
-            Value::Boolean(false) => universe.false_class(),
-            Value::Integer(_) => universe.integer_class(),
-            Value::Double(_) => universe.double_class(),
-            Value::Symbol(_) => universe.symbol_class(),
-            Value::String(_) => universe.string_class(),
-            Value::Array(_) => universe.array_class(),
-            Value::Instance(instance) => instance.borrow().class().clone(),
-            Value::Class(class) => universe.metaclass_class(),
+            Self::Nil => universe.nil_class(),
+            Self::System => universe.system_class(),
+            Self::Boolean(true) => universe.true_class(),
+            Self::Boolean(false) => universe.false_class(),
+            Self::Integer(_) => universe.integer_class(),
+            Self::Double(_) => universe.double_class(),
+            Self::Symbol(_) => universe.symbol_class(),
+            Self::String(_) => universe.string_class(),
+            Self::Array(_) => universe.array_class(),
+            Self::Block(block) => block.class(universe),
+            Self::Instance(instance) => instance.borrow().class(),
+            Self::Class(class) => class.borrow().class(),
         }
     }
 
-    // /// A method call (aka. receiving a message).
-    // ///
-    // /// This variant does not look within superclasses.
-    // pub fn call(
-    //     &mut self,
-    //     universe: &mut Universe,
-    //     signature: InternedString,
-    //     args: Vec<Value>,
-    // ) -> Option<Value> {
-    //     todo!()
-    // }
+    /// Search for a given method for this value.
+    pub fn lookup_method(
+        &self,
+        universe: &Universe,
+        signature: impl AsRef<str>,
+    ) -> Option<Invokable> {
+        let signature = signature.as_ref();
+        if let Self::Class(ref class) = self {
+            // dbg!(class.borrow().name());
+            // dbg!(signature);
+            class.borrow().lookup_method(signature)
+        } else {
+            // dbg!(self);
+            // dbg!(signature);
+            self.class(universe).borrow().lookup_method(signature)
+        }
+    }
 
-    // /// A method call (aka. receiving a message).
-    // ///
-    // /// This variant will recurse through all of the superclasses.
-    // pub fn super_call(
-    //     &mut self,
-    //     universe: &mut Universe,
-    //     signature: InternedString,
-    //     args: Vec<Value>,
-    // ) -> Option<Value> {
-    //     todo!()
-    // }
+    /// Search for a local binding within this value.
+    pub fn lookup_local(&self, name: impl AsRef<str>) -> Option<Self> {
+        match self {
+            Self::Instance(instance) => instance.borrow().lookup_local(name),
+            Self::Class(class) => class.borrow().lookup_local(name),
+            _ => None,
+        }
+    }
+
+    /// Assign a value to a local binding within this value.
+    pub fn assign_local(&mut self, name: impl AsRef<str>, value: Self) -> Option<()> {
+        match self {
+            Self::Instance(instance) => instance.borrow_mut().assign_local(name, value),
+            Self::Class(class) => class.borrow_mut().assign_local(name, value),
+            _ => None,
+        }
+    }
+
+    /// Get the string representation of this value.
+    pub fn to_string(&self, universe: &Universe) -> String {
+        match self {
+            Self::Nil => "nil".to_string(),
+            Self::System => "system".to_string(),
+            Self::Boolean(value) => value.to_string(),
+            Self::Integer(value) => value.to_string(),
+            Self::Double(value) => value.to_string(),
+            Self::Symbol(value) => {
+                let symbol = universe.lookup_symbol(*value);
+                if symbol.chars().any(|ch| ch.is_whitespace() || ch == '\'') {
+                    format!("#'{}'", symbol.replace("'", "\\'"))
+                } else {
+                    format!("#{}", symbol)
+                }
+            }
+            Self::String(value) => value.to_string(),
+            Self::Array(values) => {
+                // TODO: I think we can do better here (less allocations).
+                let strings: Vec<String> = values
+                    .borrow()
+                    .iter()
+                    .map(|value| value.to_string(universe))
+                    .collect();
+                format!("#({})", strings.join(" "))
+            }
+            Self::Block(block) => format!("instance of Block{}", block.nb_parameters() + 1),
+            Self::Instance(instance) => format!(
+                "instance of {} class",
+                instance.borrow().class().borrow().name(),
+            ),
+            Self::Class(class) => class.borrow().name().to_string(),
+        }
+    }
 }
 
-impl fmt::Display for Value {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Value::Nil => write!(f, "nil"),
-            Value::Boolean(value) => write!(f, "{}", value),
-            Value::Integer(value) => write!(f, "{}", value),
-            Value::Double(value) => write!(f, "{}", value),
-            Value::Symbol(value) => write!(f, "{}", value),
-            Value::String(value) => write!(f, "{}", value),
-            Value::Array(values) => {
-                write!(f, "[")?;
-                for (idx, value) in values.iter().enumerate() {
-                    if idx == 0 {
-                        write!(f, "{}", value)?;
-                    } else {
-                        write!(f, ", {}", value)?;
-                    }
-                }
-                write!(f, "]")
-            }
-            Value::Instance(instance) => write!(
-                f,
-                "instance of {} class",
-                instance.borrow().class().borrow().name()
-            ),
-            Value::Class(class) => write!(f, "{} class", class.borrow().name()),
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Nil, Self::Nil) | (Self::System, Self::System) => true,
+            (Self::Boolean(a), Self::Boolean(b)) => a.eq(b),
+            (Self::Integer(a), Self::Integer(b)) => a.eq(b),
+            (Self::Double(a), Self::Double(b)) => a.eq(b),
+            (Self::String(a), Self::String(b)) => a.eq(b),
+            (Self::Symbol(a), Self::Symbol(b)) => a.eq(b),
+            (Self::Array(a), Self::Array(b)) => a.eq(b),
+            (Self::Instance(a), Self::Instance(b)) => Rc::ptr_eq(a, b),
+            (Self::Class(a), Self::Class(b)) => Rc::ptr_eq(a, b),
+            _ => false,
         }
     }
 }

@@ -1,15 +1,15 @@
-use som_lexer::{Lexer, Symbol};
+use som_lexer::{Lexer, Token};
 
 #[test]
 fn empty_class_test() {
     let mut lexer = Lexer::new("Foo = ()");
 
-    assert_eq!(lexer.next(), Some(Symbol::Identifier(String::from("Foo"))));
-    assert_eq!(lexer.next(), Some(Symbol::Whitespace));
-    assert_eq!(lexer.next(), Some(Symbol::Equal));
-    assert_eq!(lexer.next(), Some(Symbol::Whitespace));
-    assert_eq!(lexer.next(), Some(Symbol::NewTerm));
-    assert_eq!(lexer.next(), Some(Symbol::EndTerm));
+    assert_eq!(lexer.next(), Some(Token::Identifier(String::from("Foo"))));
+    assert_eq!(lexer.next(), Some(Token::Whitespace));
+    assert_eq!(lexer.next(), Some(Token::Equal));
+    assert_eq!(lexer.next(), Some(Token::Whitespace));
+    assert_eq!(lexer.next(), Some(Token::NewTerm));
+    assert_eq!(lexer.next(), Some(Token::EndTerm));
     assert_eq!(lexer.next(), None);
 }
 
@@ -19,7 +19,7 @@ fn symbol_literal_test() {
 
     assert_eq!(
         lexer.next(),
-        Some(Symbol::LitSymbol(String::from("key:word:")))
+        Some(Token::LitSymbol(String::from("key:word:")))
     );
     assert_eq!(lexer.next(), None);
 }
@@ -28,12 +28,12 @@ fn symbol_literal_test() {
 fn assignment_test() {
     let mut lexer = Lexer::new("var := 3.14.");
 
-    assert_eq!(lexer.next(), Some(Symbol::Identifier(String::from("var"))));
-    assert_eq!(lexer.next(), Some(Symbol::Whitespace));
-    assert_eq!(lexer.next(), Some(Symbol::Assign));
-    assert_eq!(lexer.next(), Some(Symbol::Whitespace));
-    assert_eq!(lexer.next(), Some(Symbol::LitDouble(3.14)));
-    assert_eq!(lexer.next(), Some(Symbol::Period));
+    assert_eq!(lexer.next(), Some(Token::Identifier(String::from("var"))));
+    assert_eq!(lexer.next(), Some(Token::Whitespace));
+    assert_eq!(lexer.next(), Some(Token::Assign));
+    assert_eq!(lexer.next(), Some(Token::Whitespace));
+    assert_eq!(lexer.next(), Some(Token::LitDouble(3.14)));
+    assert_eq!(lexer.next(), Some(Token::Period));
     assert_eq!(lexer.next(), None);
 }
 
@@ -43,7 +43,7 @@ fn string_literal_test() {
 
     assert_eq!(
         lexer.next(),
-        Some(Symbol::LitString(String::from(
+        Some(Token::LitString(String::from(
             "some string with new\nline"
         )))
     );

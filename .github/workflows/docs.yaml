@@ -1,0 +1,37 @@
+name: Docs
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  generate_docs:
+    name: Generate docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout master branch
+        uses: actions/checkout@v2
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: default
+          toolchain: stable
+      - name: Generate docs
+        uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          args: --no-deps
+      - name: Deploy to GitHub Pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+        run: |
+          export COMMIT_HASH="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          cd target/doc
+          git config --global user.email ''
+          git config --global user.name 'GitHub Actions'
+          git init
+          git remote add origin "https://${GITHUB_ACTOR}:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}"
+          git add --all
+          git commit -m "Generated docs for ${COMMIT_HASH}"
+          git push -uf origin master:gh-pages

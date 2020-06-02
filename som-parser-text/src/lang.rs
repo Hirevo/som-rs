@@ -3,15 +3,6 @@ use som_core::ast::*;
 use crate::combinators::*;
 use crate::parser::Parser;
 
-#[allow(unused)]
-pub(crate) fn fst<A, B>((a, _): (A, B)) -> A {
-    a
-}
-#[allow(unused)]
-pub(crate) fn snd<A, B>((_, b): (A, B)) -> B {
-    b
-}
-
 pub fn eof<'a>() -> impl Parser<'a, ()> {
     move |input: &'a [char]| {
         if input.is_empty() {
@@ -77,25 +68,15 @@ pub fn whitespace<'a>() -> impl Parser<'a, char> {
 }
 
 pub fn comment<'a>() -> impl Parser<'a, String> {
-    map(
-        between(exact('"'), many(not_exact('"')), exact('"')),
-        |chars| chars.into_iter().collect(),
-    )
+    between(exact('"'), many(not_exact('"')), exact('"')).map(|chars| chars.into_iter().collect())
 }
 
 pub fn separator<'a>() -> impl Parser<'a, ()> {
-    map(
-        exact('-')
-            .and(exact('-'))
-            .and(exact('-'))
-            .and(exact('-'))
-            .and(many(exact('-'))),
-        |_| (),
-    )
+    exact_str("----").and(many(exact('-'))).map(|_| ())
 }
 
 pub fn spacing<'a>() -> impl Parser<'a, ()> {
-    map(whitespace(), |_| ()).or(map(comment(), |_| ()))
+    whitespace().map(|_| ()).or(comment().map(|_| ()))
 }
 
 pub fn digit<'a>() -> impl Parser<'a, i64> {
@@ -118,10 +99,12 @@ pub fn digit<'a>() -> impl Parser<'a, i64> {
 }
 
 pub fn integer<'a>() -> impl Parser<'a, i64> {
-    map(optional(exact('-')).and(some(digit())), |(sign, digits)| {
-        let sign = if sign.is_some() { -1 } else { 1 };
-        digits.into_iter().fold(0, |acc, el| acc * 10 + el) * sign
-    })
+    optional(exact('-'))
+        .and(some(digit()))
+        .map(|(sign, digits)| {
+            let sign = if sign.is_some() { -1 } else { 1 };
+            digits.into_iter().fold(0, |acc, el| acc * 10 + el) * sign
+        })
 }
 
 pub fn double<'a>() -> impl Parser<'a, f64> {
@@ -182,35 +165,31 @@ pub fn single_operator<'a>() -> impl Parser<'a, char> {
 }
 
 pub fn operator<'a>() -> impl Parser<'a, String> {
-    map(some(single_operator()), |chars| chars.into_iter().collect())
+    some(single_operator()).map(|chars| chars.into_iter().collect())
 }
 
 pub fn identifier<'a>() -> impl Parser<'a, String> {
-    move |input: &'a [char]| {
-        let parser = lower()
-            .or(upper())
-            .and(many(lower().or(upper()).or(digitc()).or(exact('_'))));
-        let ((fst, tail), input) = parser.parse(input)?;
-        let ident: String = std::iter::once(fst).chain(tail.into_iter()).collect();
-        Some((ident, input))
-    }
+    (lower().or(upper()))
+        .and(many(lower().or(upper()).or(digitc()).or(exact('_'))))
+        .map(|(fst, tail)| std::iter::once(fst).chain(tail).collect())
 }
 
-// TODO: Correctly handle control characters (`\n`, `\t`, etc...)
 pub fn string<'a>() -> impl Parser<'a, String> {
     move |input: &'a [char]| {
-        let content = map(exact('\\').and(one_of("tbnrf\'\\")), |(a, b)| match b {
-            't' => vec!['\t'],
-            'b' => vec!['\x08'],
-            'n' => vec!['\n'],
-            'r' => vec!['\r'],
-            'f' => vec!['\x12'],
-            '\'' => vec!['\''],
-            '\\' => vec!['\\'],
-            _ => vec![a, b],
-        })
-        .or(map(not_exact('\''), |a| vec![a]));
-        let parser = between(exact('\''), many(content), exact('\''));
+        let single_char = exact('\\')
+            .and(one_of("tbnrf\'\\"))
+            .map(|(a, b)| match b {
+                't' => vec!['\t'],
+                'b' => vec!['\x08'],
+                'n' => vec!['\n'],
+                'r' => vec!['\r'],
+                'f' => vec!['\x12'],
+                '\'' => vec!['\''],
+                '\\' => vec!['\\'],
+                _ => vec![a, b],
+            })
+            .or(not_exact('\'').map(|a| vec![a]));
+        let parser = between(exact('\''), many(single_char), exact('\''));
         let (value, input) = parser.parse(input)?;
         let value: String = value.into_iter().flatten().collect();
         Some((value, input))
@@ -218,16 +197,12 @@ pub fn string<'a>() -> impl Parser<'a, String> {
 }
 
 pub fn symbol<'a>() -> impl Parser<'a, String> {
-    move |input: &'a [char]| {
-        let (_, input) = exact('#').parse(input)?;
-        let (symbol, input) = map(some(keyword()), |words| words.into_iter().collect())
+    exact('#').and_right(
+        (some(keyword()).map(|words| words.into_iter().collect()))
             .or(identifier())
             .or(string())
-            .or(operator())
-            .parse(input)?;
-
-        Some((symbol, input))
-    }
+            .or(operator()),
+    )
 }
 
 pub fn array<'a>() -> impl Parser<'a, Vec<Literal>> {
@@ -243,56 +218,65 @@ pub fn array<'a>() -> impl Parser<'a, Vec<Literal>> {
 }
 
 pub fn literal<'a>() -> impl Parser<'a, Literal> {
-    map(double(), Literal::Double)
-        .or(map(integer(), Literal::Integer))
-        .or(map(string(), Literal::String))
-        .or(map(symbol(), Literal::Symbol))
-        .or(map(array(), Literal::Array))
+    (double().map(Literal::Double))
+        .or(integer().map(Literal::Integer))
+        .or(string().map(Literal::String))
+        .or(symbol().map(Literal::Symbol))
+        .or(array().map(Literal::Array))
 }
 
 pub fn keyword<'a>() -> impl Parser<'a, String> {
-    map(identifier().and(exact(':')), fst)
+    (lower().or(upper()))
+        .and(many(lower().or(upper()).or(digitc()).or(exact('_'))))
+        .and(exact(':'))
+        .map(|((fst, tail), colon)| {
+            std::iter::once(fst)
+                .chain(tail)
+                .chain(std::iter::once(colon))
+                .collect()
+        })
 }
 
 pub fn unary_send<'a>() -> impl Parser<'a, Expression> {
     move |input: &'a [char]| {
-        let (mut receiver, input) = primary().parse(input)?;
+        let (receiver, input) = primary().parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
-        let (signatures, input) = sep_by(
-            many(spacing()),
-            map(identifier().and(peek(not(exact(':')))), fst),
-        )
-        .parse(input)?;
+        let (signatures, input) = sep_by(many(spacing()), identifier()).parse(input)?;
 
-        for signature in signatures {
-            receiver = Expression::Message(Message {
-                receiver: Box::new(receiver),
-                signature,
-                values: Vec::new(),
+        let expr = signatures
+            .into_iter()
+            .fold(receiver, |receiver, signature| {
+                Expression::Message(Message {
+                    receiver: Box::new(receiver),
+                    signature,
+                    values: Vec::new(),
+                })
             });
-        }
-        Some((receiver, input))
+
+        Some((expr, input))
     }
 }
 
 pub fn binary_send<'a>() -> impl Parser<'a, Expression> {
     move |input: &'a [char]| {
-        let (mut lhs, input) = unary_send().parse(input)?;
+        let (lhs, input) = unary_send().parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
         let (operands, input) = many(
-            map(operator().and(many(spacing())), fst)
-                .and(map(map(unary_send(), Box::new).and(many(spacing())), fst)),
+            operator()
+                .and_left(many(spacing()))
+                .and(unary_send().map(Box::new).and_left(many(spacing()))),
         )
         .parse(input)?;
 
-        for (op, rhs) in operands {
-            lhs = Expression::BinaryOp(BinaryOp {
+        let expr = operands.into_iter().fold(lhs, |lhs, (op, rhs)| {
+            Expression::BinaryOp(BinaryOp {
                 lhs: Box::new(lhs),
                 op,
                 rhs,
-            });
-        }
-        Some((lhs, input))
+            })
+        });
+
+        Some((expr, input))
     }
 }
 
@@ -312,13 +296,7 @@ pub fn positional_send<'a>() -> impl Parser<'a, Expression> {
         if pairs.is_empty() {
             Some((receiver, input))
         } else {
-            let mut signature = String::new();
-            let mut values = Vec::new();
-            for (keyword, value) in pairs {
-                let keyword = format!("{}:", keyword);
-                signature.push_str(keyword.as_str());
-                values.push(value);
-            }
+            let (signature, values) = pairs.into_iter().unzip();
             let message = Expression::Message(Message {
                 receiver: Box::new(receiver),
                 signature,
@@ -344,7 +322,7 @@ pub fn body<'a>() -> impl Parser<'a, Body> {
     move |input: &'a [char]| {
         let (exprs, input) = sep_by(
             exact('.').and(many(spacing())),
-            map(exit().or(statement()).and(many(spacing())), fst),
+            exit().or(statement()).and_left(many(spacing())),
         )
         .parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
@@ -374,16 +352,8 @@ pub fn block<'a>() -> impl Parser<'a, Expression> {
     move |input: &'a [char]| {
         let (_, input) = exact('[').parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
-        let (parameters, input) = map(
-            optional(map(parameters.and(many(spacing())), fst)),
-            Option::unwrap_or_default,
-        )
-        .parse(input)?;
-        let (locals, input) = map(
-            optional(map(locals().and(many(spacing())), fst)),
-            Option::unwrap_or_default,
-        )
-        .parse(input)?;
+        let (parameters, input) = default(parameters.and_left(many(spacing()))).parse(input)?;
+        let (locals, input) = default(locals().and_left(many(spacing()))).parse(input)?;
         let (body, input) = body().parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
         let (_, input) = exact(']').parse(input)?;
@@ -427,10 +397,10 @@ pub fn expression<'a>() -> impl Parser<'a, Expression> {
 }
 
 pub fn primary<'a>() -> impl Parser<'a, Expression> {
-    map(identifier(), Expression::Reference)
+    (identifier().map(Expression::Reference))
         .or(term())
         .or(block())
-        .or(map(literal(), Expression::Literal))
+        .or(literal().map(Expression::Literal))
 }
 
 pub fn assignment<'a>() -> impl Parser<'a, Expression> {
@@ -450,18 +420,14 @@ pub fn statement<'a>() -> impl Parser<'a, Expression> {
 }
 
 pub fn primitive<'a>() -> impl Parser<'a, MethodBody> {
-    map(exact_str("primitive"), |_| MethodBody::Primitive)
+    exact_str("primitive").map(|_| MethodBody::Primitive)
 }
 
 pub fn method_body<'a>() -> impl Parser<'a, MethodBody> {
     move |input: &'a [char]| {
         let (_, input) = exact('(').parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
-        let (locals, input) = map(
-            optional(map(locals().and(many(spacing())), fst)),
-            Option::unwrap_or_default,
-        )
-        .parse(input)?;
+        let (locals, input) = default(locals().and_left(many(spacing()))).parse(input)?;
         let (body, input) = body().parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
         let (_, input) = exact(')').parse(input)?;
@@ -502,13 +468,7 @@ pub fn positional_method_def<'a>() -> impl Parser<'a, MethodDef> {
         let (_, input) = many(spacing()).parse(input)?;
         let (body, input) = primitive().or(method_body()).parse(input)?;
 
-        let mut signature = String::new();
-        let mut parameters = Vec::new();
-        for (keyword, value) in pairs {
-            let keyword = format!("{}:", keyword);
-            signature.push_str(keyword.as_str());
-            parameters.push(value);
-        }
+        let (signature, parameters) = pairs.into_iter().unzip();
         let method_def = MethodDef {
             kind: MethodKind::Positional { parameters },
             signature,
@@ -545,11 +505,7 @@ pub fn method_def<'a>() -> impl Parser<'a, MethodDef> {
 
 pub fn class_def<'a>() -> impl Parser<'a, ClassDef> {
     let class_section = move |input: &'a [char]| {
-        let (locals, input) = map(
-            optional(map(locals().and(many(spacing())), fst)),
-            Option::unwrap_or_default,
-        )
-        .parse(input)?;
+        let (locals, input) = default(locals().and_left(many(spacing()))).parse(input)?;
         let (methods, input) = sep_by(many(spacing()), method_def()).parse(input)?;
         Some(((locals, methods), input))
     };
@@ -564,8 +520,7 @@ pub fn class_def<'a>() -> impl Parser<'a, ClassDef> {
         let (_, input) = many(spacing()).parse(input)?;
         let (_, input) = exact('=').parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
-        let (super_class, input) =
-            optional(map(identifier().and(many(spacing())), fst)).parse(input)?;
+        let (super_class, input) = optional(identifier().and_left(many(spacing()))).parse(input)?;
         let (_, input) = exact('(').parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
         let ((instance_locals, instance_methods), input) = class_section.parse(input)?;

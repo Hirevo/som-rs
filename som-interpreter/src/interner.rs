@@ -9,9 +9,15 @@
 use std::collections::HashMap;
 use std::mem;
 
+/// An interned string.
+///
+/// This is fast to move, clone and compare.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub struct InternedString(u32);
+pub struct Interned(u32);
 
+/// A string interner.
+///
+/// This particular implementation comes from [matklad's "Fast and Simple Rust Interner" blog post](https://matklad.github.io/2020/03/22/fast-simple-rust-interner.html).
 #[derive(Debug)]
 pub struct Interner {
     map: HashMap<&'static str, u32>,
@@ -21,9 +27,10 @@ pub struct Interner {
 }
 
 impl Interner {
-    pub fn with_capacity(cap: usize) -> Interner {
+    /// Initialize the interner with an initial capacity.
+    pub fn with_capacity(cap: usize) -> Self {
         let cap = cap.next_power_of_two();
-        Interner {
+        Self {
             map: HashMap::default(),
             vec: Vec::new(),
             buf: String::with_capacity(cap),
@@ -31,16 +38,17 @@ impl Interner {
         }
     }
 
-    pub fn intern(&mut self, name: &str) -> InternedString {
+    /// Intern a given string.
+    pub fn intern(&mut self, name: &str) -> Interned {
         if let Some(&id) = self.map.get(name) {
-            return InternedString(id);
+            return Interned(id);
         }
         let name = unsafe { self.alloc(name) };
         let id = self.map.len() as u32;
         self.map.insert(name, id);
         self.vec.push(name);
 
-        let id = InternedString(id);
+        let id = Interned(id);
 
         debug_assert!(self.lookup(id) == name);
         debug_assert!(self.intern(name) == id);
@@ -48,7 +56,8 @@ impl Interner {
         id
     }
 
-    pub fn lookup(&self, id: InternedString) -> &str {
+    /// Get the string associated to a given interning ID.
+    pub fn lookup(&self, id: Interned) -> &str {
         self.vec[id.0 as usize]
     }
 

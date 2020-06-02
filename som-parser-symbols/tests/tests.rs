@@ -1,12 +1,12 @@
 use som_core::ast::*;
-use som_lexer::{Lexer, Symbol};
+use som_lexer::{Lexer, Token};
 use som_parser_symbols::combinators::*;
 use som_parser_symbols::lang::*;
 use som_parser_symbols::Parser;
 
 #[test]
 fn literal_tests() {
-    let syms: Vec<Symbol> = Lexer::new("1.2 5 #foo 'test'")
+    let syms: Vec<Token> = Lexer::new("1.2 5 #foo 'test'")
         .skip_whitespace(true)
         .collect();
 
@@ -27,7 +27,7 @@ fn literal_tests() {
 
 #[test]
 fn expression_test_1() {
-    let syms: Vec<Symbol> = Lexer::new("3 + counter get")
+    let syms: Vec<Token> = Lexer::new("3 + counter get")
         .skip_whitespace(true)
         .collect();
 
@@ -54,7 +54,7 @@ fn expression_test_1() {
 
 #[test]
 fn block_test() {
-    let syms: Vec<Symbol> =
+    let syms: Vec<Token> =
         Lexer::new("[ :test | |local| local := 'this is correct'. local println. ]")
             .skip_whitespace(true)
             .collect();
@@ -93,7 +93,7 @@ fn block_test() {
 
 #[test]
 fn expression_test_2() {
-    let syms: Vec<Symbol> = Lexer::new(
+    let syms: Vec<Token> = Lexer::new(
         "( 3 == 3 ) ifTrue: [ 'this is correct' println. ] ifFalse: [ 'oh no' println ]",
     )
     .skip_whitespace(true)
@@ -156,7 +156,7 @@ fn expression_test_2() {
 
 #[test]
 fn primary_test() {
-    let syms: Vec<Symbol> = Lexer::new("[ self fib: (n - 1) + (self fib: (n - 2)) ]")
+    let syms: Vec<Token> = Lexer::new("[ self fib: (n - 1) + (self fib: (n - 2)) ]")
         .skip_whitespace(true)
         .collect();
     let parser = primary();

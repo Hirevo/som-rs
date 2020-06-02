@@ -6,6 +6,13 @@ authors = ["Nicolas Polomack <nmp21@kent.ac.uk>"]
 edition = "2018"
 publish = false
 
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "som-interpreter"
+path = "src/main.rs"
+
 [dependencies]
 # internal
 som-core = { path = "../som-core", version = "0.1.0" }
@@ -18,3 +25,4 @@ structopt = "0.3.14"
 
 # error handling
 anyhow = "1.0.28"
+num-bigint = "0.2.6"

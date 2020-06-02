@@ -10,10 +10,10 @@ Here is a rundown of these different crates (as of now, layout may change in the
 
 | Name                     | Description                                                   |
 | ------------------------ | ------------------------------------------------------------- |
-| **`som-core`**           | Core types and abstractions, shared across the workspace.     |
-| **`som-interpreter`**    | The SOM interpreter library.                                  |
+| **`som-core`**           | Core SOM types and abstractions, shared across the workspace. |
+| **`som-interpreter`**    | The SOM interpreter library and binary.                       |
 | **`som-lexer`**          | The SOM lexical analyzer.                                     |
 | **`som-parser-text`**    | A SOM parser that works directly with text (without a lexer). |
-| **`som-parser-symbols`** | A SOM parser that works with the lexer's output.              |
+| **`som-parser-symbols`** | A SOM parser that works with **`som-lexer`**'s output.        |
 
 [**Cargo workspace**]: https://doc.rust-lang.org/cargo/reference/workspaces.html

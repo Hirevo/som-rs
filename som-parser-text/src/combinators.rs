@@ -1,11 +1,15 @@
 use crate::parser::Parser;
 
+/// Represents a value of either type A (Left) or type B (Right).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Either<A, B> {
+    /// Variant of type A.
     Left(A),
+    /// Variant of type B.
     Right(B),
 }
 
+/// Transforms a parser into a non-consuming one, allowing to parse ahead without consuming anything.
 pub fn peek<'a, A>(parser: impl Parser<'a, A>) -> impl Parser<'a, A> {
     move |input: &'a [char]| {
         let (value, _) = parser.parse(input)?;
@@ -13,6 +17,7 @@ pub fn peek<'a, A>(parser: impl Parser<'a, A>) -> impl Parser<'a, A> {
     }
 }
 
+/// Runs the given parser, fails if it succeeded, and succeeds otherwise.
 pub fn not<'a, A>(parser: impl Parser<'a, A>) -> impl Parser<'a, ()> {
     move |input: &'a [char]| match parser.parse(input) {
         Some(_) => None,
@@ -56,7 +61,12 @@ pub fn either<'a, A, B>(
 
 /// Tries to apply a parser, or fallback to a constant value (making it an always-succeeding parser).
 pub fn fallback<'a, A: Clone>(def: A, parser: impl Parser<'a, A>) -> impl Parser<'a, A> {
-    move |input: &'a [char]| parser.parse(input).or(Some((def.clone(), input)))
+    move |input: &'a [char]| parser.parse(input).or_else(|| Some((def.clone(), input)))
+}
+
+/// Tries to apply a parser, or fallback to its default value (making it an always-succeeding parser).
+pub fn default<'a, A: Default>(parser: impl Parser<'a, A>) -> impl Parser<'a, A> {
+    optional(parser).map(Option::unwrap_or_default)
 }
 
 /// Tries every parser in a slice, from left to right, and returns the output of the first succeeding one.
@@ -129,6 +139,7 @@ pub fn between<'a, A, B, C>(
     }
 }
 
+/// Parses zero or more things, separated by an arbitrary delimiter.
 pub fn sep_by<'a, A, B>(
     delim: impl Parser<'a, A>,
     within: impl Parser<'a, B>,
@@ -151,6 +162,7 @@ pub fn sep_by<'a, A, B>(
     }
 }
 
+/// Parses one or more things, separated by an arbitrary delimiter.
 pub fn sep_by1<'a, A, B>(
     delim: impl Parser<'a, A>,
     within: impl Parser<'a, B>,

@@ -1,6 +1,7 @@
-use crate::symbol::Symbol;
+use crate::token::Token;
 
 /// The lexer for the Simple Object Machine.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Lexer {
     pub(crate) chars: Vec<char>,
     pub(crate) skip_comments: bool,
@@ -12,6 +13,7 @@ impl Lexer {
     const SEPARATOR: &'static str = "----";
     const PRIMITIVE: &'static str = "primitive";
 
+    /// Construct a new lexer.
     pub fn new<T: AsRef<str>>(input: T) -> Lexer {
         Lexer {
             chars: input.as_ref().chars().rev().collect(),
@@ -21,21 +23,19 @@ impl Lexer {
         }
     }
 
+    /// Configure the lexer on whether to skip whitespace or not.
     pub fn skip_whitespace(mut self, value: bool) -> Lexer {
         self.skip_whitespace = value;
         self
     }
 
+    /// Configure the lexer on whether to skip comments or not.
     pub fn skip_comments(mut self, value: bool) -> Lexer {
         self.skip_comments = value;
         self
     }
 
-    pub fn skip_separator(mut self, value: bool) -> Lexer {
-        self.skip_separator = value;
-        self
-    }
-
+    /// Consume the lexer and return the left-over text.
     pub fn text(self) -> String {
         self.chars.into_iter().rev().collect()
     }
@@ -65,7 +65,7 @@ impl Lexer {
         }
     }
 
-    fn lex_comment(&mut self) -> Option<Symbol> {
+    fn lex_comment(&mut self) -> Option<Token> {
         let mut output = String::new();
         self.chars.pop()?;
         loop {
@@ -74,7 +74,7 @@ impl Lexer {
                 break if self.skip_comments {
                     self.next()
                 } else {
-                    Some(Symbol::Comment(output))
+                    Some(Token::Comment(output))
                 };
             } else {
                 output.push(ch);
@@ -82,23 +82,23 @@ impl Lexer {
         }
     }
 
-    fn lex_operator(&mut self) -> Option<Symbol> {
+    fn lex_operator(&mut self) -> Option<Token> {
         let ch = self.chars.pop()?;
         match ch {
-            '~' => Some(Symbol::Not),
-            '&' => Some(Symbol::And),
-            '|' => Some(Symbol::Or),
-            '*' => Some(Symbol::Star),
-            '/' => Some(Symbol::Div),
-            '\\' => Some(Symbol::Mod),
-            '+' => Some(Symbol::Plus),
-            '=' => Some(Symbol::Equal),
-            '>' => Some(Symbol::More),
-            '<' => Some(Symbol::Less),
-            ',' => Some(Symbol::Comma),
-            '@' => Some(Symbol::At),
-            '%' => Some(Symbol::Per),
-            '-' => Some(Symbol::Minus),
+            '~' => Some(Token::Not),
+            '&' => Some(Token::And),
+            '|' => Some(Token::Or),
+            '*' => Some(Token::Star),
+            '/' => Some(Token::Div),
+            '\\' => Some(Token::Mod),
+            '+' => Some(Token::Plus),
+            '=' => Some(Token::Equal),
+            '>' => Some(Token::More),
+            '<' => Some(Token::Less),
+            ',' => Some(Token::Comma),
+            '@' => Some(Token::At),
+            '%' => Some(Token::Per),
+            '-' => Some(Token::Minus),
             _ => None,
         }
     }
@@ -112,7 +112,7 @@ impl Lexer {
 }
 
 impl Iterator for Lexer {
-    type Item = Symbol;
+    type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut iter = self.chars.iter().rev().copied().peekable();
@@ -126,26 +126,26 @@ impl Iterator for Lexer {
                 if self.skip_whitespace {
                     self.next()
                 } else {
-                    Some(Symbol::Whitespace)
+                    Some(Token::Whitespace)
                 }
             }
-            '\'' => self.lex_string().map(Symbol::LitString),
+            '\'' => self.lex_string().map(Token::LitString),
             '"' => self.lex_comment(),
             '[' => {
                 self.chars.pop()?;
-                Some(Symbol::NewBlock)
+                Some(Token::NewBlock)
             }
             ']' => {
                 self.chars.pop()?;
-                Some(Symbol::EndBlock)
+                Some(Token::EndBlock)
             }
             '(' => {
                 self.chars.pop()?;
-                Some(Symbol::NewTerm)
+                Some(Token::NewTerm)
             }
             ')' => {
                 self.chars.pop()?;
-                Some(Symbol::EndTerm)
+                Some(Token::EndTerm)
             }
             '#' => {
                 iter.next()?;
@@ -153,12 +153,12 @@ impl Iterator for Lexer {
                     Some('\'') => {
                         self.chars.pop()?;
                         let symbol = self.lex_string()?;
-                        Some(Symbol::LitSymbol(symbol))
+                        Some(Token::LitSymbol(symbol))
                     }
                     Some('(') => {
                         self.chars.pop()?;
                         self.chars.pop()?;
-                        Some(Symbol::NewArray)
+                        Some(Token::NewArray)
                     }
                     Some(ch) if ch.is_alphabetic() => {
                         let len = iter
@@ -169,7 +169,7 @@ impl Iterator for Lexer {
                         for _ in 0..len {
                             symbol.push(self.chars.pop()?);
                         }
-                        Some(Symbol::LitSymbol(symbol))
+                        Some(Token::LitSymbol(symbol))
                     }
                     Some(ch) if Lexer::is_operator(ch) => {
                         let len = iter.take_while(|ch| Lexer::is_operator(*ch)).count();
@@ -178,18 +178,18 @@ impl Iterator for Lexer {
                         for _ in 0..len {
                             symbol.push(self.chars.pop()?);
                         }
-                        Some(Symbol::LitSymbol(symbol))
+                        Some(Token::LitSymbol(symbol))
                     }
                     _ => None,
                 }
             }
             '^' => {
                 self.chars.pop()?;
-                Some(Symbol::Exit)
+                Some(Token::Exit)
             }
             '.' => {
                 self.chars.pop()?;
-                Some(Symbol::Period)
+                Some(Token::Period)
             }
             '-' => {
                 let sep_len = iter.take_while(|ch| *ch == '-').count();
@@ -200,11 +200,11 @@ impl Iterator for Lexer {
                     if self.skip_separator {
                         self.next()
                     } else {
-                        Some(Symbol::Separator)
+                        Some(Token::Separator)
                     }
                 } else {
                     self.chars.pop()?;
-                    Some(Symbol::Minus)
+                    Some(Token::Minus)
                 }
             }
             ':' => {
@@ -212,10 +212,10 @@ impl Iterator for Lexer {
                 if let Some('=') = iter.peek().copied() {
                     self.chars.pop()?;
                     self.chars.pop()?;
-                    Some(Symbol::Assign)
+                    Some(Token::Assign)
                 } else {
                     self.chars.pop()?;
-                    Some(Symbol::Colon)
+                    Some(Token::Colon)
                 }
             }
             _ if Lexer::is_operator(peeked) => self.lex_operator(),
@@ -225,7 +225,7 @@ impl Iterator for Lexer {
                     for _ in 0..primitive_len {
                         self.chars.pop()?;
                     }
-                    Some(Symbol::Primitive)
+                    Some(Token::Primitive)
                 } else if peeked.is_alphabetic() {
                     let mut ident: String = self
                         .chars
@@ -241,9 +241,9 @@ impl Iterator for Lexer {
                     if let Some(':') = self.chars.last().copied() {
                         self.chars.pop()?;
                         ident.push(':');
-                        Some(Symbol::Keyword(ident))
+                        Some(Token::Keyword(ident))
                     } else {
-                        Some(Symbol::Identifier(ident))
+                        Some(Token::Identifier(ident))
                     }
                 } else if peeked.is_digit(10) {
                     let iter = self.chars.iter().rev().copied();
@@ -261,7 +261,7 @@ impl Iterator for Lexer {
                                 for _ in 0..total_len {
                                     self.chars.pop()?;
                                 }
-                                Some(Symbol::LitDouble(number))
+                                Some(Token::LitDouble(number))
                             }
                             _ => {
                                 let repr: String = iter.take(int_part_len).collect();
@@ -269,7 +269,7 @@ impl Iterator for Lexer {
                                 for _ in 0..int_part_len {
                                     self.chars.pop()?;
                                 }
-                                Some(Symbol::LitInteger(number))
+                                Some(Token::LitInteger(number))
                             }
                         }
                     } else {
@@ -278,7 +278,7 @@ impl Iterator for Lexer {
                         for _ in 0..int_part_len {
                             self.chars.pop()?;
                         }
-                        Some(Symbol::LitInteger(number))
+                        Some(Token::LitInteger(number))
                     }
                 } else {
                     None

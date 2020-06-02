@@ -11,9 +11,10 @@ pub mod parser;
 pub use crate::parser::Parser;
 
 use som_core::ast::ClassDef;
-use som_lexer::Symbol;
+use som_lexer::Token;
 
 /// Parses the input of an entire file into an AST.
-pub fn parse_file(input: &[Symbol]) -> Option<ClassDef> {
-    lang::file().parse(input).map(lang::fst)
+pub fn parse_file(input: &[Token]) -> Option<ClassDef> {
+    let (class, _) = lang::file().parse(input)?;
+    Some(class)
 }

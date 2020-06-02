@@ -22,14 +22,17 @@ pub enum Bytecode {
 }
 
 impl Bytecode {
+    /// Get the instruction's name.
     pub fn name(self) -> &'static str {
         NAMES[self as usize]
     }
 
+    /// Get the instruction's name padded so that every padded names are of the same length.
     pub fn padded_name(self) -> &'static str {
         PADDED_NAMES[self as usize]
     }
 
+    /// Get the number of bytes to read to process the instruction.
     pub fn bytecode_len(self) -> usize {
         match self {
             Bytecode::Halt => 1,
@@ -51,6 +54,7 @@ impl Bytecode {
         }
     }
 
+    /// Attempt to convert a raw byte to an instruction.
     pub fn from_byte(byte: u8) -> Option<Bytecode> {
         match byte {
             0 => Some(Bytecode::Halt),

@@ -1,39 +1,50 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::{Rc, Weak};
 
 use crate::class::Class;
 use crate::value::Value;
 use crate::SOMRef;
 
+/// Represents a generic (non-primitive) class instance.
 #[derive(Debug, Clone)]
 pub struct Instance {
-    /// Class object.
+    /// The class of which this is an instance from.
     pub class: SOMRef<Class>,
-    /// Instance locals.
-    pub locals: HashMap<String, SOMRef<Value>>,
+    /// This instance's locals.
+    pub locals: HashMap<String, Value>,
 }
 
 impl Instance {
-    pub fn from_class(class: &SOMRef<Class>) -> Instance {
-        let class = Rc::clone(class);
+    /// Construct an instance for a given class.
+    pub fn from_class(class: SOMRef<Class>) -> Self {
         let locals = class
             .borrow()
-            .defn()
-            .instance_locals
-            .iter()
+            .locals
+            .keys()
             .cloned()
-            .map(|local| (local, Rc::new(RefCell::new(Value::Nil))))
+            .zip(std::iter::repeat(Value::Nil))
             .collect();
 
-        Instance { class, locals }
+        Self { class, locals }
     }
 
+    /// Get the class of which this is an instance from.
     pub fn class(&self) -> SOMRef<Class> {
         self.class.clone()
     }
 
+    /// Get the superclass of this instance's class.
     pub fn super_class(&self) -> SOMRef<Class> {
         self.class.borrow().super_class()
+    }
+
+    /// Search for a local binding.
+    pub fn lookup_local(&self, name: impl AsRef<str>) -> Option<Value> {
+        self.locals.get(name.as_ref()).cloned()
+    }
+
+    /// Assign a value to a local binding.
+    pub fn assign_local(&mut self, name: impl AsRef<str>, value: Value) -> Option<()> {
+        *self.locals.get_mut(name.as_ref())? = value;
+        Some(())
     }
 }

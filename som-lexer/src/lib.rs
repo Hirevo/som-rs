@@ -1,12 +1,11 @@
 //!
-//! The SOM Lexical Analyser
-//! ========================
-//!
 //! This crate serves as the lexical analyser for the Simple Object Machine.
 //!
 
+/// The lexer module.
 mod lexer;
-mod symbol;
+/// The token definitions.
+mod token;
 
 pub use crate::lexer::Lexer;
-pub use crate::symbol::Symbol;
+pub use crate::token::Token;
