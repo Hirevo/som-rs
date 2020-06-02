@@ -136,10 +136,12 @@ impl Class {
         // dbg!(self.signature.as_str());
         // let signature = dbg!(signature.as_ref());
         let signature = signature.as_ref();
-        self.methods
-            .get(signature)
-            .cloned()
-            .or_else(|| self.super_class.upgrade()?.borrow().lookup_method(signature))
+        self.methods.get(signature).cloned().or_else(|| {
+            self.super_class
+                .upgrade()?
+                .borrow()
+                .lookup_method(signature)
+        })
     }
 
     /// Search for a local binding.

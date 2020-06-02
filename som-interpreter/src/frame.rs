@@ -9,12 +9,12 @@ pub enum FrameKind {
     /// A frame created from a block evaluation.
     Block(
         /// Weak reference to its parent frame.
-        SOMWeakRef<Frame>
+        SOMWeakRef<Frame>,
     ),
     /// A frame created from a method invocation.
     Method(
         /// The self value.
-        Value
+        Value,
     ),
 }
 

@@ -43,9 +43,7 @@ fn string_literal_test() {
 
     assert_eq!(
         lexer.next(),
-        Some(Token::LitString(String::from(
-            "some string with new\nline"
-        )))
+        Some(Token::LitString(String::from("some string with new\nline")))
     );
     assert_eq!(lexer.next(), None);
 }
