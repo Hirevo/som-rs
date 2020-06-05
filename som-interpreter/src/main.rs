@@ -6,6 +6,7 @@
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use anyhow::anyhow;
 use structopt::StructOpt;
 
 mod shell;
@@ -44,16 +45,18 @@ fn main() -> anyhow::Result<()> {
     match opts.file {
         None => shell::interactive(&mut universe, opts.verbose)?,
         Some(file) => {
-            let args = std::iter::once(
-                file.file_stem()
-                    .and_then(|stem| stem.to_str())
-                    .map(String::from)
-                    .expect("no file stem ?"),
-            )
-            .chain(opts.args.iter().cloned())
-            .map(Rc::new)
-            .map(Value::String)
-            .collect();
+            let file_stem = file
+                .file_stem()
+                .ok_or_else(|| anyhow!("the given path has no file stem"))?;
+            let file_stem = file_stem
+                .to_str()
+                .ok_or_else(|| anyhow!("the given path contains invalid UTF-8 in its file stem"))?;
+
+            let args = std::iter::once(String::from(file_stem))
+                .chain(opts.args.iter().cloned())
+                .map(Rc::new)
+                .map(Value::String)
+                .collect();
 
             let output = universe.initialize(args).unwrap_or_else(|| {
                 Return::Exception(format!("could not find 'System>>#initialize:'"))

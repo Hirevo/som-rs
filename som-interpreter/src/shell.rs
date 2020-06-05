@@ -62,7 +62,7 @@ pub fn interactive(universe: &mut Universe, verbose: bool) -> Result<(), Error> 
             Some(_) | None => {
                 println!("ERROR: could not fully parse the given expression");
                 continue;
-            },
+            }
         };
         let elapsed = start.elapsed();
         if verbose {

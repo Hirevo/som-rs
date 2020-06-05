@@ -109,7 +109,10 @@ impl Invoke for ast::MethodDef {
     fn invoke(&self, universe: &mut Universe, args: Vec<Value>) -> Return {
         let (self_value, params) = {
             let mut iter = args.into_iter();
-            let receiver = iter.next().expect("missing receiver for invocation");
+            let receiver = match iter.next() {
+                Some(receiver) => receiver,
+                None => return Return::Exception("missing receiver for invocation".to_string()),
+            };
             (receiver, iter.collect::<Vec<_>>())
         };
 
