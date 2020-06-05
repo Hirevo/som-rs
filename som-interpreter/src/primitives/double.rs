@@ -6,6 +6,16 @@ use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
 
+macro_rules! promote {
+    ($signature:expr, $value:expr) => {
+        match $value {
+            Value::Integer(value) => value as f64,
+            Value::Double(value) => value,
+            _ => return Return::Exception(format!("'{}': wrong type (expected `integer` or `double`)", $signature))
+        }
+    };
+}
+
 fn from_string(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Double>>#fromString:";
 
@@ -24,8 +34,10 @@ fn as_string(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Double>>#asString";
 
     expect_args!(SIGNATURE, args, [
-        Value::Double(value) => value,
+        value => value,
     ]);
+
+    let value = promote!(SIGNATURE, value);
 
     Return::Local(Value::String(Rc::new(value.to_string())))
 }
@@ -44,8 +56,10 @@ fn sqrt(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Double>>#sqrt";
 
     expect_args!(SIGNATURE, args, [
-        Value::Double(value) => value,
+        value => value,
     ]);
+
+    let value = promote!(SIGNATURE, value);
 
     Return::Local(Value::Double(value.sqrt()))
 }
@@ -54,8 +68,10 @@ fn round(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Double>>#round";
 
     expect_args!(SIGNATURE, args, [
-        Value::Double(value) => value,
+        value => value,
     ]);
+
+    let value = promote!(SIGNATURE, value);
 
     Return::Local(Value::Double(value.round()))
 }
@@ -64,8 +80,10 @@ fn cos(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Double>>#cos";
 
     expect_args!(SIGNATURE, args, [
-        Value::Double(value) => value,
+        value => value,
     ]);
+
+    let value = promote!(SIGNATURE, value);
 
     Return::Local(Value::Double(value.cos()))
 }
@@ -74,8 +92,10 @@ fn sin(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Double>>#sin";
 
     expect_args!(SIGNATURE, args, [
-        Value::Double(value) => value,
+        value => value,
     ]);
+
+    let value = promote!(SIGNATURE, value);
 
     Return::Local(Value::Double(value.sin()))
 }
@@ -97,9 +117,12 @@ fn lt(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Double>>#<";
 
     expect_args!(SIGNATURE, args, [
-        Value::Double(a) => a,
-        Value::Double(b) => b,
+        a => a,
+        b => b,
     ]);
+
+    let a = promote!(SIGNATURE, a);
+    let b = promote!(SIGNATURE, b);
 
     Return::Local(Value::Boolean(a < b))
 }
@@ -108,9 +131,12 @@ fn plus(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Double>>#+";
 
     expect_args!(SIGNATURE, args, [
-        Value::Double(a) => a,
-        Value::Double(b) => b,
+        a => a,
+        b => b,
     ]);
+
+    let a = promote!(SIGNATURE, a);
+    let b = promote!(SIGNATURE, b);
 
     Return::Local(Value::Double(a + b))
 }
@@ -119,9 +145,12 @@ fn minus(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Double>>#-";
 
     expect_args!(SIGNATURE, args, [
-        Value::Double(a) => a,
-        Value::Double(b) => b,
+        a => a,
+        b => b,
     ]);
+
+    let a = promote!(SIGNATURE, a);
+    let b = promote!(SIGNATURE, b);
 
     Return::Local(Value::Double(a - b))
 }
@@ -130,9 +159,12 @@ fn times(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Double>>#*";
 
     expect_args!(SIGNATURE, args, [
-        Value::Double(a) => a,
-        Value::Double(b) => b,
+        a => a,
+        b => b,
     ]);
+
+    let a = promote!(SIGNATURE, a);
+    let b = promote!(SIGNATURE, b);
 
     Return::Local(Value::Double(a * b))
 }
@@ -141,9 +173,12 @@ fn divide(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Double>>#//";
 
     expect_args!(SIGNATURE, args, [
-        Value::Double(a) => a,
-        Value::Double(b) => b,
+        a => a,
+        b => b,
     ]);
+
+    let a = promote!(SIGNATURE, a);
+    let b = promote!(SIGNATURE, b);
 
     Return::Local(Value::Double(a / b))
 }
@@ -152,9 +187,12 @@ fn modulo(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Double>>#%";
 
     expect_args!(SIGNATURE, args, [
-        Value::Double(a) => a,
-        Value::Double(b) => b,
+        a => a,
+        b => b,
     ]);
+
+    let a = promote!(SIGNATURE, a);
+    let b = promote!(SIGNATURE, b);
 
     Return::Local(Value::Double(a % b))
 }

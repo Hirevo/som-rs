@@ -28,3 +28,6 @@ anyhow = "1.0.31"
 
 # big integers
 num-bigint = "0.2.6"
+
+# random numbers
+rand = "0.7.3"

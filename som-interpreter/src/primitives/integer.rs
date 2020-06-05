@@ -1,10 +1,51 @@
+use std::convert::TryFrom;
 use std::rc::Rc;
+
+use rand::distributions::Uniform;
+use rand::Rng;
 
 use crate::expect_args;
 use crate::invokable::Return;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
+
+macro_rules! promoted_expr {
+    ($signature:expr, $a:expr, $b:expr, $expr:expr) => {
+        match ($a, $b) {
+            (Value::Integer(a), Value::Integer(b)) => Return::Local(Value::Integer({$expr}(a, b))),
+            (Value::Integer(a), Value::Double(b)) => Return::Local(Value::Double({$expr}((a as f64), b))),
+            (Value::Double(a), Value::Integer(b)) => Return::Local(Value::Double({$expr}(a, (b as f64)))),
+            (Value::Double(a), Value::Double(b)) => Return::Local(Value::Double({$expr}(a, b))),
+            _ => Return::Exception(format!("'{}': wrong type (expected `integer` or `double`)", $signature)),
+        }
+    };
+
+    ($signature:expr, $a:expr, $b:expr, $op:tt) => {
+        match (a, b) {
+            (Value::Integer(a), Value::Integer(b)) => Return::Local(Value::Integer(expr!(a $op b))),
+            (Value::Integer(a), Value::Double(b)) => Return::Local(Value::Double(expr!((a as f64) $op b))),
+            (Value::Double(a), Value::Integer(b)) => Return::Local(Value::Double(expr!(a $op (b as f64)))),
+            (Value::Double(a), Value::Double(b)) => Return::Local(Value::Double(expr!(a $op b))),
+            _ => Return::Exception(format!("'{}': wrong type (expected `integer` or `double`)", $signature)),
+        }
+    };
+}
+
+macro_rules! promote {
+    ($signature:expr, $value:expr) => {
+        match $value {
+            Value::Integer(value) => value as f64,
+            Value::Double(value) => value,
+            _ => {
+                return Return::Exception(format!(
+                    "'{}': wrong type (expected `integer` or `double`)",
+                    $signature
+                ))
+            }
+        }
+    };
+}
 
 fn from_string(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Integer>>#fromString:";
@@ -30,37 +71,83 @@ fn as_string(_: &mut Universe, args: Vec<Value>) -> Return {
     Return::Local(Value::String(Rc::new(value.to_string())))
 }
 
+fn at_random(_: &mut Universe, args: Vec<Value>) -> Return {
+    const SIGNATURE: &str = "Integer>>#atRandom";
+
+    expect_args!(SIGNATURE, args, [
+        Value::Integer(value) => value,
+    ]);
+
+    let distribution = Uniform::new(0, value);
+    let mut rng = rand::thread_rng();
+    let chosen = rng.sample(distribution);
+
+    Return::Local(Value::Integer(chosen))
+}
+
+fn as_32bit_signed_value(_: &mut Universe, args: Vec<Value>) -> Return {
+    const SIGNATURE: &str = "Integer>>#as32BitSignedValue";
+
+    expect_args!(SIGNATURE, args, [
+        Value::Integer(value) => value,
+    ]);
+
+    match i32::try_from(value) {
+        Ok(value) => Return::Local(Value::Integer(i64::from(value))),
+        Err(err) => Return::Exception(format!(
+            "'{}': could not convert to 32-bit signed integer ({})",
+            SIGNATURE, err,
+        )),
+    }
+}
+
+fn as_32bit_unsigned_value(_: &mut Universe, args: Vec<Value>) -> Return {
+    const SIGNATURE: &str = "Integer>>#as32BitUnsignedValue";
+
+    expect_args!(SIGNATURE, args, [
+        Value::Integer(value) => value,
+    ]);
+
+    match u32::try_from(value) {
+        Ok(value) => Return::Local(Value::Integer(i64::from(value))),
+        Err(err) => Return::Exception(format!(
+            "'{}': could not convert to 32-bit unsigned integer ({})",
+            SIGNATURE, err,
+        )),
+    }
+}
+
 fn plus(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Integer>>#+";
 
     expect_args!(SIGNATURE, args, [
-        Value::Integer(a) => a,
-        Value::Integer(b) => b,
+        a => a,
+        b => b,
     ]);
 
-    Return::Local(Value::Integer(a + b))
+    promoted_expr!(SIGNATURE, a, b, |a, b| a + b)
 }
 
 fn minus(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Integer>>#-";
 
     expect_args!(SIGNATURE, args, [
-        Value::Integer(a) => a,
-        Value::Integer(b) => b,
+        a => a,
+        b => b,
     ]);
 
-    Return::Local(Value::Integer(a - b))
+    promoted_expr!(SIGNATURE, a, b, |a, b| a - b)
 }
 
 fn times(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Integer>>#*";
 
     expect_args!(SIGNATURE, args, [
-        Value::Integer(a) => a,
-        Value::Integer(b) => b,
+        a => a,
+        b => b,
     ]);
 
-    Return::Local(Value::Integer(a * b))
+    promoted_expr!(SIGNATURE, a, b, |a, b| a * b)
 }
 
 fn divide(_: &mut Universe, args: Vec<Value>) -> Return {
@@ -78,11 +165,14 @@ fn divide_float(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Integer>>#//";
 
     expect_args!(SIGNATURE, args, [
-        Value::Integer(a) => a,
-        Value::Integer(b) => b,
+        a => a,
+        b => b,
     ]);
 
-    Return::Local(Value::Double((a as f64) / (b as f64)))
+    let a = promote!(SIGNATURE, a);
+    let b = promote!(SIGNATURE, b);
+
+    Return::Local(Value::Double(a / b))
 }
 
 fn modulo(_: &mut Universe, args: Vec<Value>) -> Return {
@@ -107,13 +197,27 @@ fn bitand(_: &mut Universe, args: Vec<Value>) -> Return {
     Return::Local(Value::Integer(a & b))
 }
 
-fn lt(_: &mut Universe, args: Vec<Value>) -> Return {
-    const SIGNATURE: &str = "Integer>>#<";
+fn bitxor(_: &mut Universe, args: Vec<Value>) -> Return {
+    const SIGNATURE: &str = "Integer>>#bitXor:";
 
     expect_args!(SIGNATURE, args, [
         Value::Integer(a) => a,
         Value::Integer(b) => b,
     ]);
+
+    Return::Local(Value::Integer(a ^ b))
+}
+
+fn lt(_: &mut Universe, args: Vec<Value>) -> Return {
+    const SIGNATURE: &str = "Integer>>#<";
+
+    expect_args!(SIGNATURE, args, [
+        a => a,
+        b => b,
+    ]);
+
+    let a = promote!(SIGNATURE, a);
+    let b = promote!(SIGNATURE, b);
 
     Return::Local(Value::Boolean(a < b))
 }
@@ -122,8 +226,6 @@ fn eq(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Integer>>#=";
 
     expect_args!(SIGNATURE, args, [
-        // Value::Integer(a) => a,
-        // Value::Integer(b) => b,
         a => a,
         b => b,
     ]);
@@ -131,11 +233,36 @@ fn eq(_: &mut Universe, args: Vec<Value>) -> Return {
     Return::Local(Value::Boolean(a == b))
 }
 
+fn shift_left(_: &mut Universe, args: Vec<Value>) -> Return {
+    const SIGNATURE: &str = "Integer>>#<<";
+
+    expect_args!(SIGNATURE, args, [
+        Value::Integer(a) => a,
+        Value::Integer(b) => b,
+    ]);
+
+    Return::Local(Value::Integer(a << b))
+}
+
+fn shift_right(_: &mut Universe, args: Vec<Value>) -> Return {
+    const SIGNATURE: &str = "Integer>>#>>";
+
+    expect_args!(SIGNATURE, args, [
+        Value::Integer(a) => a,
+        Value::Integer(b) => b,
+    ]);
+
+    Return::Local(Value::Integer(a >> b))
+}
+
 /// Search for a primitive matching the given signature.
 pub fn get_primitive(signature: impl AsRef<str>) -> Option<PrimitiveFn> {
     match signature.as_ref() {
         "fromString:" => Some(self::from_string),
         "asString" => Some(self::as_string),
+        "atRandom" => Some(self::at_random),
+        "as32BitSignedValue" => Some(self::as_32bit_signed_value),
+        "as32BitUnsignedValue" => Some(self::as_32bit_unsigned_value),
         "<" => Some(self::lt),
         "=" => Some(self::eq),
         "+" => Some(self::plus),
@@ -145,6 +272,9 @@ pub fn get_primitive(signature: impl AsRef<str>) -> Option<PrimitiveFn> {
         "//" => Some(self::divide_float),
         "%" => Some(self::modulo),
         "&" => Some(self::bitand),
+        "<<" => Some(self::shift_left),
+        ">>>" => Some(self::shift_right),
+        "bitXor:" => Some(self::bitxor),
         _ => None,
     }
 }
