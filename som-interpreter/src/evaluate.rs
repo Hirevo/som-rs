@@ -165,7 +165,6 @@ impl Evaluate for ast::Message {
             }
         };
 
-
         value
     }
 }
