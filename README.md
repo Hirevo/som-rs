@@ -39,7 +39,7 @@ cargo build --release
 
 This will compile the project and take care of fetching and building dependencies for you.  
 Once the build is finished, you should have a `target/` folder created in the current directory.  
-You'll find the interpreter's binary at `target/release/som-interpreter`.  
+You'll find the interpreter's binary at `./target/release/som-interpreter`.  
 
 To start the REPL, you can run:
 

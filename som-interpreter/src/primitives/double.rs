@@ -11,7 +11,12 @@ macro_rules! promote {
         match $value {
             Value::Integer(value) => value as f64,
             Value::Double(value) => value,
-            _ => return Return::Exception(format!("'{}': wrong type (expected `integer` or `double`)", $signature))
+            _ => {
+                return Return::Exception(format!(
+                    "'{}': wrong type (expected `integer` or `double`)",
+                    $signature
+                ))
+            }
         }
     };
 }
