@@ -311,6 +311,9 @@ impl Universe {
     /// Load a class from its path into this universe.
     pub fn load_class_from_path(&mut self, path: impl AsRef<Path>) -> Result<SOMRef<Class>, Error> {
         let path = path.as_ref();
+        let file_stem = path
+            .file_stem()
+            .ok_or_else(|| anyhow!("The given path has no file stem"))?;
 
         // Read file contents.
         let contents = match fs::read_to_string(path) {
@@ -330,7 +333,7 @@ impl Universe {
             None => return Err(Error::msg("could not parse file")),
         };
 
-        if defn.name.as_str() != path.file_stem().unwrap() {
+        if defn.name.as_str() != file_stem {
             return Err(anyhow!(
                 "{}: class name is different from file name.",
                 path.display(),

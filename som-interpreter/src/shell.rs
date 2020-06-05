@@ -57,7 +57,13 @@ pub fn interactive(universe: &mut Universe, verbose: bool) -> Result<(), Error> 
         }
 
         let start = Instant::now();
-        let (expr, _) = lang::expression().parse(tokens.as_slice()).unwrap();
+        let expr = match lang::expression().parse(tokens.as_slice()) {
+            Some((expr, rest)) if !rest.is_empty() => expr,
+            Some(_) | None => {
+                println!("ERROR: could not fully parse the given expression");
+                continue;
+            },
+        };
         let elapsed = start.elapsed();
         if verbose {
             writeln!(
