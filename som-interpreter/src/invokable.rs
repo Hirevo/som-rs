@@ -3,6 +3,7 @@ use std::rc::Rc;
 use som_core::ast;
 
 use crate::block::Block;
+use crate::class::Class;
 use crate::evaluate::Evaluate;
 use crate::frame::Frame;
 use crate::frame::FrameKind;
@@ -21,6 +22,8 @@ pub enum Return {
     NonLocal(Value, SOMRef<Frame>),
     /// An exception, expected to bubble all the way up.
     Exception(String),
+    /// A request to restart execution from the top of the closest body.
+    Restart,
 }
 
 /// The trait for invoking methods and primitives.
@@ -57,6 +60,8 @@ impl Invokable {
             "String" => primitives::string::get_primitive(signature),
             "Symbol" => primitives::symbol::get_primitive(signature),
             "System" => primitives::system::get_primitive(signature),
+            "Method" => primitives::method::get_primitive(signature),
+            "Primitive" => primitives::method::get_primitive(signature),
             "Block" => primitives::block1::get_primitive(signature),
             "Block1" => primitives::block1::get_primitive(signature),
             "Block2" => primitives::block2::get_primitive(signature),
@@ -74,6 +79,14 @@ impl Invokable {
             .unwrap_or_else(|| Self::NotImplemented(format!("{}>>#{}", class_name, signature)))
     }
 
+    pub fn class(&self, universe: &Universe) -> SOMRef<Class> {
+        if self.is_primitive() {
+            universe.primitive_class()
+        } else {
+            universe.method_class()
+        }
+    }
+
     /// Whether this invocable is a primitive.
     pub fn is_primitive(&self) -> bool {
         matches!(self, Self::Primitive(_))
@@ -85,7 +98,9 @@ impl Invoke for Invokable {
         match self {
             Self::MethodDef(method) => method.invoke(universe, args),
             Self::Primitive(func) => func(universe, args),
-            Self::NotImplemented(name) => unimplemented!("unimplemented primitive: {}", name),
+            Self::NotImplemented(name) => {
+                Return::Exception(format!("unimplemented primitive: {}", name))
+            }
         }
     }
 }
@@ -99,7 +114,7 @@ impl Invoke for ast::MethodDef {
         };
 
         universe.with_frame(FrameKind::Method(self_value), |universe| {
-            let current_frame = universe.current_frame();
+            let current_frame = universe.current_frame().clone();
             match &self.kind {
                 ast::MethodKind::Unary => {}
                 ast::MethodKind::Positional { parameters } => current_frame
@@ -119,19 +134,24 @@ impl Invoke for ast::MethodDef {
                         .borrow_mut()
                         .bindings
                         .extend(locals.iter().cloned().zip(std::iter::repeat(Value::Nil)));
-                    match body.evaluate(universe) {
-                        Return::NonLocal(value, frame) => {
-                            if Rc::ptr_eq(&current_frame, &frame) {
-                                Return::Local(value)
-                            } else {
-                                Return::NonLocal(value, frame)
+                    loop {
+                        match body.evaluate(universe) {
+                            Return::NonLocal(value, frame) => {
+                                if Rc::ptr_eq(&current_frame, &frame) {
+                                    break Return::Local(value);
+                                } else {
+                                    break Return::NonLocal(value, frame);
+                                }
                             }
+                            Return::Local(_) => {
+                                break Return::Local(current_frame.borrow().get_self())
+                            }
+                            Return::Exception(msg) => break Return::Exception(msg),
+                            Return::Restart => continue,
                         }
-                        Return::Local(_) => Return::Local(current_frame.borrow().get_self()),
-                        Return::Exception(msg) => Return::Exception(msg),
                     }
                 }
-                ast::MethodBody::Primitive => unimplemented!(
+                ast::MethodBody::Primitive => Return::Exception(format!(
                     "unimplemented primitive: {}>>#{}",
                     current_frame
                         .borrow()
@@ -140,7 +160,7 @@ impl Invoke for ast::MethodDef {
                         .borrow()
                         .name(),
                     self.signature,
-                ),
+                )),
             }
         })
     }

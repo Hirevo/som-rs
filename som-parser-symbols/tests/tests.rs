@@ -6,12 +6,12 @@ use som_parser_symbols::Parser;
 
 #[test]
 fn literal_tests() {
-    let syms: Vec<Token> = Lexer::new("1.2 5 #foo 'test'")
+    let tokens: Vec<Token> = Lexer::new("1.2 5 #foo 'test'")
         .skip_whitespace(true)
         .collect();
 
     let parser = many(literal());
-    let result = parser.parse(syms.as_slice());
+    let result = parser.parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (literals, rest) = result.unwrap();
@@ -27,12 +27,12 @@ fn literal_tests() {
 
 #[test]
 fn expression_test_1() {
-    let syms: Vec<Token> = Lexer::new("3 + counter get")
+    let tokens: Vec<Token> = Lexer::new("3 + counter get")
         .skip_whitespace(true)
         .collect();
 
     let parser = expression();
-    let result = parser.parse(syms.as_slice());
+    let result = parser.parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (expression, rest) = result.unwrap();
@@ -54,13 +54,13 @@ fn expression_test_1() {
 
 #[test]
 fn block_test() {
-    let syms: Vec<Token> =
+    let tokens: Vec<Token> =
         Lexer::new("[ :test | |local| local := 'this is correct'. local println. ]")
             .skip_whitespace(true)
             .collect();
 
     let parser = block();
-    let result = parser.parse(syms.as_slice());
+    let result = parser.parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (block, rest) = result.unwrap();
@@ -93,14 +93,14 @@ fn block_test() {
 
 #[test]
 fn expression_test_2() {
-    let syms: Vec<Token> = Lexer::new(
+    let tokens: Vec<Token> = Lexer::new(
         "( 3 == 3 ) ifTrue: [ 'this is correct' println. ] ifFalse: [ 'oh no' println ]",
     )
     .skip_whitespace(true)
     .collect();
 
     let parser = expression();
-    let result = parser.parse(syms.as_slice());
+    let result = parser.parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (expression, rest) = result.unwrap();
@@ -156,11 +156,11 @@ fn expression_test_2() {
 
 #[test]
 fn primary_test() {
-    let syms: Vec<Token> = Lexer::new("[ self fib: (n - 1) + (self fib: (n - 2)) ]")
+    let tokens: Vec<Token> = Lexer::new("[ self fib: (n - 1) + (self fib: (n - 2)) ]")
         .skip_whitespace(true)
         .collect();
     let parser = primary();
-    let result = parser.parse(syms.as_slice());
+    let result = parser.parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (primary, rest) = result.unwrap();

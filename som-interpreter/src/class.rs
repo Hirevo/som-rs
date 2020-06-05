@@ -13,7 +13,7 @@ use crate::{SOMRef, SOMWeakRef};
 #[derive(Debug, Clone)]
 pub enum MaybeWeak<A> {
     /// An owned reference.
-    Owned(SOMRef<A>),
+    Strong(SOMRef<A>),
     /// A weak reference.
     Weak(SOMWeakRef<A>),
 }
@@ -26,16 +26,17 @@ pub struct Class {
     /// The class of this class.
     pub class: MaybeWeak<Class>,
     /// The superclass of this class.
+    // TODO: Should probably be `Option<SOMRef<Class>>`.
     pub super_class: SOMWeakRef<Class>,
     /// The class' locals.
     pub locals: HashMap<String, Value>,
     /// The class' methods/invokables.
-    pub methods: HashMap<String, Invokable>,
+    pub methods: HashMap<String, Rc<Invokable>>,
 }
 
 impl Class {
     /// Load up a class from its class definition from the AST.
-    pub fn from_class_def(defn: ClassDef) -> Self {
+    pub fn from_class_def(defn: ClassDef) -> SOMRef<Class> {
         let static_locals = defn
             .static_locals
             .iter()
@@ -55,7 +56,7 @@ impl Class {
                     ),
                     MethodBody::Body { .. } => Invokable::MethodDef(method.clone()),
                 };
-                (signature, method)
+                (signature, Rc::new(method))
             })
             .collect();
 
@@ -78,25 +79,25 @@ impl Class {
                     ),
                     MethodBody::Body { .. } => Invokable::MethodDef(method.clone()),
                 };
-                (signature, method)
+                (signature, Rc::new(method))
             })
             .collect();
 
-        let static_class = Self {
+        let static_class = Rc::new(RefCell::new(Self {
             name: format!("{} class", defn.name),
             class: MaybeWeak::Weak(Weak::new()),
             super_class: Weak::new(),
             locals: static_locals,
             methods: static_methods,
-        };
+        }));
 
-        Self {
+        Rc::new(RefCell::new(Self {
             name: defn.name,
-            class: MaybeWeak::Owned(Rc::new(RefCell::new(static_class))),
+            class: MaybeWeak::Strong(static_class),
             super_class: Weak::new(),
             locals: instance_locals,
             methods: instance_methods,
-        }
+        }))
     }
 
     /// Get the class' name.
@@ -110,7 +111,7 @@ impl Class {
             MaybeWeak::Weak(ref weak) => weak.upgrade().unwrap_or_else(|| {
                 panic!("superclass dropped, cannot upgrade ref ({})", self.name())
             }),
-            MaybeWeak::Owned(ref owned) => owned.clone(),
+            MaybeWeak::Strong(ref owned) => owned.clone(),
         }
     }
 
@@ -119,11 +120,14 @@ impl Class {
         self.class = MaybeWeak::Weak(Rc::downgrade(class));
     }
 
+    /// Set the class of this class (as a strong reference).
+    pub fn set_class_owned(&mut self, class: &SOMRef<Self>) {
+        self.class = MaybeWeak::Strong(class.clone());
+    }
+
     /// Get the superclass of this class.
-    pub fn super_class(&self) -> SOMRef<Self> {
-        self.super_class
-            .upgrade()
-            .unwrap_or_else(|| panic!("superclass dropped, cannot upgrade ref ({})", self.name()))
+    pub fn super_class(&self) -> Option<SOMRef<Self>> {
+        self.super_class.upgrade()
     }
 
     /// Set the superclass of this class (as a weak reference).
@@ -132,9 +136,7 @@ impl Class {
     }
 
     /// Search for a given method within this class.
-    pub fn lookup_method(&self, signature: impl AsRef<str>) -> Option<Invokable> {
-        // dbg!(self.signature.as_str());
-        // let signature = dbg!(signature.as_ref());
+    pub fn lookup_method(&self, signature: impl AsRef<str>) -> Option<Rc<Invokable>> {
         let signature = signature.as_ref();
         self.methods.get(signature).cloned().or_else(|| {
             self.super_class
@@ -160,9 +162,9 @@ impl fmt::Debug for Class {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Class")
             .field("name", &self.name)
-            .field("locals", &self.locals)
-            .field("class", &self.class)
-            .field("super_class", &self.super_class)
+            .field("locals", &self.locals.keys())
+            // .field("class", &self.class)
+            // .field("super_class", &self.super_class)
             .finish()
     }
 }

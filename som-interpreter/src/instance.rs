@@ -1,11 +1,12 @@
 use std::collections::HashMap;
+use std::fmt;
 
 use crate::class::Class;
 use crate::value::Value;
 use crate::SOMRef;
 
 /// Represents a generic (non-primitive) class instance.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Instance {
     /// The class of which this is an instance from.
     pub class: SOMRef<Class>,
@@ -16,13 +17,23 @@ pub struct Instance {
 impl Instance {
     /// Construct an instance for a given class.
     pub fn from_class(class: SOMRef<Class>) -> Self {
-        let locals = class
-            .borrow()
-            .locals
-            .keys()
-            .cloned()
-            .zip(std::iter::repeat(Value::Nil))
-            .collect();
+        let mut locals = HashMap::new();
+
+        fn collect_locals(class: &SOMRef<Class>, locals: &mut HashMap<String, Value>) {
+            if let Some(class) = class.borrow().super_class() {
+                collect_locals(&class, locals);
+            }
+            locals.extend(
+                class
+                    .borrow()
+                    .locals
+                    .keys()
+                    .cloned()
+                    .zip(std::iter::repeat(Value::Nil)),
+            );
+        }
+
+        collect_locals(&class, &mut locals);
 
         Self { class, locals }
     }
@@ -33,7 +44,7 @@ impl Instance {
     }
 
     /// Get the superclass of this instance's class.
-    pub fn super_class(&self) -> SOMRef<Class> {
+    pub fn super_class(&self) -> Option<SOMRef<Class>> {
         self.class.borrow().super_class()
     }
 
@@ -46,5 +57,14 @@ impl Instance {
     pub fn assign_local(&mut self, name: impl AsRef<str>, value: Value) -> Option<()> {
         *self.locals.get_mut(name.as_ref())? = value;
         Some(())
+    }
+}
+
+impl fmt::Debug for Instance {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Instance")
+            .field("name", &self.class.borrow().name())
+            .field("locals", &self.locals.keys())
+            .finish()
     }
 }

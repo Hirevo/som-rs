@@ -5,10 +5,10 @@ use som_parser_text::Parser;
 
 #[test]
 fn literal_tests() {
-    let syms: Vec<char> = "1.2 5 #foo 'test'".chars().collect();
+    let tokens: Vec<char> = "1.2 5 #foo 'test'".chars().collect();
 
     let parser = sep_by(spacing(), literal());
-    let result = parser.parse(syms.as_slice());
+    let result = parser.parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (literals, rest) = result.unwrap();
@@ -24,10 +24,10 @@ fn literal_tests() {
 
 #[test]
 fn expression_test_1() {
-    let syms: Vec<char> = "3 + counter get".chars().collect();
+    let tokens: Vec<char> = "3 + counter get".chars().collect();
 
     let parser = expression();
-    let result = parser.parse(syms.as_slice());
+    let result = parser.parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (expression, rest) = result.unwrap();
@@ -49,12 +49,12 @@ fn expression_test_1() {
 
 #[test]
 fn block_test() {
-    let syms: Vec<char> = "[ :test | |local| local := 'this is correct'. local println. ]"
+    let tokens: Vec<char> = "[ :test | |local| local := 'this is correct'. local println. ]"
         .chars()
         .collect();
 
     let parser = block();
-    let result = parser.parse(syms.as_slice());
+    let result = parser.parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (block, rest) = result.unwrap();
@@ -87,13 +87,13 @@ fn block_test() {
 
 #[test]
 fn expression_test_2() {
-    let syms: Vec<char> =
+    let tokens: Vec<char> =
         "( 3 == 3 ) ifTrue: [ 'this is correct' println. ] ifFalse: [ 'oh no' println ]"
             .chars()
             .collect();
 
     let parser = expression();
-    let result = parser.parse(syms.as_slice());
+    let result = parser.parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (expression, rest) = result.unwrap();
@@ -149,11 +149,11 @@ fn expression_test_2() {
 
 #[test]
 fn primary_test() {
-    let syms: Vec<char> = "[ self fib: (n - 1) + (self fib: (n - 2)) ]"
+    let tokens: Vec<char> = "[ (self fib: (n - 1)) + (self fib: (n - 2)) ]"
         .chars()
         .collect();
     let parser = primary();
-    let result = parser.parse(syms.as_slice());
+    let result = parser.parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (primary, rest) = result.unwrap();
@@ -165,45 +165,52 @@ fn primary_test() {
             parameters: vec![],
             locals: vec![],
             body: Body {
-                exprs: vec![Expression::Message(Message {
-                    receiver: Box::new(Expression::Reference(String::from("self"))),
-                    signature: String::from("fib:"),
-                    values: vec![Expression::BinaryOp(BinaryOp {
-                        op: String::from("+"),
-                        lhs: Box::new(Expression::Term(Term {
-                            body: Body {
-                                exprs: vec![Expression::BinaryOp(BinaryOp {
-                                    op: String::from("-"),
-                                    lhs: Box::new(Expression::Reference(String::from("n"))),
-                                    rhs: Box::new(Expression::Literal(Literal::Integer(1))),
-                                })],
-                                full_stopped: false,
-                            }
-                        })),
-                        rhs: Box::new(Expression::Term(Term {
-                            body: Body {
-                                exprs: vec![Expression::Message(Message {
-                                    receiver: Box::new(Expression::Reference(String::from("self"))),
-                                    signature: String::from("fib:"),
-                                    values: vec![Expression::Term(Term {
-                                        body: Body {
-                                            exprs: vec![Expression::BinaryOp(BinaryOp {
-                                                op: String::from("-"),
-                                                lhs: Box::new(Expression::Reference(String::from(
-                                                    "n"
-                                                ))),
-                                                rhs: Box::new(Expression::Literal(
-                                                    Literal::Integer(2)
-                                                )),
+                exprs: vec![Expression::Term(Term {
+                    body: Body {
+                        exprs: vec![Expression::Message(Message {
+                            receiver: Box::new(Expression::Reference(String::from("self"))),
+                            signature: String::from("fib:"),
+                            values: vec![Expression::BinaryOp(BinaryOp {
+                                op: String::from("+"),
+                                lhs: Box::new(Expression::Term(Term {
+                                    body: Body {
+                                        exprs: vec![Expression::BinaryOp(BinaryOp {
+                                            op: String::from("-"),
+                                            lhs: Box::new(Expression::Reference(String::from("n"))),
+                                            rhs: Box::new(Expression::Literal(Literal::Integer(1))),
+                                        })],
+                                        full_stopped: false,
+                                    }
+                                })),
+                                rhs: Box::new(Expression::Term(Term {
+                                    body: Body {
+                                        exprs: vec![Expression::Message(Message {
+                                            receiver: Box::new(Expression::Reference(
+                                                String::from("self")
+                                            )),
+                                            signature: String::from("fib:"),
+                                            values: vec![Expression::Term(Term {
+                                                body: Body {
+                                                    exprs: vec![Expression::BinaryOp(BinaryOp {
+                                                        op: String::from("-"),
+                                                        lhs: Box::new(Expression::Reference(
+                                                            String::from("n")
+                                                        )),
+                                                        rhs: Box::new(Expression::Literal(
+                                                            Literal::Integer(2)
+                                                        )),
+                                                    })],
+                                                    full_stopped: false,
+                                                }
                                             })],
-                                            full_stopped: false,
-                                        }
-                                    })],
-                                })],
-                                full_stopped: false,
-                            }
-                        }))
-                    })],
+                                        })],
+                                        full_stopped: false,
+                                    }
+                                }))
+                            })],
+                        })],
+                        full_stopped: false
+                    }
                 })],
                 full_stopped: false,
             }

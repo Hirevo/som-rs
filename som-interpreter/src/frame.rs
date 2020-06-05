@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::value::Value;
-use crate::SOMWeakRef;
+use crate::SOMRef;
 
 /// The kind of a given frame.
 #[derive(Debug, Clone)]
@@ -9,7 +9,7 @@ pub enum FrameKind {
     /// A frame created from a block evaluation.
     Block(
         /// Weak reference to its parent frame.
-        SOMWeakRef<Frame>,
+        SOMRef<Frame>,
     ),
     /// A frame created from a method invocation.
     Method(
@@ -45,10 +45,7 @@ impl Frame {
     pub fn get_self(&self) -> Value {
         match &self.kind {
             FrameKind::Method(value) => value.clone(),
-            FrameKind::Block(frame_ref) => frame_ref
-                .upgrade()
-                .map(|frame| frame.borrow().get_self())
-                .unwrap_or(Value::Nil),
+            FrameKind::Block(frame) => frame.borrow().get_self(),
         }
     }
 
@@ -60,9 +57,7 @@ impl Frame {
         }
         match &self.kind {
             FrameKind::Method(value) => value.lookup_local(name),
-            FrameKind::Block(frame_ref) => frame_ref
-                .upgrade()
-                .and_then(|frame| frame.borrow().lookup_local(name)),
+            FrameKind::Block(frame) => frame.borrow().lookup_local(name),
         }
     }
 
@@ -75,9 +70,15 @@ impl Frame {
         }
         match &mut self.kind {
             FrameKind::Method(self_value) => self_value.assign_local(name, value),
-            FrameKind::Block(frame_ref) => frame_ref
-                .upgrade()
-                .and_then(|frame| frame.borrow_mut().assign_local(name, value)),
+            FrameKind::Block(frame) => frame.borrow_mut().assign_local(name, value),
+        }
+    }
+
+    /// Get the method invocation frame for that frame.
+    pub fn method_frame(frame: &SOMRef<Frame>) -> SOMRef<Frame> {
+        match frame.borrow().kind() {
+            FrameKind::Block(frame) => Frame::method_frame(frame),
+            FrameKind::Method(_) => frame.clone(),
         }
     }
 }

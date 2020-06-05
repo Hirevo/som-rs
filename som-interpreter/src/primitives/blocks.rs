@@ -1,3 +1,4 @@
+use crate::expect_args;
 use crate::invokable::Invoke;
 use crate::invokable::Return;
 use crate::primitives::PrimitiveFn;
@@ -11,34 +12,27 @@ pub mod block1 {
     fn value(universe: &mut Universe, args: Vec<Value>) -> Return {
         const SIGNATURE: &str = "Block1>>#value";
 
-        match args[0] {
-            Value::Block(ref block) => block.invoke(universe, args.clone()),
-            _ => Return::Exception(format!("'{}': invalid self type", SIGNATURE)),
-        }
+        let block_args = args.clone();
+        expect_args!(SIGNATURE, args, [
+            Value::Block(block) => block,
+        ]);
+
+        block.invoke(universe, block_args)
     }
 
-    fn while_true(universe: &mut Universe, args: Vec<Value>) -> Return {
-        const SIGNATURE: &str = "Block>>#whileTrue:";
+    fn restart(_: &mut Universe, args: Vec<Value>) -> Return {
+        const SIGNATURE: &str = "Block>>#restart";
 
-        match (&args[0], &args[1]) {
-            (Value::Block(cond), Value::Block(action)) => loop {
-                let value = cond.invoke(universe, vec![args[0].clone()]);
-                if let Return::Local(Value::Boolean(true)) = value {
-                    action.invoke(universe, vec![args[1].clone()]);
-                } else {
-                    break value;
-                }
-            },
-            _ => Return::Exception(format!("'{}': invalid self type", SIGNATURE)),
-        }
+        expect_args!(SIGNATURE, args, [Value::Block(_)]);
+
+        Return::Restart
     }
 
     /// Search for a primitive matching the given signature.
     pub fn get_primitive(signature: impl AsRef<str>) -> Option<PrimitiveFn> {
         match signature.as_ref() {
             "value" => Some(self::value),
-            "whileTrue:" => Some(self::while_true),
-            // "restart" => Some(self::value),
+            "restart" => Some(self::restart),
             _ => None,
         }
     }
@@ -51,10 +45,13 @@ pub mod block2 {
     fn value(universe: &mut Universe, args: Vec<Value>) -> Return {
         const SIGNATURE: &str = "Block2>>#value:";
 
-        match args[0] {
-            Value::Block(ref block) => block.invoke(universe, args.clone()),
-            _ => Return::Exception(format!("'{}': invalid self type", SIGNATURE)),
-        }
+        let block_args = args.clone();
+        expect_args!(SIGNATURE, args, [
+            Value::Block(block) => block,
+            _,
+        ]);
+
+        block.invoke(universe, block_args)
     }
 
     /// Search for a primitive matching the given signature.
@@ -73,10 +70,14 @@ pub mod block3 {
     fn value_with(universe: &mut Universe, args: Vec<Value>) -> Return {
         const SIGNATURE: &str = "Block3>>#value:with:";
 
-        match args[0] {
-            Value::Block(ref block) => block.invoke(universe, args.clone()),
-            _ => Return::Exception(format!("'{}': invalid self type", SIGNATURE)),
-        }
+        let block_args = args.clone();
+        expect_args!(SIGNATURE, args, [
+            Value::Block(block) => block,
+            _,
+            _,
+        ]);
+
+        block.invoke(universe, block_args)
     }
 
     /// Search for a primitive matching the given signature.

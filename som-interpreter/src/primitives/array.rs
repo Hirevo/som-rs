@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::convert::TryFrom;
 use std::rc::Rc;
 
+use crate::expect_args;
 use crate::invokable::Return;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
@@ -10,70 +11,66 @@ use crate::value::Value;
 fn at(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Array>>#at:";
 
-    let index = match args[1] {
-        Value::Integer(value) => match usize::try_from(value - 1) {
-            Ok(index) => index,
-            Err(err) => return Return::Exception(format!("'{}': {}", SIGNATURE, err)),
-        },
-        _ => return Return::Exception(format!("'{}': invalid index type", SIGNATURE)),
+    expect_args!(SIGNATURE, args, [
+        Value::Array(values) => values,
+        Value::Integer(index) => index,
+    ]);
+
+    let index = match usize::try_from(index - 1) {
+        Ok(index) => index,
+        Err(err) => return Return::Exception(format!("'{}': {}", SIGNATURE, err)),
     };
-    match args[0] {
-        Value::Array(ref values) => {
-            Return::Local(values.borrow().get(index).cloned().unwrap_or(Value::Nil))
-        }
-        _ => Return::Exception(format!("'{}': invalid self type", SIGNATURE)),
-    }
+    let value = values.borrow().get(index).cloned().unwrap_or(Value::Nil);
+    Return::Local(value)
 }
 
 fn at_put(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Array>>#at:put:";
 
-    let mut iter = args.into_iter();
-    let mut receiver = iter.next().unwrap();
-    let index = iter.next().unwrap();
-    let value = iter.next().unwrap();
-    let index = match index {
-        Value::Integer(value) => match usize::try_from(value - 1) {
-            Ok(index) => index,
-            Err(err) => return Return::Exception(format!("'{}': {}", SIGNATURE, err)),
-        },
-        _ => return Return::Exception(format!("'{}': invalid index type", SIGNATURE)),
+    expect_args!(SIGNATURE, args, [
+        Value::Array(values) => values,
+        Value::Integer(index) => index,
+        value => value,
+    ]);
+
+    let index = match usize::try_from(index - 1) {
+        Ok(index) => index,
+        Err(err) => return Return::Exception(format!("'{}': {}", SIGNATURE, err)),
     };
-    match receiver {
-        Value::Array(ref mut values) => {
-            if let Some(location) = values.borrow_mut().get_mut(index as usize) {
-                *location = value;
-            }
-            Return::Local(receiver)
-        }
-        _ => Return::Exception(format!("'{}': invalid self type", SIGNATURE)),
+    if let Some(location) = values.borrow_mut().get_mut(index) {
+        *location = value;
     }
+    Return::Local(Value::Array(values))
 }
 
 fn length(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Array>>#length";
 
-    match args[0] {
-        Value::Array(ref values) => match i64::try_from(values.borrow().len()) {
-            Ok(length) => Return::Local(Value::Integer(length)),
-            Err(err) => Return::Exception(format!("'{}': {}", SIGNATURE, err)),
-        },
-        _ => Return::Exception(format!("'{}': invalid self type", SIGNATURE)),
+    expect_args!(SIGNATURE, args, [
+        Value::Array(values) => values,
+    ]);
+
+    let length = values.borrow().len();
+    match i64::try_from(length) {
+        Ok(length) => Return::Local(Value::Integer(length)),
+        Err(err) => Return::Exception(format!("'{}': {}", SIGNATURE, err)),
     }
 }
 
 fn new(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Array>>#new:";
 
-    match args[1] {
-        Value::Integer(value) => match usize::try_from(value) {
-            Ok(length) => Return::Local(Value::Array(Rc::new(RefCell::new(vec![
-                Value::Nil;
-                length
-            ])))),
-            Err(err) => Return::Exception(format!("'{}': {}", SIGNATURE, err)),
-        },
-        _ => Return::Exception(format!("'{}': invalid length type", SIGNATURE)),
+    expect_args!(SIGNATURE, args, [
+        _,
+        Value::Integer(count) => count,
+    ]);
+
+    match usize::try_from(count) {
+        Ok(length) => Return::Local(Value::Array(Rc::new(RefCell::new(vec![
+            Value::Nil;
+            length
+        ])))),
+        Err(err) => Return::Exception(format!("'{}': {}", SIGNATURE, err)),
     }
 }
 

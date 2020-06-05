@@ -1,3 +1,4 @@
+use std::fmt;
 use std::rc::Rc;
 
 use crate::block::Block;
@@ -9,7 +10,7 @@ use crate::universe::Universe;
 use crate::SOMRef;
 
 /// Represents an SOM value.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Value {
     /// The **nil** value.
     Nil,
@@ -28,11 +29,13 @@ pub enum Value {
     /// An array of values.
     Array(SOMRef<Vec<Self>>),
     /// A block value, ready to be evaluated.
-    Block(Block),
+    Block(Rc<Block>),
     /// A generic (non-primitive) class instance.
     Instance(SOMRef<Instance>),
     /// A bare class object.
     Class(SOMRef<Class>),
+    /// A bare invokable.
+    Invokable(SOMRef<Class>, Rc<Invokable>),
 }
 
 impl Value {
@@ -51,6 +54,7 @@ impl Value {
             Self::Block(block) => block.class(universe),
             Self::Instance(instance) => instance.borrow().class(),
             Self::Class(class) => class.borrow().class(),
+            Self::Invokable(_, invokable) => invokable.class(universe),
         }
     }
 
@@ -59,17 +63,8 @@ impl Value {
         &self,
         universe: &Universe,
         signature: impl AsRef<str>,
-    ) -> Option<Invokable> {
-        let signature = signature.as_ref();
-        if let Self::Class(ref class) = self {
-            // dbg!(class.borrow().name());
-            // dbg!(signature);
-            class.borrow().lookup_method(signature)
-        } else {
-            // dbg!(self);
-            // dbg!(signature);
-            self.class(universe).borrow().lookup_method(signature)
-        }
+    ) -> Option<Rc<Invokable>> {
+        self.class(universe).borrow().lookup_method(signature)
     }
 
     /// Search for a local binding within this value.
@@ -122,6 +117,12 @@ impl Value {
                 instance.borrow().class().borrow().name(),
             ),
             Self::Class(class) => class.borrow().name().to_string(),
+            Self::Invokable(holder, invokable) => match invokable.as_ref() {
+                Invokable::MethodDef(defn) => {
+                    format!("{}>>#{}", holder.borrow().name(), defn.signature)
+                }
+                _ => format!("instance of Primitive"),
+            },
         }
     }
 }
@@ -137,8 +138,35 @@ impl PartialEq for Value {
             (Self::Symbol(a), Self::Symbol(b)) => a.eq(b),
             (Self::Array(a), Self::Array(b)) => a.eq(b),
             (Self::Instance(a), Self::Instance(b)) => Rc::ptr_eq(a, b),
-            (Self::Class(a), Self::Class(b)) => Rc::ptr_eq(a, b),
+            (Self::Class(a), Self::Class(b)) => a.as_ptr() == b.as_ptr(),
             _ => false,
+        }
+    }
+}
+
+impl fmt::Debug for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Nil => f.debug_tuple("Nil").finish(),
+            Self::System => f.debug_tuple("System").finish(),
+            Self::Boolean(val) => f.debug_tuple("Boolean").field(val).finish(),
+            Self::Integer(val) => f.debug_tuple("Integer").field(val).finish(),
+            Self::Double(val) => f.debug_tuple("Double").field(val).finish(),
+            Self::Symbol(val) => f.debug_tuple("Symbol").field(val).finish(),
+            Self::String(val) => f.debug_tuple("String").field(val).finish(),
+            Self::Array(val) => f.debug_tuple("Array").field(&val.borrow()).finish(),
+            Self::Block(val) => f.debug_tuple("Block").field(val).finish(),
+            Self::Instance(val) => f.debug_tuple("Instance").field(&val.borrow()).finish(),
+            Self::Class(val) => f.debug_tuple("Class").field(&val.borrow()).finish(),
+            Self::Invokable(holder, val) => {
+                let signature = match val.as_ref() {
+                    Invokable::MethodDef(defn) => {
+                        format!("{}>>#{}", holder.borrow().name(), defn.signature)
+                    }
+                    _ => format!("instance of Primitive"),
+                };
+                f.debug_tuple("Invokable").field(&signature).finish()
+            }
         }
     }
 }

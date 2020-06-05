@@ -42,7 +42,7 @@ pub fn interactive(universe: &mut Universe, verbose: bool) -> Result<(), Error> 
         }
 
         let start = Instant::now();
-        let symbols: Vec<Token> = Lexer::new(line)
+        let tokens: Vec<Token> = Lexer::new(line)
             .skip_comments(true)
             .skip_whitespace(true)
             .collect();
@@ -57,7 +57,7 @@ pub fn interactive(universe: &mut Universe, verbose: bool) -> Result<(), Error> 
         }
 
         let start = Instant::now();
-        let (expr, _) = lang::expression().parse(symbols.as_slice()).unwrap();
+        let (expr, _) = lang::expression().parse(tokens.as_slice()).unwrap();
         let elapsed = start.elapsed();
         if verbose {
             writeln!(
@@ -95,6 +95,7 @@ pub fn interactive(universe: &mut Universe, verbose: bool) -> Result<(), Error> 
                 last_value = value;
             }
             Return::Exception(message) => println!("ERROR: {}", message),
+            Return::Restart => println!("ERROR: asked for a restart to the top-level"),
         }
         counter += 1;
     }

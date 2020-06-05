@@ -17,12 +17,14 @@ path = "src/main.rs"
 # internal
 som-core = { path = "../som-core", version = "0.1.0" }
 som-lexer = { path = "../som-lexer", version = "0.1.0" }
-som-parser = { package = "som-parser-symbols", path = "../som-parser-symbols" }
-# som-parser = { package = "som-parser-text", path = "../som-parser-text" }
+som-parser = { package = "som-parser-symbols", path = "../som-parser-symbols", version = "0.1.0" }
+# som-parser = { package = "som-parser-text", path = "../som-parser-text", version = "0.1.0" }
 
 # CLI interface
 structopt = "0.3.14"
 
 # error handling
-anyhow = "1.0.28"
+anyhow = "1.0.31"
+
+# big integers
 num-bigint = "0.2.6"
