@@ -47,7 +47,7 @@ fn length(universe: &mut Universe, args: Vec<Value>) -> Return {
         _ => return Return::Exception(format!("'{}': invalid self type", SIGNATURE)),
     };
 
-    match i64::try_from(value.len()) {
+    match i64::try_from(value.chars().count()) {
         Ok(idx) => Return::Local(Value::Integer(idx)),
         Err(err) => Return::Exception(format!("'{}': {}", SIGNATURE, err)),
     }
