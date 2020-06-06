@@ -493,7 +493,9 @@ impl Universe {
             .insert(name.as_ref().to_string(), value)
             .map(|_| ())
     }
+}
 
+impl Universe {
     /// Call `System>>#initialize:` with the given name, if it is defined.
     pub fn initialize(&mut self, args: Vec<Value>) -> Option<Return> {
         let initialize = Value::System.lookup_method(self, "initialize:")?;
@@ -501,9 +503,7 @@ impl Universe {
 
         Some(initialize.invoke(self, vec![Value::System, args]))
     }
-}
 
-impl Universe {
     /// Call `System>>#unknownGlobal:` with the given name, if it is defined.
     pub fn unknown_global(&mut self, name: impl AsRef<str>) -> Option<Return> {
         let sym = self.intern_symbol(name.as_ref());
