@@ -66,7 +66,9 @@ fn is_letters(universe: &mut Universe, args: Vec<Value>) -> Return {
         _ => return Return::Exception(format!("'{}': invalid self type", SIGNATURE)),
     };
 
-    Return::Local(Value::Boolean(value.chars().all(char::is_alphabetic)))
+    Return::Local(Value::Boolean(
+        !value.is_empty() && !value.is_empty() && value.chars().all(char::is_alphabetic),
+    ))
 }
 
 fn is_digits(universe: &mut Universe, args: Vec<Value>) -> Return {
@@ -82,11 +84,13 @@ fn is_digits(universe: &mut Universe, args: Vec<Value>) -> Return {
         _ => return Return::Exception(format!("'{}': invalid self type", SIGNATURE)),
     };
 
-    Return::Local(Value::Boolean(value.chars().all(char::is_numeric)))
+    Return::Local(Value::Boolean(
+        !value.is_empty() && value.chars().all(char::is_numeric),
+    ))
 }
 
 fn is_whitespace(universe: &mut Universe, args: Vec<Value>) -> Return {
-    const SIGNATURE: &str = "String>>#isWhitespace";
+    const SIGNATURE: &str = "String>>#isWhiteSpace";
 
     expect_args!(SIGNATURE, args, [
         value => value,
@@ -98,7 +102,9 @@ fn is_whitespace(universe: &mut Universe, args: Vec<Value>) -> Return {
         _ => return Return::Exception(format!("'{}': invalid self type", SIGNATURE)),
     };
 
-    Return::Local(Value::Boolean(value.chars().all(char::is_whitespace)))
+    Return::Local(Value::Boolean(
+        !value.is_empty() && value.chars().all(char::is_whitespace),
+    ))
 }
 
 fn concatenate(universe: &mut Universe, args: Vec<Value>) -> Return {
@@ -177,7 +183,7 @@ pub fn get_primitive(signature: impl AsRef<str>) -> Option<PrimitiveFn> {
         "length" => Some(self::length),
         "isLetters" => Some(self::is_letters),
         "isDigits" => Some(self::is_digits),
-        "isWhitespace" => Some(self::is_whitespace),
+        "isWhiteSpace" => Some(self::is_whitespace),
         "asSymbol" => Some(self::as_symbol),
         "concatenate:" => Some(self::concatenate),
         "primSubstringFrom:to:" => Some(self::prim_substring_from_to),
