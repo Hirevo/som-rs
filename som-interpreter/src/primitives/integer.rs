@@ -203,7 +203,6 @@ fn sqrt(_: &mut Universe, args: Vec<Value>) -> Return {
     }
 }
 
-
 fn bitand(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Integer>>#&";
 

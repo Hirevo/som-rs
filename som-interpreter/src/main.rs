@@ -44,7 +44,7 @@ fn main() -> anyhow::Result<()> {
         None => {
             let mut universe = Universe::with_classpath(opts.classpath)?;
             shell::interactive(&mut universe, opts.verbose)?
-        },
+        }
         Some(file) => {
             let file_stem = file
                 .file_stem()

@@ -105,7 +105,11 @@ pub fn interactive(universe: &mut Universe, verbose: bool) -> Result<(), Error> 
                 last_value = value;
             }
             Return::NonLocal(value, frame) => {
-                println!("returned (non-local, escaped): {} ({:?})", value.to_string(&universe), value);
+                println!(
+                    "returned (non-local, escaped): {} ({:?})",
+                    value.to_string(&universe),
+                    value
+                );
                 println!("intended for frame: {:?}", frame);
                 last_value = value;
             }
