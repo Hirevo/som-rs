@@ -84,23 +84,37 @@ impl Lexer {
     }
 
     fn lex_operator(&mut self) -> Option<Token> {
-        let ch = self.chars.pop()?;
-        match ch {
-            '~' => Some(Token::Not),
-            '&' => Some(Token::And),
-            '|' => Some(Token::Or),
-            '*' => Some(Token::Star),
-            '/' => Some(Token::Div),
-            '\\' => Some(Token::Mod),
-            '+' => Some(Token::Plus),
-            '=' => Some(Token::Equal),
-            '>' => Some(Token::More),
-            '<' => Some(Token::Less),
-            ',' => Some(Token::Comma),
-            '@' => Some(Token::At),
-            '%' => Some(Token::Per),
-            '-' => Some(Token::Minus),
-            _ => None,
+        let iter = self.chars.iter().rev().copied();
+        let length = iter.take_while(|ch| Lexer::is_operator(*ch)).count();
+        match length {
+            0 => None,
+            1 => {
+                let ch = self.chars.pop()?;
+                match ch {
+                    '~' => Some(Token::Not),
+                    '&' => Some(Token::And),
+                    '|' => Some(Token::Or),
+                    '*' => Some(Token::Star),
+                    '/' => Some(Token::Div),
+                    '\\' => Some(Token::Mod),
+                    '+' => Some(Token::Plus),
+                    '=' => Some(Token::Equal),
+                    '>' => Some(Token::More),
+                    '<' => Some(Token::Less),
+                    ',' => Some(Token::Comma),
+                    '@' => Some(Token::At),
+                    '%' => Some(Token::Per),
+                    '-' => Some(Token::Minus),
+                    _ => None,
+                }
+            }
+            length => {
+                let mut operator = String::with_capacity(length);
+                for _ in 0..length {
+                    operator.push(self.chars.pop()?);
+                }
+                Some(Token::OperatorSequence(operator))
+            }
         }
     }
 
@@ -204,8 +218,7 @@ impl Iterator for Lexer {
                         Some(Token::Separator)
                     }
                 } else {
-                    self.chars.pop()?;
-                    Some(Token::Minus)
+                    self.lex_operator()
                 }
             }
             ':' => {

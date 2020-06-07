@@ -68,31 +68,41 @@ pub fn double<'a>() -> impl Parser<'a, f64> {
     }
 }
 
-pub fn single_operator<'a>() -> impl Parser<'a, char> {
+pub fn single_operator<'a>() -> impl Parser<'a, &'static str> {
     move |input: &'a [Token]| {
         let (head, tail) = input.split_first()?;
         match head {
-            Token::Not => Some(('~', tail)),
-            Token::And => Some(('&', tail)),
-            Token::Or => Some(('|', tail)),
-            Token::Star => Some(('*', tail)),
-            Token::Div => Some(('/', tail)),
-            Token::Mod => Some(('\\', tail)),
-            Token::Plus => Some(('+', tail)),
-            Token::Equal => Some(('=', tail)),
-            Token::More => Some(('>', tail)),
-            Token::Less => Some(('<', tail)),
-            Token::Comma => Some((',', tail)),
-            Token::At => Some(('@', tail)),
-            Token::Per => Some(('%', tail)),
-            Token::Minus => Some(('-', tail)),
+            Token::Not => Some(("~", tail)),
+            Token::And => Some(("&", tail)),
+            Token::Or => Some(("|", tail)),
+            Token::Star => Some(("*", tail)),
+            Token::Div => Some(("/", tail)),
+            Token::Mod => Some(("\\", tail)),
+            Token::Plus => Some(("+", tail)),
+            Token::Equal => Some(("=", tail)),
+            Token::More => Some((">", tail)),
+            Token::Less => Some(("<", tail)),
+            Token::Comma => Some((",", tail)),
+            Token::At => Some(("@", tail)),
+            Token::Per => Some(("%", tail)),
+            Token::Minus => Some(("-", tail)),
+            _ => None,
+        }
+    }
+}
+
+pub fn operator_sequence<'a>() -> impl Parser<'a, String> {
+    move |input: &'a [Token]| {
+        let (head, tail) = input.split_first()?;
+        match head {
+            Token::OperatorSequence(seq) => Some((seq.clone(), tail)),
             _ => None,
         }
     }
 }
 
 pub fn operator<'a>() -> impl Parser<'a, String> {
-    some(single_operator()).map(|chars| chars.into_iter().collect())
+    single_operator().map(String::from).or(operator_sequence())
 }
 
 pub fn identifier<'a>() -> impl Parser<'a, String> {

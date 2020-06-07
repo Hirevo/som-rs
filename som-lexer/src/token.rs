@@ -65,6 +65,8 @@ pub enum Token {
     Identifier(String),
     /// A keyword (`fromString:`).
     Keyword(String),
+    /// A sequence of operators (eg: `>>>`).
+    OperatorSequence(String),
     /// A comment (`"what a beautiful and majestic piece of code"`).
     Comment(String),
     /// Some whitespace (` `).
