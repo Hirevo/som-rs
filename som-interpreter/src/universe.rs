@@ -462,16 +462,10 @@ impl Universe {
     pub fn lookup_local(&self, name: impl AsRef<str>) -> Option<Value> {
         let name = name.as_ref();
         match name {
-            "self" => {
+            "self" | "super" => {
                 let frame = self.current_frame();
                 let self_value = frame.borrow().get_self();
                 Some(self_value)
-            }
-            "super" => {
-                let frame = self.current_frame();
-                let class = frame.borrow().get_self().class(self);
-                let super_class = class.borrow().super_class();
-                Some(super_class.map(Value::Class).unwrap_or(Value::Nil))
             }
             name => self.current_frame().borrow().lookup_local(name),
         }
