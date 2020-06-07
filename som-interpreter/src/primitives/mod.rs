@@ -28,7 +28,7 @@ use crate::value::Value;
 /// A interpreter primitive (just a bare function pointer).
 pub type PrimitiveFn = fn(universe: &mut Universe, args: Vec<Value>) -> Return;
 
-/// Macro for checking and destructure arguments passed to primitives.
+/// Macro for checking and destructuring arguments passed to primitives.
 #[macro_export]
 macro_rules! expect_args {
     ($signature:expr, $args:expr, [ $( $ptrn:pat $( => $name:ident )? ),* $(,)? ]) => {

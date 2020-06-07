@@ -1,4 +1,3 @@
-use std::convert::TryFrom;
 use std::rc::Rc;
 
 use rand::distributions::Uniform;
@@ -47,15 +46,21 @@ macro_rules! promote {
     };
 }
 
-fn from_string(_: &mut Universe, args: Vec<Value>) -> Return {
+fn from_string(universe: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Integer>>#fromString:";
 
     expect_args!(SIGNATURE, args, [
         _,
-        Value::String(string) => string,
+        value => value,
     ]);
 
-    match string.parse() {
+    let value = match value {
+        Value::String(ref value) => value.as_str(),
+        Value::Symbol(sym) => universe.lookup_symbol(sym),
+        _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
+    };
+
+    match value.parse() {
         Ok(parsed) => Return::Local(Value::Integer(parsed)),
         Err(err) => Return::Exception(err.to_string()),
     }
@@ -92,13 +97,7 @@ fn as_32bit_signed_value(_: &mut Universe, args: Vec<Value>) -> Return {
         Value::Integer(value) => value,
     ]);
 
-    match i32::try_from(value) {
-        Ok(value) => Return::Local(Value::Integer(i64::from(value))),
-        Err(err) => Return::Exception(format!(
-            "'{}': could not convert to 32-bit signed integer ({})",
-            SIGNATURE, err,
-        )),
-    }
+    Return::Local(Value::Integer(value as i32 as i64))
 }
 
 fn as_32bit_unsigned_value(_: &mut Universe, args: Vec<Value>) -> Return {
@@ -108,13 +107,7 @@ fn as_32bit_unsigned_value(_: &mut Universe, args: Vec<Value>) -> Return {
         Value::Integer(value) => value,
     ]);
 
-    match u32::try_from(value) {
-        Ok(value) => Return::Local(Value::Integer(i64::from(value))),
-        Err(err) => Return::Exception(format!(
-            "'{}': could not convert to 32-bit unsigned integer ({})",
-            SIGNATURE, err,
-        )),
-    }
+    Return::Local(Value::Integer(value as u32 as i64))
 }
 
 fn plus(_: &mut Universe, args: Vec<Value>) -> Return {
@@ -177,6 +170,17 @@ fn divide_float(_: &mut Universe, args: Vec<Value>) -> Return {
 
 fn modulo(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Integer>>#%";
+
+    expect_args!(SIGNATURE, args, [
+        Value::Integer(a) => a,
+        Value::Integer(b) => b,
+    ]);
+
+    Return::Local(Value::Integer(a % b))
+}
+
+fn remainder(_: &mut Universe, args: Vec<Value>) -> Return {
+    const SIGNATURE: &str = "Integer>>#rem:";
 
     expect_args!(SIGNATURE, args, [
         Value::Integer(a) => a,
@@ -288,6 +292,7 @@ pub fn get_primitive(signature: impl AsRef<str>) -> Option<PrimitiveFn> {
         "/" => Some(self::divide),
         "//" => Some(self::divide_float),
         "%" => Some(self::modulo),
+        "rem:" => Some(self::remainder),
         "&" => Some(self::bitand),
         "<<" => Some(self::shift_left),
         ">>>" => Some(self::shift_right),
