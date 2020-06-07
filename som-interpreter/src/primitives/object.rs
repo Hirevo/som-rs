@@ -1,8 +1,11 @@
-use crate::expect_args;
+use std::convert::TryFrom;
+
+use crate::class::Class;
 use crate::invokable::{Invoke, Return};
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
+use crate::{expect_args, SOMRef};
 
 fn class(universe: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &'static str = "Object>>#class";
@@ -177,13 +180,21 @@ fn inst_var_at(universe: &mut Universe, args: Vec<Value>) -> Return {
 
     expect_args!(SIGNATURE, args, [
         object => object,
-        Value::Symbol(sym) => sym,
+        Value::Integer(index) => index,
     ]);
 
-    let signature = universe.lookup_symbol(sym);
-    let local = object.lookup_local(signature);
+    let index = match usize::try_from(index - 1) {
+        Ok(index) => index,
+        Err(err) => return Return::Exception(format!("'{}': {}", SIGNATURE, err)),
+    };
 
-    Return::Local(local.unwrap_or(Value::Nil))
+    let locals = gather_locals(universe, object.class(universe));
+    let local = locals
+        .get(index)
+        .and_then(|local| object.lookup_local(local))
+        .unwrap_or(Value::Nil);
+
+    Return::Local(local)
 }
 
 fn inst_var_at_put(universe: &mut Universe, args: Vec<Value>) -> Return {
@@ -191,14 +202,31 @@ fn inst_var_at_put(universe: &mut Universe, args: Vec<Value>) -> Return {
 
     expect_args!(SIGNATURE, args, [
         object => object,
-        Value::Symbol(sym) => sym,
+        Value::Integer(index) => index,
         value => value,
     ]);
 
-    let signature = universe.lookup_symbol(sym);
-    let outcome = object.assign_local(signature, value.clone());
+    let index = match usize::try_from(index - 1) {
+        Ok(index) => index,
+        Err(err) => return Return::Exception(format!("'{}': {}", SIGNATURE, err)),
+    };
 
-    Return::Local(outcome.map(|_| value).unwrap_or(Value::Nil))
+    let locals = gather_locals(universe, object.class(universe));
+    let local = locals
+        .get(index)
+        .and_then(|local| object.assign_local(local, value.clone()).map(|_| value))
+        .unwrap_or(Value::Nil);
+
+    Return::Local(local)
+}
+
+fn gather_locals(universe: &mut Universe, class: SOMRef<Class>) -> Vec<String> {
+    let mut fields = match class.borrow().super_class() {
+        Some(super_class) => gather_locals(universe, super_class),
+        None => Vec::new(),
+    };
+    fields.extend(class.borrow().locals.keys().cloned());
+    fields
 }
 
 /// Search for a primitive matching the given signature.
