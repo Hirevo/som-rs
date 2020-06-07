@@ -4,6 +4,7 @@ use std::rc::Rc;
 use som_core::ast;
 
 use crate::block::Block;
+use crate::frame::FrameKind;
 use crate::invokable::{Invoke, Return};
 use crate::universe::Universe;
 use crate::value::Value;
@@ -40,7 +41,35 @@ impl Evaluate for ast::Expression {
             Self::Exit(expr) => {
                 let value = propagate!(expr.evaluate(universe));
                 let frame = universe.current_method_frame();
-                Return::NonLocal(value, frame)
+                let has_not_escaped = universe
+                    .frames
+                    .iter()
+                    .rev()
+                    .any(|live_frame| Rc::ptr_eq(&live_frame, &frame));
+                if has_not_escaped {
+                    Return::NonLocal(value, frame)
+                } else {
+                    // Block has escaped its method frame.
+                    let instance = frame.borrow().get_self();
+                    let frame = universe.current_frame();
+                    let block = match frame.borrow().kind() {
+                        FrameKind::Block { block, .. } => block.clone(),
+                        _ => {
+                            // Should never happen, because `universe.current_frame()` would
+                            // have been equal to `universe.current_method_frame()`.
+                            return Return::Exception(format!(
+                                "A method frame has escaped itself ??"
+                            ));
+                        }
+                    };
+                    universe.escaped_block(instance, block).unwrap_or_else(|| {
+                        // TODO: should we call `doesNotUnderstand:` here ?
+                        Return::Exception(
+                            "A block has escaped and `escapedBlock:` is not defined on receiver"
+                                .to_string(),
+                        )
+                    })
+                }
             }
             Self::Literal(literal) => literal.evaluate(universe),
             Self::Reference(name) => (universe.lookup_local(name))
@@ -62,18 +91,22 @@ impl Evaluate for ast::BinaryOp {
         // println!(
         //     "invoking {}>>#{}",
         //     lhs.class(universe).borrow().name(),
-        //     self.op
+        //     self.signature
         // );
 
         if let Some(invokable) = lhs.lookup_method(universe, &self.op) {
             invokable.invoke(universe, vec![lhs, rhs])
         } else {
-            Return::Exception(format!(
-                "could not find method '{}>>#{}'",
-                lhs.class(universe).borrow().name(),
-                self.op
-            ))
-            // Return::Local(Value::Nil)
+            universe
+                .does_not_understand(lhs.clone(), &self.op, vec![rhs])
+                .unwrap_or_else(|| {
+                    Return::Exception(format!(
+                        "could not find method '{}>>#{}'",
+                        lhs.class(universe).borrow().name(),
+                        self.op
+                    ))
+                    // Return::Local(Value::Nil)
+                })
         }
     }
 }
@@ -117,9 +150,18 @@ impl Evaluate for ast::Block {
 impl Evaluate for ast::Message {
     fn evaluate(&self, universe: &mut Universe) -> Return {
         let (receiver, invokable) = match self.receiver.as_ref() {
+            // ast::Expression::Reference(ident) if ident == "self" => {
+            //     let frame = universe.current_frame();
+            //     let receiver = frame.borrow().get_self();
+            //     let holder = frame.borrow().get_method_holder();
+            //     let invokable = holder.borrow().lookup_method(&self.signature);
+            //     (receiver, invokable)
+            // }
             ast::Expression::Reference(ident) if ident == "super" => {
-                let receiver = universe.current_frame().borrow().get_self();
-                let super_class = match receiver.class(universe).borrow().super_class() {
+                let frame = universe.current_frame();
+                let receiver = frame.borrow().get_self();
+                let holder = frame.borrow().get_method_holder();
+                let super_class = match holder.borrow().super_class() {
                     Some(class) => class,
                     None => {
                         return Return::Exception(
@@ -156,12 +198,18 @@ impl Evaluate for ast::Message {
         let value = match invokable {
             Some(invokable) => invokable.invoke(universe, args),
             None => {
-                Return::Exception(format!(
-                    "could not find method '{}>>#{}'",
-                    receiver.class(universe).borrow().name(),
-                    self.signature
-                ))
-                // Return::Local(Value::Nil)
+                let mut args = args;
+                args.remove(0);
+                universe
+                    .does_not_understand(receiver.clone(), &self.signature, args)
+                    .unwrap_or_else(|| {
+                        Return::Exception(format!(
+                            "could not find method '{}>>#{}'",
+                            receiver.class(universe).borrow().name(),
+                            self.signature
+                        ))
+                        // Return::Local(Value::Nil)
+                    })
             }
         };
 

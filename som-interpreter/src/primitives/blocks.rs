@@ -1,4 +1,5 @@
 use crate::expect_args;
+use crate::frame::FrameKind;
 use crate::invokable::Invoke;
 use crate::invokable::Return;
 use crate::primitives::PrimitiveFn;
@@ -17,7 +18,12 @@ pub mod block1 {
             Value::Block(block) => block,
         ]);
 
-        block.invoke(universe, block_args)
+        universe.with_frame(
+            FrameKind::Block {
+                block: block.clone(),
+            },
+            |universe| block.invoke(universe, block_args),
+        )
     }
 
     fn restart(_: &mut Universe, args: Vec<Value>) -> Return {
@@ -51,7 +57,12 @@ pub mod block2 {
             _,
         ]);
 
-        block.invoke(universe, block_args)
+        universe.with_frame(
+            FrameKind::Block {
+                block: block.clone(),
+            },
+            |universe| block.invoke(universe, block_args),
+        )
     }
 
     /// Search for a primitive matching the given signature.
@@ -77,7 +88,12 @@ pub mod block3 {
             _,
         ]);
 
-        block.invoke(universe, block_args)
+        universe.with_frame(
+            FrameKind::Block {
+                block: block.clone(),
+            },
+            |universe| block.invoke(universe, block_args),
+        )
     }
 
     /// Search for a primitive matching the given signature.

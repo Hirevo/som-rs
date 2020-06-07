@@ -186,6 +186,24 @@ fn modulo(_: &mut Universe, args: Vec<Value>) -> Return {
     Return::Local(Value::Integer(a.rem_euclid(b)))
 }
 
+fn sqrt(_: &mut Universe, args: Vec<Value>) -> Return {
+    const SIGNATURE: &str = "Integer>>#sqrt";
+
+    expect_args!(SIGNATURE, args, [
+        Value::Integer(a) => a,
+    ]);
+
+    let sqrt = (a as f64).sqrt();
+    let trucated = sqrt.trunc();
+
+    if sqrt == trucated {
+        Return::Local(Value::Integer(trucated as i64))
+    } else {
+        Return::Local(Value::Double(sqrt))
+    }
+}
+
+
 fn bitand(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Integer>>#&";
 
@@ -275,6 +293,7 @@ pub fn get_primitive(signature: impl AsRef<str>) -> Option<PrimitiveFn> {
         "<<" => Some(self::shift_left),
         ">>>" => Some(self::shift_right),
         "bitXor:" => Some(self::bitxor),
+        "sqrt" => Some(self::sqrt),
         _ => None,
     }
 }

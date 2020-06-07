@@ -75,7 +75,11 @@ pub fn interactive(universe: &mut Universe, verbose: bool) -> Result<(), Error> 
         }
 
         let start = Instant::now();
-        let output = universe.with_frame(FrameKind::Method(Value::System), |universe| {
+        let kind = FrameKind::Method {
+            holder: universe.system_class(),
+            self_value: Value::System,
+        };
+        let output = universe.with_frame(kind, |universe| {
             universe
                 .current_frame()
                 .borrow_mut()
@@ -96,8 +100,13 @@ pub fn interactive(universe: &mut Universe, verbose: bool) -> Result<(), Error> 
         }
 
         match output {
-            Return::Local(value) | Return::NonLocal(value, _) => {
+            Return::Local(value) => {
                 println!("returned: {} ({:?})", value.to_string(&universe), value);
+                last_value = value;
+            }
+            Return::NonLocal(value, frame) => {
+                println!("returned (non-local, escaped): {} ({:?})", value.to_string(&universe), value);
+                println!("intended for frame: {:?}", frame);
                 last_value = value;
             }
             Return::Exception(message) => println!("ERROR: {}", message),

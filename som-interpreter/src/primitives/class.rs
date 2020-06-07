@@ -1,12 +1,14 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::class::Class;
 use crate::expect_args;
 use crate::instance::Instance;
 use crate::invokable::Return;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
+use crate::SOMRef;
 
 fn superclass(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Class>>#superclass";
@@ -53,7 +55,7 @@ fn methods(_: &mut Universe, args: Vec<Value>) -> Return {
         .borrow()
         .methods
         .values()
-        .map(|invokable| Value::Invokable(class.clone(), invokable.clone()))
+        .map(|invokable| Value::Invokable(invokable.clone()))
         .collect();
 
     Return::Local(Value::Array(Rc::new(RefCell::new(methods))))
@@ -66,12 +68,22 @@ fn fields(universe: &mut Universe, args: Vec<Value>) -> Return {
         Value::Class(class) => class,
     ]);
 
-    let fields = class
-        .borrow()
-        .locals
-        .keys()
-        .map(|field| Value::Symbol(universe.intern_symbol(field)))
-        .collect();
+    fn gather_locals(universe: &mut Universe, class: SOMRef<Class>) -> Vec<Value> {
+        let mut fields = match class.borrow().super_class() {
+            Some(super_class) => gather_locals(universe, super_class),
+            None => Vec::new(),
+        };
+        fields.extend(
+            class
+                .borrow()
+                .locals
+                .keys()
+                .map(|field| Value::Symbol(universe.intern_symbol(field))),
+        );
+        fields
+    }
+
+    let fields = gather_locals(universe, class);
 
     Return::Local(Value::Array(Rc::new(RefCell::new(fields))))
 }

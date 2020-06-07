@@ -40,10 +40,11 @@ struct Options {
 fn main() -> anyhow::Result<()> {
     let opts: Options = Options::from_args();
 
-    let mut universe = Universe::with_classpath(opts.classpath)?;
-
     match opts.file {
-        None => shell::interactive(&mut universe, opts.verbose)?,
+        None => {
+            let mut universe = Universe::with_classpath(opts.classpath)?;
+            shell::interactive(&mut universe, opts.verbose)?
+        },
         Some(file) => {
             let file_stem = file
                 .file_stem()
@@ -51,6 +52,13 @@ fn main() -> anyhow::Result<()> {
             let file_stem = file_stem
                 .to_str()
                 .ok_or_else(|| anyhow!("the given path contains invalid UTF-8 in its file stem"))?;
+
+            let mut classpath = opts.classpath;
+            if let Some(directory) = file.parent() {
+                classpath.push(directory.to_path_buf());
+            }
+
+            let mut universe = Universe::with_classpath(classpath)?;
 
             let args = std::iter::once(String::from(file_stem))
                 .chain(opts.args.iter().cloned())
@@ -61,6 +69,13 @@ fn main() -> anyhow::Result<()> {
             let output = universe.initialize(args).unwrap_or_else(|| {
                 Return::Exception(format!("could not find 'System>>#initialize:'"))
             });
+
+            // let class = universe.load_class_from_path(file)?;
+            // let instance = som_interpreter::instance::Instance::from_class(class);
+            // let instance = Value::Instance(Rc::new(std::cell::RefCell::new(instance)));
+
+            // let invokable = instance.lookup_method(&universe, "run").unwrap();
+            // let output = som_interpreter::invokable::Invoke::invoke(invokable.as_ref(), &mut universe, vec![instance]);
 
             match output {
                 Return::Exception(message) => println!("ERROR: {}", message),

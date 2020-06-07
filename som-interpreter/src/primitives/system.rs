@@ -20,16 +20,22 @@ use crate::value::Value;
 //     }
 // }
 
-fn print_string(_: &mut Universe, args: Vec<Value>) -> Return {
+fn print_string(universe: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "System>>#printString:";
 
     expect_args!(SIGNATURE, args, [
         Value::System,
-        Value::String(string) => string,
+        value => value,
     ]);
 
+    let string = match value {
+        Value::String(ref string) => string,
+        Value::Symbol(sym) => universe.lookup_symbol(sym),
+        _ => return Return::Exception(format!("'{}': wrong type", SIGNATURE)),
+    };
+
     print!("{}", string);
-    Return::Local(Value::String(string))
+    Return::Local(Value::System)
 }
 
 fn print_newline(_: &mut Universe, args: Vec<Value>) -> Return {

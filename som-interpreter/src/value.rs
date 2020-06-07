@@ -5,7 +5,7 @@ use crate::block::Block;
 use crate::class::Class;
 use crate::instance::Instance;
 use crate::interner::Interned;
-use crate::invokable::Invokable;
+use crate::invokable::Method;
 use crate::universe::Universe;
 use crate::SOMRef;
 
@@ -35,7 +35,7 @@ pub enum Value {
     /// A bare class object.
     Class(SOMRef<Class>),
     /// A bare invokable.
-    Invokable(SOMRef<Class>, Rc<Invokable>),
+    Invokable(Rc<Method>),
 }
 
 impl Value {
@@ -54,7 +54,7 @@ impl Value {
             Self::Block(block) => block.class(universe),
             Self::Instance(instance) => instance.borrow().class(),
             Self::Class(class) => class.borrow().class(),
-            Self::Invokable(_, invokable) => invokable.class(universe),
+            Self::Invokable(invokable) => invokable.class(universe),
         }
     }
 
@@ -63,7 +63,7 @@ impl Value {
         &self,
         universe: &Universe,
         signature: impl AsRef<str>,
-    ) -> Option<Rc<Invokable>> {
+    ) -> Option<Rc<Method>> {
         self.class(universe).borrow().lookup_method(signature)
     }
 
@@ -117,12 +117,11 @@ impl Value {
                 instance.borrow().class().borrow().name(),
             ),
             Self::Class(class) => class.borrow().name().to_string(),
-            Self::Invokable(holder, invokable) => match invokable.as_ref() {
-                Invokable::MethodDef(defn) => {
-                    format!("{}>>#{}", holder.borrow().name(), defn.signature)
-                }
-                _ => format!("instance of Primitive"),
-            },
+            Self::Invokable(invokable) => format!(
+                "{}>>#{}",
+                invokable.holder().borrow().name(),
+                invokable.signature(),
+            ),
         }
     }
 }
@@ -133,12 +132,16 @@ impl PartialEq for Value {
             (Self::Nil, Self::Nil) | (Self::System, Self::System) => true,
             (Self::Boolean(a), Self::Boolean(b)) => a.eq(b),
             (Self::Integer(a), Self::Integer(b)) => a.eq(b),
+            (Self::Integer(a), Self::Double(b)) => (*a as f64).eq(b),
+            (Self::Double(a), Self::Integer(b)) => a.eq(&(*b as f64)),
             (Self::Double(a), Self::Double(b)) => a.eq(b),
             (Self::String(a), Self::String(b)) => a.eq(b),
             (Self::Symbol(a), Self::Symbol(b)) => a.eq(b),
             (Self::Array(a), Self::Array(b)) => a.eq(b),
             (Self::Instance(a), Self::Instance(b)) => Rc::ptr_eq(a, b),
-            (Self::Class(a), Self::Class(b)) => a.as_ptr() == b.as_ptr(),
+            (Self::Class(a), Self::Class(b)) => Rc::ptr_eq(a, b),
+            (Self::Block(a), Self::Block(b)) => Rc::ptr_eq(a, b),
+            (Self::Invokable(a), Self::Invokable(b)) => Rc::ptr_eq(a, b),
             _ => false,
         }
     }
@@ -158,13 +161,8 @@ impl fmt::Debug for Value {
             Self::Block(val) => f.debug_tuple("Block").field(val).finish(),
             Self::Instance(val) => f.debug_tuple("Instance").field(&val.borrow()).finish(),
             Self::Class(val) => f.debug_tuple("Class").field(&val.borrow()).finish(),
-            Self::Invokable(holder, val) => {
-                let signature = match val.as_ref() {
-                    Invokable::MethodDef(defn) => {
-                        format!("{}>>#{}", holder.borrow().name(), defn.signature)
-                    }
-                    _ => format!("instance of Primitive"),
-                };
+            Self::Invokable(val) => {
+                let signature = format!("{}>>#{}", val.holder().borrow().name(), val.signature());
                 f.debug_tuple("Invokable").field(&signature).finish()
             }
         }

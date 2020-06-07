@@ -32,18 +32,18 @@ pub trait Invoke {
     fn invoke(&self, universe: &mut Universe, args: Vec<Value>) -> Return;
 }
 
-/// The kind of invocables for a class method.
+/// The kind of a class method.
 #[derive(Clone)]
-pub enum Invokable {
+pub enum MethodKind {
     /// A user-defined method from the AST.
-    MethodDef(ast::MethodDef),
+    Defined(ast::MethodDef),
     /// An interpreter primitive.
     Primitive(PrimitiveFn),
     /// A non-implemented primitive.
     NotImplemented(String),
 }
 
-impl Invokable {
+impl MethodKind {
     /// Return the interpreter primitive matching a given class name and signature.
     pub fn primitive_from_signature(
         class_name: impl AsRef<str>,
@@ -74,17 +74,10 @@ impl Invokable {
         //     signature,
         //     primitive.is_some()
         // );
-        primitive
-            .map(Self::Primitive)
-            .unwrap_or_else(|| Self::NotImplemented(format!("{}>>#{}", class_name, signature)))
-    }
-
-    pub fn class(&self, universe: &Universe) -> SOMRef<Class> {
-        if self.is_primitive() {
-            universe.primitive_class()
-        } else {
-            universe.method_class()
-        }
+        primitive.map(MethodKind::Primitive).unwrap_or_else(|| {
+            MethodKind::NotImplemented(format!("{}>>#{}", class_name, signature))
+        })
+        // .unwrap_or_else(|| panic!("unimplemented primitive: '{}>>#{}'", class_name, signature))
     }
 
     /// Whether this invocable is a primitive.
@@ -93,101 +86,157 @@ impl Invokable {
     }
 }
 
-impl Invoke for Invokable {
+/// Represents a class method.
+#[derive(Clone)]
+pub struct Method {
+    pub kind: MethodKind,
+    pub holder: SOMRef<Class>,
+    pub signature: String,
+}
+
+impl Method {
+    pub fn class(&self, universe: &Universe) -> SOMRef<Class> {
+        if self.is_primitive() {
+            universe.primitive_class()
+        } else {
+            universe.method_class()
+        }
+    }
+
+    pub fn kind(&self) -> &MethodKind {
+        &self.kind
+    }
+
+    pub fn holder(&self) -> &SOMRef<Class> {
+        &self.holder
+    }
+
+    pub fn signature(&self) -> &str {
+        self.signature.as_str()
+    }
+
+    /// Whether this invocable is a primitive.
+    pub fn is_primitive(&self) -> bool {
+        self.kind.is_primitive()
+    }
+}
+
+impl Invoke for Method {
     fn invoke(&self, universe: &mut Universe, args: Vec<Value>) -> Return {
-        match self {
-            Self::MethodDef(method) => method.invoke(universe, args),
-            Self::Primitive(func) => func(universe, args),
-            Self::NotImplemented(name) => {
+        let output = match self.kind() {
+            MethodKind::Defined(method) => {
+                let (self_value, params) = {
+                    let mut iter = args.into_iter();
+                    let receiver = match iter.next() {
+                        Some(receiver) => receiver,
+                        None => {
+                            return Return::Exception("missing receiver for invocation".to_string())
+                        }
+                    };
+                    (receiver, iter.collect::<Vec<_>>())
+                };
+                universe.with_frame(
+                    FrameKind::Method {
+                        holder: self.holder().clone(),
+                        self_value,
+                    },
+                    |universe| method.invoke(universe, params),
+                )
+            }
+            MethodKind::Primitive(func) => func(universe, args),
+            MethodKind::NotImplemented(name) => {
                 Return::Exception(format!("unimplemented primitive: {}", name))
             }
+        };
+        match output {
+            // Return::Exception(msg) => Return::Exception(format!(
+            //     "from {}>>#{}\n{}",
+            //     self.holder().borrow().name(),
+            //     self.signature(),
+            //     msg,
+            // )),
+            output => output,
         }
     }
 }
 
 impl Invoke for ast::MethodDef {
     fn invoke(&self, universe: &mut Universe, args: Vec<Value>) -> Return {
-        let (self_value, params) = {
-            let mut iter = args.into_iter();
-            let receiver = match iter.next() {
-                Some(receiver) => receiver,
-                None => return Return::Exception("missing receiver for invocation".to_string()),
-            };
-            (receiver, iter.collect::<Vec<_>>())
-        };
-
-        universe.with_frame(FrameKind::Method(self_value), |universe| {
-            let current_frame = universe.current_frame().clone();
-            match &self.kind {
-                ast::MethodKind::Unary => {}
-                ast::MethodKind::Positional { parameters } => current_frame
+        let current_frame = universe.current_frame().clone();
+        match &self.kind {
+            ast::MethodKind::Unary => {}
+            ast::MethodKind::Positional { parameters } => current_frame
+                .borrow_mut()
+                .bindings
+                .extend(parameters.iter().cloned().zip(args)),
+            ast::MethodKind::Operator { rhs } => {
+                let rhs_value = match args.into_iter().next() {
+                    Some(value) => value,
+                    None => {
+                        // This should never happen in theory (the parser would have caught the missing rhs).
+                        return Return::Exception(format!(
+                            "no right-hand side for operator call ?"
+                        ));
+                    }
+                };
+                current_frame
                     .borrow_mut()
                     .bindings
-                    .extend(parameters.iter().cloned().zip(params)),
-                ast::MethodKind::Operator { rhs } => {
-                    current_frame
-                        .borrow_mut()
-                        .bindings
-                        .insert(rhs.clone(), params[0].clone());
-                }
+                    .insert(rhs.clone(), rhs_value);
             }
-            match &self.body {
-                ast::MethodBody::Body { locals, body } => {
-                    current_frame
-                        .borrow_mut()
-                        .bindings
-                        .extend(locals.iter().cloned().zip(std::iter::repeat(Value::Nil)));
-                    loop {
-                        match body.evaluate(universe) {
-                            Return::NonLocal(value, frame) => {
-                                if Rc::ptr_eq(&current_frame, &frame) {
-                                    break Return::Local(value);
-                                } else {
-                                    break Return::NonLocal(value, frame);
-                                }
+        }
+        match &self.body {
+            ast::MethodBody::Body { locals, body } => {
+                current_frame
+                    .borrow_mut()
+                    .bindings
+                    .extend(locals.iter().cloned().zip(std::iter::repeat(Value::Nil)));
+                loop {
+                    match body.evaluate(universe) {
+                        Return::NonLocal(value, frame) => {
+                            if Rc::ptr_eq(&current_frame, &frame) {
+                                break Return::Local(value);
+                            } else {
+                                break Return::NonLocal(value, frame);
                             }
-                            Return::Local(_) => {
-                                break Return::Local(current_frame.borrow().get_self())
-                            }
-                            Return::Exception(msg) => break Return::Exception(msg),
-                            Return::Restart => continue,
                         }
+                        Return::Local(_) => break Return::Local(current_frame.borrow().get_self()),
+                        Return::Exception(msg) => break Return::Exception(msg),
+                        Return::Restart => continue,
                     }
                 }
-                ast::MethodBody::Primitive => Return::Exception(format!(
-                    "unimplemented primitive: {}>>#{}",
-                    current_frame
-                        .borrow()
-                        .get_self()
-                        .class(universe)
-                        .borrow()
-                        .name(),
-                    self.signature,
-                )),
             }
-        })
+            ast::MethodBody::Primitive => Return::Exception(format!(
+                "unimplemented primitive: {}>>#{}",
+                current_frame
+                    .borrow()
+                    .get_self()
+                    .class(universe)
+                    .borrow()
+                    .name(),
+                self.signature,
+            )),
+        }
     }
 }
 
 impl Invoke for Block {
     fn invoke(&self, universe: &mut Universe, args: Vec<Value>) -> Return {
-        universe.with_frame(FrameKind::Block(self.frame.clone()), |universe| {
-            let current_frame = universe.current_frame();
-            current_frame.borrow_mut().bindings.extend(
-                self.block
-                    .parameters
-                    .iter()
-                    .cloned()
-                    .zip(args.into_iter().skip(1)),
-            );
-            current_frame.borrow_mut().bindings.extend(
-                self.block
-                    .locals
-                    .iter()
-                    .cloned()
-                    .zip(std::iter::repeat(Value::Nil)),
-            );
-            self.block.body.evaluate(universe)
-        })
+        let current_frame = universe.current_frame();
+        current_frame.borrow_mut().bindings.extend(
+            self.block
+                .parameters
+                .iter()
+                .cloned()
+                .zip(args.into_iter().skip(1)),
+        );
+        current_frame.borrow_mut().bindings.extend(
+            self.block
+                .locals
+                .iter()
+                .cloned()
+                .zip(std::iter::repeat(Value::Nil)),
+        );
+        self.block.body.evaluate(universe)
     }
 }

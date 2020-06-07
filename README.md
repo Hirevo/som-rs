@@ -46,6 +46,9 @@ To start the REPL, you can run:
 ```bash
 # the '-c' flag instructs the interpreter where to find the SOM standard library.
 ./target/release/som-interpreter -c core-lib/Smalltalk
+
+# you can pass multiple paths to '-c' by just keeping on adding arguments.
+./target/release/som-interpreter -c core-lib/Smalltalk core-lib/Examples
 ```
 
 You'll get a prompt in which you can type SOM expressions and see what they get evaluated to.  
