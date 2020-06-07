@@ -57,6 +57,7 @@ impl Lexer {
                         'f' => output.push('\x12'),
                         '\'' => output.push('\''),
                         '\\' => output.push('\\'),
+                        '0' => output.push('\0'),
                         _ => {}
                     }
                 }

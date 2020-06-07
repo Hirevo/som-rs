@@ -186,6 +186,7 @@ pub fn string<'a>() -> impl Parser<'a, String> {
                 'f' => vec!['\x12'],
                 '\'' => vec!['\''],
                 '\\' => vec!['\\'],
+                '0' => vec!['\0'],
                 _ => vec![a, b],
             })
             .or(not_exact('\'').map(|a| vec![a]));
