@@ -1,4 +1,6 @@
+use std::collections::hash_map::DefaultHasher;
 use std::convert::TryFrom;
+use std::hash::Hasher;
 use std::rc::Rc;
 
 use crate::expect_args;
@@ -6,33 +8,6 @@ use crate::invokable::Return;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
-
-fn at(universe: &mut Universe, args: Vec<Value>) -> Return {
-    const SIGNATURE: &str = "String>>#at:";
-
-    expect_args!(SIGNATURE, args, [
-        value => value,
-        Value::Integer(index) => index,
-    ]);
-
-    let index = match usize::try_from(index) {
-        Ok(index) => index,
-        Err(err) => return Return::Exception(format!("'{}': {}", SIGNATURE, err)),
-    };
-    let value = match value {
-        Value::String(ref value) => value.as_str(),
-        Value::Symbol(sym) => universe.lookup_symbol(sym),
-        _ => return Return::Exception(format!("'{}': invalid self type", SIGNATURE)),
-    };
-
-    Return::Local(
-        value
-            .chars()
-            .nth(index as usize)
-            .map(|ch| Value::String(Rc::new(ch.to_string())))
-            .unwrap_or(Value::Nil),
-    )
-}
 
 fn length(universe: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "String>>#length";
@@ -51,6 +26,31 @@ fn length(universe: &mut Universe, args: Vec<Value>) -> Return {
         Ok(idx) => Return::Local(Value::Integer(idx)),
         Err(err) => Return::Exception(format!("'{}': {}", SIGNATURE, err)),
     }
+}
+
+fn hashcode(universe: &mut Universe, args: Vec<Value>) -> Return {
+    const SIGNATURE: &str = "String>>#hashcode";
+
+    expect_args!(SIGNATURE, args, [
+        value => value,
+    ]);
+
+    let value = match value {
+        Value::String(ref value) => value.as_str(),
+        Value::Symbol(sym) => universe.lookup_symbol(sym),
+        _ => return Return::Exception(format!("'{}': invalid self type", SIGNATURE)),
+    };
+
+    let mut hasher = DefaultHasher::new();
+
+    hasher.write(value.as_bytes());
+
+    // match i64::try_from(hasher.finish()) {
+    //     Ok(hash) => Return::Local(Value::Integer(hash)),
+    //     Err(err) => Return::Exception(format!("'{}': {}", SIGNATURE, err)),
+    // }
+
+    Return::Local(Value::Integer((hasher.finish() as i64).abs()))
 }
 
 fn is_letters(universe: &mut Universe, args: Vec<Value>) -> Return {
@@ -179,8 +179,8 @@ fn prim_substring_from_to(universe: &mut Universe, args: Vec<Value>) -> Return {
 /// Search for a primitive matching the given signature.
 pub fn get_primitive(signature: impl AsRef<str>) -> Option<PrimitiveFn> {
     match signature.as_ref() {
-        "at:" => Some(self::at),
         "length" => Some(self::length),
+        "hashcode" => Some(self::hashcode),
         "isLetters" => Some(self::is_letters),
         "isDigits" => Some(self::is_digits),
         "isWhiteSpace" => Some(self::is_whitespace),

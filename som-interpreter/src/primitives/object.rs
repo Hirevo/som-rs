@@ -1,4 +1,6 @@
+use std::collections::hash_map::DefaultHasher;
 use std::convert::TryFrom;
+use std::hash::Hasher;
 
 use crate::class::Class;
 use crate::invokable::{Invoke, Return};
@@ -21,6 +23,27 @@ fn object_size(_: &mut Universe, _: Vec<Value>) -> Return {
     const _: &'static str = "Object>>#objectSize";
 
     Return::Local(Value::Integer(std::mem::size_of::<Value>() as i64))
+}
+
+fn hashcode(_: &mut Universe, args: Vec<Value>) -> Return {
+    const SIGNATURE: &'static str = "Object>>#hashcode";
+
+    expect_args!(SIGNATURE, args, [
+        value => value,
+    ]);
+
+    let mut hasher = DefaultHasher::new();
+
+    // Should be fine, since we do not mutate anything ??
+    let raw_bytes: &[u8] = unsafe {
+        std::slice::from_raw_parts(
+            (&value as *const Value) as *const u8,
+            std::mem::size_of_val(&value),
+        )
+    };
+    hasher.write(raw_bytes);
+
+    Return::Local(Value::Integer((hasher.finish() as i64).abs()))
 }
 
 fn eq(_: &mut Universe, args: Vec<Value>) -> Return {
@@ -234,6 +257,7 @@ pub fn get_primitive(signature: impl AsRef<str>) -> Option<PrimitiveFn> {
     match signature.as_ref() {
         "class" => Some(self::class),
         "objectSize" => Some(self::object_size),
+        "hashcode" => Some(self::hashcode),
         "perform:" => Some(self::perform),
         "perform:withArguments:" => Some(self::perform_with_arguments),
         "perform:inSuperclass:" => Some(self::perform_in_super_class),
