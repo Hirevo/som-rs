@@ -1,7 +1,8 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fmt;
 use std::rc::{Rc, Weak};
+
+use indexmap::IndexMap;
 
 use som_core::ast::{ClassDef, MethodBody};
 
@@ -29,9 +30,9 @@ pub struct Class {
     // TODO: Should probably be `Option<SOMRef<Class>>`.
     pub super_class: SOMWeakRef<Class>,
     /// The class' locals.
-    pub locals: HashMap<String, Value>,
+    pub locals: IndexMap<String, Value>,
     /// The class' methods/invokables.
-    pub methods: HashMap<String, Rc<Method>>,
+    pub methods: IndexMap<String, Rc<Method>>,
     /// Is this class a static one ?
     pub is_static: bool,
 }
@@ -58,7 +59,7 @@ impl Class {
             class: MaybeWeak::Weak(Weak::new()),
             super_class: Weak::new(),
             locals: static_locals,
-            methods: HashMap::new(),
+            methods: IndexMap::new(),
             is_static: true,
         }));
 
@@ -67,7 +68,7 @@ impl Class {
             class: MaybeWeak::Strong(static_class.clone()),
             super_class: Weak::new(),
             locals: instance_locals,
-            methods: HashMap::new(),
+            methods: IndexMap::new(),
             is_static: false,
         }));
 

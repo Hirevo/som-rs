@@ -26,8 +26,12 @@ structopt = "0.3.14"
 # error handling
 anyhow = "1.0.31"
 
+# consistently-ordered hashmaps
+indexmap = "1.4.0"
+
 # big integers
 num-bigint = "0.2.6"
 
 # random numbers
 rand = "0.7.3"
+
