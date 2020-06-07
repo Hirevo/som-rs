@@ -513,20 +513,12 @@ impl Universe {
         Some(initialize.invoke(self, vec![value, sym, args]))
     }
 
-    /// Call `System>>#initialize:` with the given name, if it is defined.
-    pub fn initialize(&mut self, args: Vec<Value>) -> Option<Return> {
-        let initialize = Value::System.lookup_method(self, "initialize:")?;
-        let args = Value::Array(Rc::new(RefCell::new(args)));
-
-        Some(initialize.invoke(self, vec![Value::System, args]))
-    }
-
-    /// Call `System>>#unknownGlobal:` with the given name, if it is defined.
-    pub fn unknown_global(&mut self, name: impl AsRef<str>) -> Option<Return> {
+    /// Call `unknownGlobal:` on the given value, if it is defined.
+    pub fn unknown_global(&mut self, value: Value, name: impl AsRef<str>) -> Option<Return> {
         let sym = self.intern_symbol(name.as_ref());
-        let method = Value::System.lookup_method(self, "unknownGlobal:")?;
+        let method = value.lookup_method(self, "unknownGlobal:")?;
 
-        match method.invoke(self, vec![Value::System, Value::Symbol(sym)]) {
+        match method.invoke(self, vec![value, Value::Symbol(sym)]) {
             Return::Local(value) | Return::NonLocal(value, _) => Some(Return::Local(value)),
             Return::Exception(err) => Some(Return::Exception(format!(
                 "(from 'System>>#unknownGlobal:') {}",
@@ -536,6 +528,14 @@ impl Universe {
                 "(from 'System>>#unknownGlobal:') incorrectly asked for a restart".to_string(),
             )),
         }
+    }
+
+    /// Call `System>>#initialize:` with the given name, if it is defined.
+    pub fn initialize(&mut self, args: Vec<Value>) -> Option<Return> {
+        let initialize = Value::System.lookup_method(self, "initialize:")?;
+        let args = Value::Array(Rc::new(RefCell::new(args)));
+
+        Some(initialize.invoke(self, vec![Value::System, args]))
     }
 }
 

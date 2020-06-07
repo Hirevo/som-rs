@@ -75,7 +75,11 @@ impl Evaluate for ast::Expression {
             Self::Reference(name) => (universe.lookup_local(name))
                 .or_else(|| universe.lookup_global(name))
                 .map(Return::Local)
-                .or_else(|| universe.unknown_global(name.as_str()))
+                .or_else(|| {
+                    let frame = universe.current_frame();
+                    let self_value = frame.borrow().get_self();
+                    universe.unknown_global(self_value, name.as_str())
+                })
                 .unwrap_or_else(|| Return::Exception(format!("variable '{}' not found", name))),
             Self::Term(term) => term.evaluate(universe),
             Self::Message(msg) => msg.evaluate(universe),
