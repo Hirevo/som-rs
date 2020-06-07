@@ -1,0 +1,30 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  run_test_suite:
+    name: Run SOM Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout master branch
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: default
+          toolchain: stable
+      - name: Compile SOM interpreter
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release -p som-interpreter
+      - name: Run test suite
+        run: |
+          ./target/release/som-interpreter -c core-lib/Smalltalk core-lib/TestSuite -- TestHarness --ignore-inefficacies
