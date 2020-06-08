@@ -129,7 +129,8 @@ fn full_gc(_: &mut Universe, args: Vec<Value>) -> Return {
 
     expect_args!(SIGNATURE, args, [Value::System]);
 
-    Return::Local(Value::Boolean(true))
+    // We don't do any garbage collection at all, so we return false.
+    Return::Local(Value::Boolean(false))
 }
 
 /// Search for a primitive matching the given signature.
