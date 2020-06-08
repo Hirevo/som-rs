@@ -6,7 +6,7 @@ use indexmap::IndexMap;
 
 use som_core::ast::{ClassDef, MethodBody};
 
-use crate::invokable::{Method, MethodKind};
+use crate::method::{Method, MethodKind};
 use crate::value::Value;
 use crate::{SOMRef, SOMWeakRef};
 

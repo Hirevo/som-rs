@@ -5,7 +5,7 @@ use crate::block::Block;
 use crate::class::Class;
 use crate::instance::Instance;
 use crate::interner::Interned;
-use crate::invokable::Method;
+use crate::method::Method;
 use crate::universe::Universe;
 use crate::SOMRef;
 

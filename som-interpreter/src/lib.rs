@@ -19,6 +19,8 @@ pub mod instance;
 pub mod interner;
 /// Facilities for invoking methods and/or primitives.
 pub mod invokable;
+/// Facilities for manipulating class methods.
+pub mod method;
 /// Definitions for all supported primitives.
 pub mod primitives;
 /// The interpreter's main data structure.
