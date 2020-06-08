@@ -176,7 +176,12 @@ fn modulo(_: &mut Universe, args: Vec<Value>) -> Return {
         Value::Integer(b) => b,
     ]);
 
-    Return::Local(Value::Integer(a % b))
+    let result = a % b;
+    if result.signum() != b.signum() {
+        Return::Local(Value::Integer(result + b))
+    } else {
+        Return::Local(Value::Integer(result))
+    }
 }
 
 fn remainder(_: &mut Universe, args: Vec<Value>) -> Return {
@@ -187,7 +192,12 @@ fn remainder(_: &mut Universe, args: Vec<Value>) -> Return {
         Value::Integer(b) => b,
     ]);
 
-    Return::Local(Value::Integer(a.rem_euclid(b)))
+    let result = a % b;
+    if result.signum() != a.signum() {
+        Return::Local(Value::Integer(result + a))
+    } else {
+        Return::Local(Value::Integer(result))
+    }
 }
 
 fn sqrt(_: &mut Universe, args: Vec<Value>) -> Return {
