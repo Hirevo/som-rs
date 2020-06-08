@@ -4,8 +4,11 @@
 //! This particular version of the parser works with the tokens outputted by the lexical analyser, instead of directly reading text.
 //!
 
+/// Generic parser combinators.
 pub mod combinators;
+/// SOM-specific parser combinators.
 pub mod lang;
+/// Parser combinator primitives.
 pub mod parser;
 
 pub use crate::parser::Parser;

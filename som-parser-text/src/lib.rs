@@ -4,11 +4,11 @@
 //! This particular version of the parser works with by directly reading the source code text, thus it does not need any lexical analysis stage before it.
 //!
 
-/// The collection of generic parser combinators.
+/// Generic parser combinators.
 pub mod combinators;
-/// The collection of language-specific parsers.
+/// SOM-specific parser combinators.
 pub mod lang;
-/// The base `Parser` definitions.
+/// Parser combinator primitives.
 pub mod parser;
 
 pub use crate::parser::Parser;

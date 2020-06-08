@@ -1,7 +1,7 @@
 //!
 //! This is the interpreter for the Simple Object Machine.
 //!
-// #![allow(dead_code, unused_variables, unused_imports)]
+#![warn(missing_docs)]
 
 use std::path::PathBuf;
 use std::rc::Rc;
