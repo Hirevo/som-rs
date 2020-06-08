@@ -117,11 +117,11 @@ impl Value {
                 instance.borrow().class().borrow().name(),
             ),
             Self::Class(class) => class.borrow().name().to_string(),
-            Self::Invokable(invokable) => format!(
-                "{}>>#{}",
-                invokable.holder().borrow().name(),
-                invokable.signature(),
-            ),
+            Self::Invokable(invokable) => invokable
+                .holder()
+                .upgrade()
+                .map(|holder| format!("{}>>#{}", holder.borrow().name(), invokable.signature()))
+                .unwrap_or_else(|| format!("??>>#{}", invokable.signature())),
         }
     }
 }
@@ -162,7 +162,11 @@ impl fmt::Debug for Value {
             Self::Instance(val) => f.debug_tuple("Instance").field(&val.borrow()).finish(),
             Self::Class(val) => f.debug_tuple("Class").field(&val.borrow()).finish(),
             Self::Invokable(val) => {
-                let signature = format!("{}>>#{}", val.holder().borrow().name(), val.signature());
+                let signature = val
+                    .holder()
+                    .upgrade()
+                    .map(|holder| format!("{}>>#{}", holder.borrow().name(), val.signature()))
+                    .unwrap_or_else(|| format!("??>>#{}", val.signature()));
                 f.debug_tuple("Invokable").field(&signature).finish()
             }
         }

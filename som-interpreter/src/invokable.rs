@@ -44,13 +44,18 @@ impl Invoke for Method {
                     };
                     (receiver, iter.collect::<Vec<_>>())
                 };
-                universe.with_frame(
-                    FrameKind::Method {
-                        holder: self.holder().clone(),
-                        self_value,
-                    },
-                    |universe| method.invoke(universe, params),
-                )
+                let holder = match self.holder().upgrade() {
+                    Some(holder) => holder,
+                    None => {
+                        return Return::Exception(
+                            "cannot invoke this method because its holder has been collected"
+                                .to_string(),
+                        )
+                    }
+                };
+                universe.with_frame(FrameKind::Method { holder, self_value }, |universe| {
+                    method.invoke(universe, params)
+                })
             }
             MethodKind::Primitive(func) => func(universe, args),
             MethodKind::NotImplemented(name) => {

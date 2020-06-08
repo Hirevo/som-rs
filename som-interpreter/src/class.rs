@@ -87,7 +87,7 @@ impl Class {
                 let method = Method {
                     kind,
                     signature: signature.clone(),
-                    holder: static_class.clone(),
+                    holder: Rc::downgrade(&static_class),
                 };
                 (signature, Rc::new(method))
             })
@@ -108,7 +108,7 @@ impl Class {
                 let method = Method {
                     kind,
                     signature: signature.clone(),
-                    holder: instance_class.clone(),
+                    holder: Rc::downgrade(&instance_class),
                 };
                 (signature, Rc::new(method))
             })

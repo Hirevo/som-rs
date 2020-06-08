@@ -11,7 +11,13 @@ fn holder(_: &mut Universe, args: Vec<Value>) -> Return {
         Value::Invokable(invokable) => invokable,
     ]);
 
-    Return::Local(Value::Class(invokable.holder().clone()))
+    match invokable.holder().upgrade() {
+        Some(holder) => Return::Local(Value::Class(holder)),
+        None => Return::Exception(format!(
+            "'{}': method sholder has been collected",
+            SIGNATURE
+        )),
+    }
 }
 
 fn signature(universe: &mut Universe, args: Vec<Value>) -> Return {
