@@ -27,4 +27,4 @@ jobs:
           args: --release -p som-interpreter
       - name: Run test suite
         run: |
-          ./target/release/som-interpreter -c core-lib/Smalltalk core-lib/TestSuite -- TestHarness --ignore-inefficacies
+          ./target/release/som-interpreter -c core-lib/Smalltalk core-lib/TestSuite -- TestHarness
