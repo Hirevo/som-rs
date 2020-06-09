@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -248,7 +248,7 @@ impl Universe {
                 ));
             }
 
-            return Ok(Class::from_class_def(defn));
+            return Class::from_class_def(defn).map_err(Error::msg);
         }
 
         Err(anyhow!("could not find the '{}' system class", class_name))
@@ -295,8 +295,38 @@ impl Universe {
                 self.core.object_class.clone()
             };
 
-            let class = Class::from_class_def(defn);
+            let class = Class::from_class_def(defn).map_err(Error::msg)?;
             set_super_class(&class, &super_class, &self.core.metaclass_class);
+
+            fn has_duplicated_field(class: &SOMRef<Class>) -> Option<String> {
+                let mut set = HashSet::new();
+                for class in
+                    std::iter::successors(Some(class.clone()), |class| class.borrow().super_class())
+                {
+                    for (field, _) in class.borrow().locals.iter() {
+                        if !set.insert(field.clone()) {
+                            return Some(field.clone());
+                        }
+                    }
+                }
+                return None;
+            }
+
+            if let Some(field) = has_duplicated_field(&class) {
+                return Err(anyhow!(
+                    "{}: a field named '{}' is already defined in a superclass",
+                    class.borrow().name(),
+                    field,
+                ));
+            }
+
+            if let Some(field) = has_duplicated_field(&class.borrow().class()) {
+                return Err(anyhow!(
+                    "{}: a field named '{}' is already defined in a superclass",
+                    class.borrow().name(),
+                    field,
+                ));
+            }
 
             self.globals.insert(
                 class.borrow().name().to_string(),
@@ -350,7 +380,7 @@ impl Universe {
             self.core.object_class.clone()
         };
 
-        let class = Class::from_class_def(defn);
+        let class = Class::from_class_def(defn).map_err(Error::msg)?;
         set_super_class(&class, &super_class, &self.core.metaclass_class);
 
         Ok(class)

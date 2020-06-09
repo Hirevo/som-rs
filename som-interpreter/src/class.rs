@@ -39,20 +39,32 @@ pub struct Class {
 
 impl Class {
     /// Load up a class from its class definition from the AST.
-    pub fn from_class_def(defn: ClassDef) -> SOMRef<Class> {
-        let static_locals = defn
-            .static_locals
-            .iter()
-            .cloned()
-            .zip(std::iter::repeat(Value::Nil))
-            .collect();
+    pub fn from_class_def(defn: ClassDef) -> Result<SOMRef<Class>, String> {
+        let static_locals = {
+            let mut static_locals = IndexMap::new();
+            for field in defn.static_locals.iter() {
+                if static_locals.insert(field.clone(), Value::Nil).is_some() {
+                    return Err(format!(
+                        "{}: the field named '{}' is defined twice in the same class",
+                        defn.name, field,
+                    ));
+                }
+            }
+            static_locals
+        };
 
-        let instance_locals = defn
-            .instance_locals
-            .iter()
-            .cloned()
-            .zip(std::iter::repeat(Value::Nil))
-            .collect();
+        let instance_locals = {
+            let mut instance_locals = IndexMap::new();
+            for field in defn.instance_locals.iter() {
+                if instance_locals.insert(field.clone(), Value::Nil).is_some() {
+                    return Err(format!(
+                        "{}: the field named '{}' is defined twice in the same class",
+                        defn.name, field,
+                    ));
+                }
+            }
+            instance_locals
+        };
 
         let static_class = Rc::new(RefCell::new(Self {
             name: format!("{} class", defn.name),
@@ -117,7 +129,7 @@ impl Class {
         static_class.borrow_mut().methods = static_methods;
         instance_class.borrow_mut().methods = instance_methods;
 
-        instance_class
+        Ok(instance_class)
     }
 
     /// Get the class' name.
