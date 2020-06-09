@@ -299,10 +299,11 @@ impl Universe {
             set_super_class(&class, &super_class, &self.core.metaclass_class);
 
             fn has_duplicated_field(class: &SOMRef<Class>) -> Option<String> {
+                let super_class_iterator = std::iter::successors(Some(class.clone()), |class| {
+                    class.borrow().super_class()
+                });
                 let mut set = HashSet::new();
-                for class in
-                    std::iter::successors(Some(class.clone()), |class| class.borrow().super_class())
-                {
+                for class in super_class_iterator {
                     for (field, _) in class.borrow().locals.iter() {
                         if !set.insert(field.clone()) {
                             return Some(field.clone());
