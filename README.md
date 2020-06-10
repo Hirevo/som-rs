@@ -80,3 +80,21 @@ For other purposes, you can use '-h' (or '--help') to print the complete help me
 ```bash
 ./target/release/som-interpreter -h
 ```
+
+License
+-------
+
+Unless otherwise noted (below and/or in individual files), this project is licensed under either of
+
+- the Apache License, Version 2.0 (LICENSE-APACHE or <http://www.apache.org/licenses/LICENSE-2.0>)
+- the MIT License (LICENSE-MIT or <http://opensource.org/licenses/MIT>)
+
+at your option.
+
+The SOM core library (in the `core-lib/` folder) is licensed under SOM's own terms:
+
+**<https://github.com/SOM-st/SOM>**
+
+### Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
