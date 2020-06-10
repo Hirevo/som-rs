@@ -45,7 +45,7 @@ impl Class {
             for field in defn.static_locals.iter() {
                 if static_locals.insert(field.clone(), Value::Nil).is_some() {
                     return Err(format!(
-                        "{}: the field named '{}' is defined twice in the same class",
+                        "{}: the field named '{}' is already defined in this class",
                         defn.name, field,
                     ));
                 }
@@ -58,7 +58,7 @@ impl Class {
             for field in defn.instance_locals.iter() {
                 if instance_locals.insert(field.clone(), Value::Nil).is_some() {
                     return Err(format!(
-                        "{}: the field named '{}' is defined twice in the same class",
+                        "{}: the field named '{}' is already defined in this class",
                         defn.name, field,
                     ));
                 }
