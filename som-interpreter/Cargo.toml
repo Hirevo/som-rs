@@ -5,6 +5,7 @@ description = "An interpreter for the Simple Object Machine"
 authors = ["Nicolas Polomack <nmp21@kent.ac.uk>"]
 edition = "2018"
 publish = false
+license = "MIT OR Apache-2.0"
 
 [lib]
 path = "src/lib.rs"
