@@ -35,6 +35,8 @@ pub enum Token {
     EndBlock,
     /// A colon (`:`).
     Colon,
+    /// A semicolon (`;`).
+    Semicolon,
     /// A period, the statement terminator (`.`).
     Period,
     /// A caret, the return operator (`^`).

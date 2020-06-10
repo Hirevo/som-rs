@@ -259,8 +259,53 @@ pub fn exit<'a>() -> impl Parser<'a, Expression> {
         .map(|expr| Expression::Exit(Box::new(expr)))
 }
 
+pub fn cascade<'a>() -> impl Parser<'a, Expression> {
+    binary_send()
+        .and(sep_by(
+            exact(Token::Semicolon),
+            many(identifier())
+                .and(many(operator().and(unary_send())))
+                .and(many(keyword().and(binary_send()))),
+        ))
+        .map(|(receiver, cascades)| {
+            if cascades.is_empty() {
+                return receiver;
+            }
+
+            let sequences = cascades
+                .into_iter()
+                .map(|((unaries, binaries), positionals)| {
+                    let unaries = unaries.into_iter().map(|signature| CascadeMessage {
+                        signature,
+                        values: vec![],
+                    });
+                    let binaries = binaries.into_iter().map(|(signature, rhs)| CascadeMessage {
+                        signature,
+                        values: vec![rhs],
+                    });
+                    let positionals = {
+                        if positionals.is_empty() {
+                            None
+                        } else {
+                            let (signature, values) = positionals.into_iter().unzip();
+                            Some(CascadeMessage { signature, values })
+                        }
+                    };
+                    CascadeMessageSequence {
+                        messages: unaries.chain(binaries).chain(positionals).collect(),
+                    }
+                })
+                .collect();
+
+            Expression::Cascade(Cascade {
+                receiver: Box::new(receiver),
+                sequences,
+            })
+        })
+}
+
 pub fn expression<'a>() -> impl Parser<'a, Expression> {
-    positional_send()
+    opaque!(cascade())
 }
 
 pub fn primary<'a>() -> impl Parser<'a, Expression> {

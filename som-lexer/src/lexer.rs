@@ -232,6 +232,10 @@ impl Iterator for Lexer {
                     Some(Token::Colon)
                 }
             }
+            ';' => {
+                self.chars.pop()?;
+                Some(Token::Semicolon)
+            }
             _ if Lexer::is_operator(peeked) => self.lex_operator(),
             _ => {
                 let primitive_len = Lexer::PRIMITIVE.chars().count();
