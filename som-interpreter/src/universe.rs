@@ -1,5 +1,6 @@
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -298,34 +299,39 @@ impl Universe {
             let class = Class::from_class_def(defn).map_err(Error::msg)?;
             set_super_class(&class, &super_class, &self.core.metaclass_class);
 
-            fn has_duplicated_field(class: &SOMRef<Class>) -> Option<String> {
+            fn has_duplicated_field(class: &SOMRef<Class>) -> Option<(String, (String, String))> {
                 let super_class_iterator = std::iter::successors(Some(class.clone()), |class| {
                     class.borrow().super_class()
                 });
-                let mut set = HashSet::new();
+                let mut map = HashMap::<String, String>::new();
                 for class in super_class_iterator {
+                    let class_name = class.borrow().name().to_string();
                     for (field, _) in class.borrow().locals.iter() {
-                        if !set.insert(field.clone()) {
-                            return Some(field.clone());
+                        let field_name = field.clone();
+                        match map.entry(field_name.clone()) {
+                            Entry::Occupied(entry) => {
+                                return Some((field_name, (class_name, entry.get().clone())))
+                            }
+                            Entry::Vacant(v) => {
+                                v.insert(class_name.clone());
+                            }
                         }
                     }
                 }
                 return None;
             }
 
-            if let Some(field) = has_duplicated_field(&class) {
+            if let Some((field, (c1, c2))) = has_duplicated_field(&class) {
                 return Err(anyhow!(
-                    "{}: a field named '{}' is already defined in a superclass",
-                    class.borrow().name(),
-                    field,
+                    "the field named '{}' is defined more than once (by '{}' and '{}', where the latter inherits from the former)",
+                    field, c1, c2,
                 ));
             }
 
-            if let Some(field) = has_duplicated_field(&class.borrow().class()) {
+            if let Some((field, (c1, c2))) = has_duplicated_field(&class.borrow().class()) {
                 return Err(anyhow!(
-                    "{}: a field named '{}' is already defined in a superclass",
-                    class.borrow().name(),
-                    field,
+                    "the field named '{}' is defined more than once (by '{}' and '{}', where the latter inherits from the former)",
+                    field, c1, c2,
                 ));
             }
 
