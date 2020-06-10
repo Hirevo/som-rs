@@ -83,6 +83,7 @@ impl Evaluate for ast::Expression {
                 .unwrap_or_else(|| Return::Exception(format!("variable '{}' not found", name))),
             Self::Term(term) => term.evaluate(universe),
             Self::Message(msg) => msg.evaluate(universe),
+            Self::Cascade(cascade) => cascade.evaluate(universe),
         }
     }
 }
@@ -91,12 +92,6 @@ impl Evaluate for ast::BinaryOp {
     fn evaluate(&self, universe: &mut Universe) -> Return {
         let lhs = propagate!(self.lhs.evaluate(universe));
         let rhs = propagate!(self.rhs.evaluate(universe));
-
-        // println!(
-        //     "invoking {}>>#{}",
-        //     lhs.class(universe).borrow().name(),
-        //     self.signature
-        // );
 
         if let Some(invokable) = lhs.lookup_method(universe, &self.op) {
             invokable.invoke(universe, vec![lhs, rhs])
@@ -112,6 +107,76 @@ impl Evaluate for ast::BinaryOp {
                     // Return::Local(Value::Nil)
                 })
         }
+    }
+}
+
+impl Evaluate for ast::Cascade {
+    fn evaluate(&self, universe: &mut Universe) -> Return {
+        let frame = universe.current_frame().clone();
+        let (receiver, is_super) = match self.receiver.as_ref() {
+            ast::Expression::Reference(ident) if ident == "super" => {
+                let receiver = frame.borrow().get_self();
+                (receiver, true)
+            }
+            expr => {
+                let receiver = propagate!(expr.evaluate(universe));
+                (receiver, false)
+            }
+        };
+
+        let mut last_value = receiver.clone();
+
+        for sequence in &self.sequences {
+            last_value = receiver.clone();
+            for message in &sequence.messages {
+                let invokable = if is_super {
+                    let holder = frame.borrow().get_method_holder();
+                    let super_class = match holder.borrow().super_class() {
+                        Some(class) => class,
+                        None => {
+                            return Return::Exception(
+                                "`super` used without any superclass available".to_string(),
+                            )
+                        }
+                    };
+                    let method = super_class.borrow().lookup_method(&message.signature);
+                    method
+                } else {
+                    last_value.lookup_method(universe, &message.signature)
+                };
+                let args = {
+                    let mut output = Vec::with_capacity(message.values.len() + 1);
+                    output.push(last_value.clone());
+                    for expr in &message.values {
+                        let value = propagate!(expr.evaluate(universe));
+                        output.push(value);
+                    }
+                    output
+                };
+
+                let value = match invokable {
+                    Some(invokable) => invokable.invoke(universe, args),
+                    None => {
+                        let mut args = args;
+                        args.remove(0);
+                        universe
+                            .does_not_understand(last_value.clone(), &message.signature, args)
+                            .unwrap_or_else(|| {
+                                Return::Exception(format!(
+                                    "could not find method '{}>>#{}'",
+                                    last_value.class(universe).borrow().name(),
+                                    message.signature
+                                ))
+                                // Return::Local(Value::Nil)
+                            })
+                    }
+                };
+
+                last_value = propagate!(value);
+            }
+        }
+
+        Return::Local(last_value)
     }
 }
 
@@ -154,13 +219,6 @@ impl Evaluate for ast::Block {
 impl Evaluate for ast::Message {
     fn evaluate(&self, universe: &mut Universe) -> Return {
         let (receiver, invokable) = match self.receiver.as_ref() {
-            // ast::Expression::Reference(ident) if ident == "self" => {
-            //     let frame = universe.current_frame();
-            //     let receiver = frame.borrow().get_self();
-            //     let holder = frame.borrow().get_method_holder();
-            //     let invokable = holder.borrow().lookup_method(&self.signature);
-            //     (receiver, invokable)
-            // }
             ast::Expression::Reference(ident) if ident == "super" => {
                 let frame = universe.current_frame();
                 let receiver = frame.borrow().get_self();
@@ -191,13 +249,6 @@ impl Evaluate for ast::Message {
             }
             output
         };
-
-        // println!(
-        //     "invoking {}>>#{} with ({:?})",
-        //     receiver.class(universe).borrow().name(),
-        //     self.signature,
-        //     self.values,
-        // );
 
         let value = match invokable {
             Some(invokable) => invokable.invoke(universe, args),

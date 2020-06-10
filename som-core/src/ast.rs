@@ -141,6 +141,8 @@ pub enum Expression {
     Block(Block),
     /// A term (eg. `( counter increment )`).
     Term(Term),
+    /// A cascade (eg. `self increment; increment; increment`)
+    Cascade(Cascade),
 }
 
 /// Represents a message send.
@@ -216,6 +218,30 @@ pub struct Block {
 pub struct Term {
     /// The body of the term.
     pub body: Body,
+}
+
+/// Represents a cascade.
+///
+/// Exemple:
+/// ```text
+/// "simple cascade"
+/// Point new setX: 25 setY: 35; isZero
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct Cascade {
+    pub receiver: Box<Expression>,
+    pub sequences: Vec<CascadeMessageSequence>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CascadeMessage {
+    pub signature: String,
+    pub values: Vec<Expression>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CascadeMessageSequence {
+    pub messages: Vec<CascadeMessage>,
 }
 
 /// Represents a literal.
