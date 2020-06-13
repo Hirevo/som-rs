@@ -1,5 +1,6 @@
 use som_core::ast::*;
-use som_lexer::Token;
+use som_core::span::Span;
+use som_lexer::{Token, TokenKind};
 
 use crate::combinators::*;
 use crate::parser::Parser;
@@ -21,333 +22,403 @@ pub fn eof<'a>() -> impl Parser<'a, ()> {
     }
 }
 
-pub fn exact<'a>(ch: Token) -> impl Parser<'a, ()> {
+pub fn exact<'a>(kind: TokenKind) -> impl Parser<'a, Span> {
     move |input: &'a [Token]| {
         let (head, tail) = input.split_first()?;
-        if *head == ch {
-            Some(((), tail))
+        if head.kind() == kind {
+            Some((head.span(), tail))
         } else {
             None
         }
     }
 }
 
-pub fn exact_ident<'a, 'b: 'a>(string: &'b str) -> impl Parser<'a, ()> {
+pub fn exact_ident<'a, 'b: 'a>(source: &'b str, string: &'b str) -> impl Parser<'a, ()> {
     move |input: &'a [Token]| {
         let (head, tail) = input.split_first()?;
-        match head {
-            Token::Identifier(ref ident) if ident.as_str() == string => Some(((), tail)),
+        match head.kind() {
+            TokenKind::Identifier if head.span().to_str(source) == string => Some(((), tail)),
             _ => None,
         }
     }
 }
 
-pub fn integer<'a>() -> impl Parser<'a, i64> {
+pub fn integer<'a>() -> impl Parser<'a, Expression> {
     move |input: &'a [Token]| {
-        let (sign, input) = optional(exact(Token::Minus)).parse(input)?;
-        let sign = if sign.is_some() { -1 } else { 1 };
-
+        let (sign, input) = optional(exact(TokenKind::Minus)).parse(input)?;
         let (head, tail) = input.split_first()?;
-        match head {
-            Token::LitInteger(value) => Some((*value * sign, tail)),
+        match head.kind() {
+            TokenKind::LitInteger => {
+                let span = if let Some(sign) = sign {
+                    Span::between(sign, head.span())
+                } else {
+                    head.span()
+                };
+                Some((
+                    Expression {
+                        span,
+                        kind: ExpressionKind::Literal(Literal::Integer),
+                    },
+                    tail,
+                ))
+            }
             _ => None,
         }
     }
 }
 
-pub fn double<'a>() -> impl Parser<'a, f64> {
+pub fn double<'a>() -> impl Parser<'a, Expression> {
     move |input: &'a [Token]| {
-        let (sign, input) = optional(exact(Token::Minus)).parse(input)?;
-        let sign = if sign.is_some() { -1.0 } else { 1.0 };
+        let (sign, input) = optional(exact(TokenKind::Minus)).parse(input)?;
 
         let (head, tail) = input.split_first()?;
-        match head {
-            Token::LitDouble(value) => Some((*value * sign, tail)),
+        match head.kind() {
+            TokenKind::LitDouble => {
+                let span = if let Some(sign) = sign {
+                    Span::between(sign, head.span())
+                } else {
+                    head.span()
+                };
+                Some((
+                    Expression {
+                        span,
+                        kind: ExpressionKind::Literal(Literal::Double),
+                    },
+                    tail,
+                ))
+            }
             _ => None,
         }
     }
 }
 
-pub fn single_operator<'a>() -> impl Parser<'a, &'static str> {
+pub fn single_operator<'a>() -> impl Parser<'a, Span> {
     move |input: &'a [Token]| {
         let (head, tail) = input.split_first()?;
-        match head {
-            Token::Not => Some(("~", tail)),
-            Token::And => Some(("&", tail)),
-            Token::Or => Some(("|", tail)),
-            Token::Star => Some(("*", tail)),
-            Token::Div => Some(("/", tail)),
-            Token::Mod => Some(("\\", tail)),
-            Token::Plus => Some(("+", tail)),
-            Token::Equal => Some(("=", tail)),
-            Token::More => Some((">", tail)),
-            Token::Less => Some(("<", tail)),
-            Token::Comma => Some((",", tail)),
-            Token::At => Some(("@", tail)),
-            Token::Per => Some(("%", tail)),
-            Token::Minus => Some(("-", tail)),
+        match head.kind() {
+            TokenKind::Not => Some((head.span(), tail)),
+            TokenKind::And => Some((head.span(), tail)),
+            TokenKind::Or => Some((head.span(), tail)),
+            TokenKind::Star => Some((head.span(), tail)),
+            TokenKind::Div => Some((head.span(), tail)),
+            TokenKind::Mod => Some((head.span(), tail)),
+            TokenKind::Plus => Some((head.span(), tail)),
+            TokenKind::Equal => Some((head.span(), tail)),
+            TokenKind::More => Some((head.span(), tail)),
+            TokenKind::Less => Some((head.span(), tail)),
+            TokenKind::Comma => Some((head.span(), tail)),
+            TokenKind::At => Some((head.span(), tail)),
+            TokenKind::Per => Some((head.span(), tail)),
+            TokenKind::Minus => Some((head.span(), tail)),
             _ => None,
         }
     }
 }
 
-pub fn operator_sequence<'a>() -> impl Parser<'a, String> {
+pub fn operator_sequence<'a>() -> impl Parser<'a, Span> {
     move |input: &'a [Token]| {
         let (head, tail) = input.split_first()?;
-        match head {
-            Token::OperatorSequence(seq) => Some((seq.clone(), tail)),
+        match head.kind() {
+            TokenKind::OperatorSequence => Some((head.span(), tail)),
             _ => None,
         }
     }
 }
 
-pub fn operator<'a>() -> impl Parser<'a, String> {
-    single_operator().map(String::from).or(operator_sequence())
+pub fn operator<'a>() -> impl Parser<'a, Span> {
+    single_operator().or(operator_sequence())
 }
 
-pub fn identifier<'a>() -> impl Parser<'a, String> {
+pub fn identifier<'a>() -> impl Parser<'a, Span> {
     move |input: &'a [Token]| {
         let (head, tail) = input.split_first()?;
-        match head {
-            Token::Identifier(value) => Some((value.clone(), tail)),
+        match head.kind() {
+            TokenKind::Identifier => Some((head.span(), tail)),
             _ => None,
         }
     }
 }
 
-pub fn string<'a>() -> impl Parser<'a, String> {
+pub fn string<'a>() -> impl Parser<'a, Expression> {
     move |input: &'a [Token]| {
         let (head, tail) = input.split_first()?;
-        match head {
-            Token::LitString(value) => Some((value.clone(), tail)),
+        match head.kind() {
+            TokenKind::LitString(span) => Some((
+                Expression {
+                    span: head.span(),
+                    kind: ExpressionKind::Literal(Literal::String(span)),
+                },
+                tail,
+            )),
             _ => None,
         }
     }
 }
 
-pub fn symbol<'a>() -> impl Parser<'a, String> {
+pub fn symbol<'a>() -> impl Parser<'a, Expression> {
     move |input: &'a [Token]| {
         let (head, tail) = input.split_first()?;
-        match head {
-            Token::LitSymbol(value) => Some((value.clone(), tail)),
+        match head.kind() {
+            TokenKind::LitSymbol(span) => Some((
+                Expression {
+                    span: head.span(),
+                    kind: ExpressionKind::Literal(Literal::Symbol(span)),
+                },
+                tail,
+            )),
             _ => None,
         }
     }
 }
 
-pub fn array<'a>() -> impl Parser<'a, Vec<Literal>> {
-    move |input: &'a [Token]| {
-        between(
-            exact(Token::NewArray),
-            many(literal()),
-            exact(Token::EndTerm),
-        )
-        .parse(input)
-    }
+pub fn array<'a>() -> impl Parser<'a, Expression> {
+    exact(TokenKind::NewArray)
+        .and(opaque!(many(literal())))
+        .and(exact(TokenKind::EndTerm))
+        .map(|((start, literals), end)| Expression {
+            span: Span::between(start, end),
+            kind: ExpressionKind::Literal(Literal::Array(literals)),
+        })
 }
 
-pub fn literal<'a>() -> impl Parser<'a, Literal> {
-    (double().map(Literal::Double))
-        .or(integer().map(Literal::Integer))
-        .or(string().map(Literal::String))
-        .or(symbol().map(Literal::Symbol))
-        .or(array().map(Literal::Array))
+pub fn literal<'a>() -> impl Parser<'a, Expression> {
+    double().or(integer()).or(string()).or(symbol()).or(array())
 }
 
-pub fn keyword<'a>() -> impl Parser<'a, String> {
+pub fn keyword<'a>() -> impl Parser<'a, Span> {
     move |input: &'a [Token]| {
         let (head, tail) = input.split_first()?;
-        match head {
-            Token::Keyword(value) => Some((value.clone(), tail)),
+        match head.kind() {
+            TokenKind::Keyword => Some((head.span(), tail)),
             _ => None,
         }
     }
 }
 
-pub fn unary_send<'a>() -> impl Parser<'a, Expression> {
-    opaque!(primary())
+pub fn unary_send<'a>(source: &'a str) -> impl Parser<'a, Expression> {
+    opaque!(primary(source))
         .and(many(identifier()))
-        .map(|(receiver, signatures)| {
+        .map(move |(receiver, signatures)| {
             signatures
                 .into_iter()
-                .fold(receiver, |receiver, signature| {
-                    Expression::Message(Message {
+                .fold(receiver, |receiver, signature| Expression {
+                    span: Span::between(receiver.span, signature),
+                    kind: ExpressionKind::Message(Message {
                         receiver: Box::new(receiver),
-                        signature,
-                        values: Vec::new(),
-                    })
+                        signature: signature.to_str(source).to_string(),
+                        kind: MessageKind::Unary,
+                    }),
                 })
         })
 }
 
-pub fn binary_send<'a>() -> impl Parser<'a, Expression> {
-    unary_send()
-        .and(many(operator().and(unary_send().map(Box::new))))
-        .map(|(lhs, operands)| {
-            operands.into_iter().fold(lhs, |lhs, (op, rhs)| {
-                Expression::BinaryOp(BinaryOp {
-                    lhs: Box::new(lhs),
-                    op,
-                    rhs,
-                })
+pub fn binary_send<'a>(source: &'a str) -> impl Parser<'a, Expression> {
+    unary_send(source)
+        .and(many(operator().and(unary_send(source))))
+        .map(move |(lhs, operands)| {
+            operands.into_iter().fold(lhs, |lhs, (op, rhs)| Expression {
+                span: Span::between(lhs.span, rhs.span),
+                kind: ExpressionKind::Message(Message {
+                    receiver: Box::new(lhs),
+                    signature: op.to_str(source).to_string(),
+                    kind: MessageKind::Binary { rhs: Box::new(rhs) },
+                }),
             })
         })
 }
 
-pub fn positional_send<'a>() -> impl Parser<'a, Expression> {
-    binary_send()
-        .and(many(keyword().and(binary_send())))
-        .map(|(receiver, pairs)| {
+pub fn positional_send<'a>(source: &'a str) -> impl Parser<'a, Expression> {
+    binary_send(source)
+        .and(many(keyword().and(binary_send(source))))
+        .map(move |(receiver, pairs)| {
             if pairs.is_empty() {
                 receiver
             } else {
-                let (signature, values) = pairs.into_iter().unzip();
+                let (keywords, values): (Vec<_>, Vec<_>) = pairs.into_iter().unzip();
+                let signature = keywords.iter().map(|span| span.to_str(source)).collect();
 
-                Expression::Message(Message {
-                    receiver: Box::new(receiver),
-                    signature,
-                    values,
-                })
+                Expression {
+                    span: values.last().map_or(receiver.span, |expr| {
+                        Span::between(receiver.span, expr.span)
+                    }),
+                    kind: ExpressionKind::Message(Message {
+                        receiver: Box::new(receiver),
+                        signature,
+                        kind: MessageKind::Positional { keywords, values },
+                    }),
+                }
             }
         })
 }
 
-pub fn body<'a>() -> impl Parser<'a, Body> {
-    sep_by(exact(Token::Period), exit().or(statement()))
-        .and(optional(exact(Token::Period)))
+pub fn body<'a>(source: &'a str) -> impl Parser<'a, Body> {
+    sep_by(exact(TokenKind::Period), exit(source).or(statement(source)))
+        .and(optional(exact(TokenKind::Period)))
         .map(|(exprs, stopped)| Body {
             exprs,
             full_stopped: stopped.is_some(),
         })
 }
 
-pub fn locals<'a>() -> impl Parser<'a, Vec<String>> {
-    between(exact(Token::Or), many(identifier()), exact(Token::Or))
-}
-
-pub fn parameter<'a>() -> impl Parser<'a, String> {
-    exact(Token::Colon).and_right(identifier())
-}
-
-pub fn parameters<'a>() -> impl Parser<'a, Vec<String>> {
-    some(parameter()).and_left(exact(Token::Or))
-}
-
-pub fn block<'a>() -> impl Parser<'a, Expression> {
+pub fn locals<'a>() -> impl Parser<'a, Vec<Span>> {
     between(
-        exact(Token::NewBlock),
-        default(parameters()).and(default(locals())).and(body()),
-        exact(Token::EndBlock),
+        exact(TokenKind::Or),
+        many(identifier()),
+        exact(TokenKind::Or),
     )
-    .map(|((parameters, locals), body)| {
-        Expression::Block(Block {
-            parameters,
-            locals,
-            body,
+}
+
+pub fn parameter<'a>() -> impl Parser<'a, Span> {
+    exact(TokenKind::Colon).and_right(identifier())
+}
+
+pub fn parameters<'a>() -> impl Parser<'a, Vec<Span>> {
+    some(parameter()).and_left(exact(TokenKind::Or))
+}
+
+pub fn block<'a>(source: &'a str) -> impl Parser<'a, Expression> {
+    exact(TokenKind::NewBlock)
+        .and(default(parameters()))
+        .and(default(locals()))
+        .and(body(source))
+        .and(exact(TokenKind::EndBlock))
+        .map(|((((start, parameters), locals), body), end)| Expression {
+            span: Span::between(start, end),
+            kind: ExpressionKind::Block(Block {
+                parameters,
+                locals,
+                body,
+            }),
         })
-    })
 }
 
-pub fn term<'a>() -> impl Parser<'a, Expression> {
-    between(exact(Token::NewTerm), body(), exact(Token::EndTerm))
-        .map(|body| Expression::Term(Term { body }))
+pub fn term<'a>(source: &'a str) -> impl Parser<'a, Expression> {
+    exact(TokenKind::NewTerm)
+        .and(body(source))
+        .and(exact(TokenKind::EndTerm))
+        .map(|((start, body), end)| Expression {
+            span: Span::between(start, end),
+            kind: ExpressionKind::Term(Term { body }),
+        })
 }
 
-pub fn exit<'a>() -> impl Parser<'a, Expression> {
-    exact(Token::Exit)
-        .and_right(statement())
-        .map(|expr| Expression::Exit(Box::new(expr)))
+pub fn exit<'a>(source: &'a str) -> impl Parser<'a, Expression> {
+    exact(TokenKind::Exit)
+        .and(statement(source))
+        .map(|(start, expr)| Expression {
+            span: Span::between(start, expr.span),
+            kind: ExpressionKind::Exit(Box::new(expr)),
+        })
 }
 
-pub fn expression<'a>() -> impl Parser<'a, Expression> {
-    positional_send()
+pub fn expression<'a>(source: &'a str) -> impl Parser<'a, Expression> {
+    positional_send(source)
 }
 
-pub fn primary<'a>() -> impl Parser<'a, Expression> {
-    (identifier().map(Expression::Reference))
-        .or(term())
-        .or(block())
-        .or(literal().map(Expression::Literal))
+pub fn primary<'a>(source: &'a str) -> impl Parser<'a, Expression> {
+    (identifier().map(|span| Expression {
+        span,
+        kind: ExpressionKind::Reference,
+    }))
+    .or(term(source))
+    .or(block(source))
+    .or(literal())
 }
 
-pub fn assignment<'a>() -> impl Parser<'a, Expression> {
+pub fn assignment<'a>(source: &'a str) -> impl Parser<'a, Expression> {
     identifier()
-        .and_left(exact(Token::Assign))
-        .and(opaque!(statement()))
-        .map(|(name, expr)| Expression::Assignment(name, Box::new(expr)))
+        .and_left(exact(TokenKind::Assign))
+        .and(opaque!(statement(source)))
+        .map(|(name, expr)| Expression {
+            span: Span::between(name, expr.span),
+            kind: ExpressionKind::Assignment(name, Box::new(expr)),
+        })
 }
 
-pub fn statement<'a>() -> impl Parser<'a, Expression> {
-    assignment().or(expression())
+pub fn statement<'a>(source: &'a str) -> impl Parser<'a, Expression> {
+    assignment(source).or(expression(source))
 }
 
 pub fn primitive<'a>() -> impl Parser<'a, MethodBody> {
-    exact(Token::Primitive).map(|_| MethodBody::Primitive)
+    exact(TokenKind::Primitive).map(|span| MethodBody {
+        span,
+        kind: MethodBodyKind::Primitive,
+    })
 }
 
-pub fn method_body<'a>() -> impl Parser<'a, MethodBody> {
-    between(
-        exact(Token::NewTerm),
-        default(locals()).and(body()),
-        exact(Token::EndTerm),
-    )
-    .map(|(locals, body)| MethodBody::Body { locals, body })
+pub fn method_body<'a>(source: &'a str) -> impl Parser<'a, MethodBody> {
+    exact(TokenKind::NewTerm)
+        .and(default(locals()))
+        .and(body(source))
+        .and(exact(TokenKind::EndTerm))
+        .map(|(((start, locals), body), end)| MethodBody {
+            span: Span::between(start, end),
+            kind: MethodBodyKind::Body { locals, body },
+        })
 }
 
-pub fn unary_method_def<'a>() -> impl Parser<'a, MethodDef> {
+pub fn unary_method_def<'a>(source: &'a str) -> impl Parser<'a, MethodDef> {
     identifier()
-        .and_left(exact(Token::Equal))
-        .and(primitive().or(method_body()))
-        .map(|(signature, body)| MethodDef {
+        .and_left(exact(TokenKind::Equal))
+        .and(primitive().or(method_body(source)))
+        .map(move |(signature, body)| MethodDef {
+            span: Span::between(signature, body.span),
             kind: MethodKind::Unary,
-            signature,
+            signature: signature.to_str(source).to_string(),
             body,
         })
 }
 
-pub fn positional_method_def<'a>() -> impl Parser<'a, MethodDef> {
+pub fn positional_method_def<'a>(source: &'a str) -> impl Parser<'a, MethodDef> {
     some(keyword().and(identifier()))
-        .and_left(exact(Token::Equal))
-        .and(primitive().or(method_body()))
-        .map(|(pairs, body)| {
-            let (signature, parameters) = pairs.into_iter().unzip();
+        .and_left(exact(TokenKind::Equal))
+        .and(primitive().or(method_body(source)))
+        .map(move |(pairs, body)| {
+            let (keywords, parameters): (Vec<_>, Vec<_>) = pairs.into_iter().unzip();
+            let signature = keywords.iter().map(|span| span.to_str(source)).collect();
 
             MethodDef {
-                kind: MethodKind::Positional { parameters },
+                span: Span::between(keywords[0], body.span),
+                kind: MethodKind::Positional {
+                    keywords,
+                    parameters,
+                },
                 signature,
                 body,
             }
         })
 }
 
-pub fn operator_method_def<'a>() -> impl Parser<'a, MethodDef> {
+pub fn operator_method_def<'a>(source: &'a str) -> impl Parser<'a, MethodDef> {
     operator()
         .and(identifier())
-        .and_left(exact(Token::Equal))
-        .and(primitive().or(method_body()))
-        .map(|((signature, rhs), body)| MethodDef {
+        .and_left(exact(TokenKind::Equal))
+        .and(primitive().or(method_body(source)))
+        .map(move |((signature, rhs), body)| MethodDef {
+            span: Span::between(signature, body.span),
             kind: MethodKind::Operator { rhs },
-            signature,
+            signature: signature.to_str(source).to_string(),
             body,
         })
 }
 
-pub fn method_def<'a>() -> impl Parser<'a, MethodDef> {
-    unary_method_def()
-        .or(positional_method_def())
-        .or(operator_method_def())
+pub fn method_def<'a>(source: &'a str) -> impl Parser<'a, MethodDef> {
+    unary_method_def(source)
+        .or(positional_method_def(source))
+        .or(operator_method_def(source))
 }
 
-pub fn class_def<'a>() -> impl Parser<'a, ClassDef> {
+pub fn class_def<'a>(source: &'a str) -> impl Parser<'a, ClassDef> {
     identifier()
-        .and_left(exact(Token::Equal))
+        .and_left(exact(TokenKind::Equal))
         .and(optional(identifier()))
         .and(between(
-            exact(Token::NewTerm),
-            default(locals()).and(many(method_def())).and(default(
-                exact(Token::Separator).and_right(default(locals()).and(many(method_def()))),
+            exact(TokenKind::NewTerm),
+            default(locals()).and(many(method_def(source))).and(default(
+                exact(TokenKind::Separator)
+                    .and_right(default(locals()).and(many(method_def(source)))),
             )),
-            exact(Token::EndTerm),
+            exact(TokenKind::EndTerm),
         ))
         .map(|((name, super_class), (instance_defns, static_defns))| {
             let (instance_locals, instance_methods) = instance_defns;
@@ -364,6 +435,6 @@ pub fn class_def<'a>() -> impl Parser<'a, ClassDef> {
         })
 }
 
-pub fn file<'a>() -> impl Parser<'a, ClassDef> {
-    class_def().and_left(eof())
+pub fn file<'a>(source: &'a str) -> impl Parser<'a, ClassDef> {
+    class_def(source).and_left(eof())
 }

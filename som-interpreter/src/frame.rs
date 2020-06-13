@@ -3,6 +3,7 @@ use std::rc::Rc;
 
 use crate::block::Block;
 use crate::class::Class;
+use crate::interner::Interned;
 use crate::value::Value;
 use crate::SOMRef;
 
@@ -29,7 +30,7 @@ pub struct Frame {
     /// This frame's kind.
     pub kind: FrameKind,
     /// The bindings within this frame.
-    pub bindings: HashMap<String, Value>,
+    pub bindings: HashMap<Interned, Value>,
 }
 
 impl Frame {
@@ -63,9 +64,8 @@ impl Frame {
     }
 
     /// Search for a local binding.
-    pub fn lookup_local(&self, name: impl AsRef<str>) -> Option<Value> {
-        let name = name.as_ref();
-        if let Some(value) = self.bindings.get(name).cloned() {
+    pub fn lookup_local(&self, name: Interned) -> Option<Value> {
+        if let Some(value) = self.bindings.get(&name).cloned() {
             return Some(value);
         }
         match &self.kind {
@@ -81,9 +81,8 @@ impl Frame {
     }
 
     /// Assign to a local binding.
-    pub fn assign_local(&mut self, name: impl AsRef<str>, value: Value) -> Option<()> {
-        let name = name.as_ref();
-        if let Some(local) = self.bindings.get_mut(name) {
+    pub fn assign_local(&mut self, name: Interned, value: Value) -> Option<()> {
+        if let Some(local) = self.bindings.get_mut(&name) {
             *local = value;
             return Some(());
         }

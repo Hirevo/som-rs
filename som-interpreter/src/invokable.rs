@@ -12,7 +12,6 @@ use crate::value::Value;
 use crate::SOMRef;
 
 /// Represents the kinds of possible returns from an invocation.
-#[derive(Debug)]
 pub enum Return {
     /// A local return, the value is for the immediate caller.
     Local(Value),
@@ -77,14 +76,22 @@ impl Invoke for Method {
 impl Invoke for ast::MethodDef {
     fn invoke(&self, universe: &mut Universe, args: Vec<Value>) -> Return {
         let current_frame = universe.current_frame().clone();
+        let class = current_frame.borrow().get_method_holder();
         match &self.kind {
             ast::MethodKind::Unary => {}
-            ast::MethodKind::Positional { parameters } => current_frame
-                .borrow_mut()
-                .bindings
-                .extend(parameters.iter().cloned().zip(args)),
+            ast::MethodKind::Positional { parameters, .. } => {
+                current_frame.borrow_mut().bindings.extend(
+                    parameters
+                        .iter()
+                        .map(|span| {
+                            universe.intern_symbol(span.to_str(class.borrow().source_code.as_str()))
+                        })
+                        .zip(args),
+                )
+            }
             ast::MethodKind::Operator { rhs } => {
-                let rhs_value = match args.into_iter().next() {
+                let name = universe.intern_symbol(rhs.to_str(class.borrow().source_code.as_str()));
+                let value = match args.into_iter().next() {
                     Some(value) => value,
                     None => {
                         // This should never happen in theory (the parser would have caught the missing rhs).
@@ -93,18 +100,19 @@ impl Invoke for ast::MethodDef {
                         ));
                     }
                 };
-                current_frame
-                    .borrow_mut()
-                    .bindings
-                    .insert(rhs.clone(), rhs_value);
+                current_frame.borrow_mut().bindings.insert(name, value);
             }
         }
-        match &self.body {
-            ast::MethodBody::Body { locals, body } => {
-                current_frame
-                    .borrow_mut()
-                    .bindings
-                    .extend(locals.iter().cloned().zip(std::iter::repeat(Value::Nil)));
+        match &self.body.kind {
+            ast::MethodBodyKind::Body { locals, body } => {
+                current_frame.borrow_mut().bindings.extend(
+                    locals
+                        .iter()
+                        .map(|span| {
+                            universe.intern_symbol(span.to_str(class.borrow().source_code.as_str()))
+                        })
+                        .zip(std::iter::repeat(Value::Nil)),
+                );
                 loop {
                     match body.evaluate(universe) {
                         Return::NonLocal(value, frame) => {
@@ -120,7 +128,7 @@ impl Invoke for ast::MethodDef {
                     }
                 }
             }
-            ast::MethodBody::Primitive => Return::Exception(format!(
+            ast::MethodBodyKind::Primitive => Return::Exception(format!(
                 "unimplemented primitive: {}>>#{}",
                 current_frame
                     .borrow()
@@ -136,19 +144,27 @@ impl Invoke for ast::MethodDef {
 
 impl Invoke for Block {
     fn invoke(&self, universe: &mut Universe, args: Vec<Value>) -> Return {
-        let current_frame = universe.current_frame();
+        let current_frame = universe.current_frame().clone();
+        let class = current_frame.borrow().get_method_holder();
+        let class = class.borrow();
         current_frame.borrow_mut().bindings.extend(
             self.block
                 .parameters
                 .iter()
-                .cloned()
+                .map(|span| {
+                    let name = span.to_str(class.source_code.as_str());
+                    universe.intern_symbol(name)
+                })
                 .zip(args.into_iter().skip(1)),
         );
         current_frame.borrow_mut().bindings.extend(
             self.block
                 .locals
                 .iter()
-                .cloned()
+                .map(|span| {
+                    let name = span.to_str(class.source_code.as_str());
+                    universe.intern_symbol(name)
+                })
                 .zip(std::iter::repeat(Value::Nil)),
         );
         self.block.body.evaluate(universe)

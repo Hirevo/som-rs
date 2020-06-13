@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 use crate::class::Class;
+use crate::interner::Interned;
 use crate::value::Value;
 use crate::SOMRef;
 
@@ -11,7 +12,7 @@ pub struct Instance {
     /// The class of which this is an instance from.
     pub class: SOMRef<Class>,
     /// This instance's locals.
-    pub locals: HashMap<String, Value>,
+    pub locals: HashMap<Interned, Value>,
 }
 
 impl Instance {
@@ -19,7 +20,7 @@ impl Instance {
     pub fn from_class(class: SOMRef<Class>) -> Self {
         let mut locals = HashMap::new();
 
-        fn collect_locals(class: &SOMRef<Class>, locals: &mut HashMap<String, Value>) {
+        fn collect_locals(class: &SOMRef<Class>, locals: &mut HashMap<Interned, Value>) {
             if let Some(class) = class.borrow().super_class() {
                 collect_locals(&class, locals);
             }
@@ -28,7 +29,7 @@ impl Instance {
                     .borrow()
                     .locals
                     .keys()
-                    .cloned()
+                    .copied()
                     .zip(std::iter::repeat(Value::Nil)),
             );
         }
@@ -49,13 +50,13 @@ impl Instance {
     }
 
     /// Search for a local binding.
-    pub fn lookup_local(&self, name: impl AsRef<str>) -> Option<Value> {
-        self.locals.get(name.as_ref()).cloned()
+    pub fn lookup_local(&self, name: Interned) -> Option<Value> {
+        self.locals.get(&name).cloned()
     }
 
     /// Assign a value to a local binding.
-    pub fn assign_local(&mut self, name: impl AsRef<str>, value: Value) -> Option<()> {
-        *self.locals.get_mut(name.as_ref())? = value;
+    pub fn assign_local(&mut self, name: Interned, value: Value) -> Option<()> {
+        *self.locals.get_mut(&name)? = value;
         Some(())
     }
 }

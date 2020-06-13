@@ -9,6 +9,8 @@ use std::time::Instant;
 
 use anyhow::{anyhow, Error};
 
+use som_core::span::Span;
+
 use crate::block::Block;
 use crate::class::Class;
 use crate::frame::{Frame, FrameKind};
@@ -74,7 +76,7 @@ pub struct Universe {
     /// The string interner for symbols.
     pub interner: Interner,
     /// The known global bindings.
-    pub globals: HashMap<String, Value>,
+    pub globals: HashMap<Interned, Value>,
     /// The path to search in for new classes.
     pub classpath: Vec<PathBuf>,
     /// The interpreter's core classes.
@@ -88,31 +90,35 @@ pub struct Universe {
 impl Universe {
     /// Initialize the universe from the given classpath.
     pub fn with_classpath(classpath: Vec<PathBuf>) -> Result<Self, Error> {
-        let interner = Interner::with_capacity(100);
+        let mut interner = Interner::with_capacity(100);
         let mut globals = HashMap::new();
 
-        let object_class = Self::load_system_class(classpath.as_slice(), "Object")?;
-        let class_class = Self::load_system_class(classpath.as_slice(), "Class")?;
-        let metaclass_class = Self::load_system_class(classpath.as_slice(), "Metaclass")?;
+        let object_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Object")?;
+        let class_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Class")?;
+        let metaclass_class =
+            Self::load_system_class(&mut interner, classpath.as_slice(), "Metaclass")?;
 
-        let nil_class = Self::load_system_class(classpath.as_slice(), "Nil")?;
-        let integer_class = Self::load_system_class(classpath.as_slice(), "Integer")?;
-        let array_class = Self::load_system_class(classpath.as_slice(), "Array")?;
-        let method_class = Self::load_system_class(classpath.as_slice(), "Method")?;
-        let symbol_class = Self::load_system_class(classpath.as_slice(), "Symbol")?;
-        let primitive_class = Self::load_system_class(classpath.as_slice(), "Primitive")?;
-        let string_class = Self::load_system_class(classpath.as_slice(), "String")?;
-        let system_class = Self::load_system_class(classpath.as_slice(), "System")?;
-        let double_class = Self::load_system_class(classpath.as_slice(), "Double")?;
+        let nil_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Nil")?;
+        let integer_class =
+            Self::load_system_class(&mut interner, classpath.as_slice(), "Integer")?;
+        let array_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Array")?;
+        let method_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Method")?;
+        let symbol_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Symbol")?;
+        let primitive_class =
+            Self::load_system_class(&mut interner, classpath.as_slice(), "Primitive")?;
+        let string_class = Self::load_system_class(&mut interner, classpath.as_slice(), "String")?;
+        let system_class = Self::load_system_class(&mut interner, classpath.as_slice(), "System")?;
+        let double_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Double")?;
 
-        let block_class = Self::load_system_class(classpath.as_slice(), "Block")?;
-        let block1_class = Self::load_system_class(classpath.as_slice(), "Block1")?;
-        let block2_class = Self::load_system_class(classpath.as_slice(), "Block2")?;
-        let block3_class = Self::load_system_class(classpath.as_slice(), "Block3")?;
+        let block_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Block")?;
+        let block1_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Block1")?;
+        let block2_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Block2")?;
+        let block3_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Block3")?;
 
-        let boolean_class = Self::load_system_class(classpath.as_slice(), "Boolean")?;
-        let true_class = Self::load_system_class(classpath.as_slice(), "True")?;
-        let false_class = Self::load_system_class(classpath.as_slice(), "False")?;
+        let boolean_class =
+            Self::load_system_class(&mut interner, classpath.as_slice(), "Boolean")?;
+        let true_class = Self::load_system_class(&mut interner, classpath.as_slice(), "True")?;
+        let false_class = Self::load_system_class(&mut interner, classpath.as_slice(), "False")?;
 
         // initializeSystemClass(objectClass, null, "Object");
         // set_super_class(&object_class, &nil_class, &metaclass_class);
@@ -158,30 +164,69 @@ impl Universe {
         set_super_class(&true_class, &boolean_class, &metaclass_class);
         set_super_class(&false_class, &boolean_class, &metaclass_class);
 
-        globals.insert("Object".into(), Value::Class(object_class.clone()));
-        globals.insert("Class".into(), Value::Class(class_class.clone()));
-        globals.insert("Metaclass".into(), Value::Class(metaclass_class.clone()));
-        globals.insert("Nil".into(), Value::Class(nil_class.clone()));
-        globals.insert("Integer".into(), Value::Class(integer_class.clone()));
-        globals.insert("Array".into(), Value::Class(array_class.clone()));
-        globals.insert("Method".into(), Value::Class(method_class.clone()));
-        globals.insert("Symbol".into(), Value::Class(symbol_class.clone()));
-        globals.insert("Primitive".into(), Value::Class(primitive_class.clone()));
-        globals.insert("String".into(), Value::Class(string_class.clone()));
-        globals.insert("System".into(), Value::Class(system_class.clone()));
-        globals.insert("Double".into(), Value::Class(double_class.clone()));
-        globals.insert("Boolean".into(), Value::Class(boolean_class.clone()));
-        globals.insert("True".into(), Value::Class(true_class.clone()));
-        globals.insert("False".into(), Value::Class(false_class.clone()));
-        globals.insert("Block".into(), Value::Class(block_class.clone()));
-        globals.insert("Block1".into(), Value::Class(block1_class.clone()));
-        globals.insert("Block2".into(), Value::Class(block2_class.clone()));
-        globals.insert("Block3".into(), Value::Class(block3_class.clone()));
+        globals.insert(
+            interner.intern("Object"),
+            Value::Class(object_class.clone()),
+        );
+        globals.insert(interner.intern("Class"), Value::Class(class_class.clone()));
+        globals.insert(
+            interner.intern("Metaclass"),
+            Value::Class(metaclass_class.clone()),
+        );
+        globals.insert(interner.intern("Nil"), Value::Class(nil_class.clone()));
+        globals.insert(
+            interner.intern("Integer"),
+            Value::Class(integer_class.clone()),
+        );
+        globals.insert(interner.intern("Array"), Value::Class(array_class.clone()));
+        globals.insert(
+            interner.intern("Method"),
+            Value::Class(method_class.clone()),
+        );
+        globals.insert(
+            interner.intern("Symbol"),
+            Value::Class(symbol_class.clone()),
+        );
+        globals.insert(
+            interner.intern("Primitive"),
+            Value::Class(primitive_class.clone()),
+        );
+        globals.insert(
+            interner.intern("String"),
+            Value::Class(string_class.clone()),
+        );
+        globals.insert(
+            interner.intern("System"),
+            Value::Class(system_class.clone()),
+        );
+        globals.insert(
+            interner.intern("Double"),
+            Value::Class(double_class.clone()),
+        );
+        globals.insert(
+            interner.intern("Boolean"),
+            Value::Class(boolean_class.clone()),
+        );
+        globals.insert(interner.intern("True"), Value::Class(true_class.clone()));
+        globals.insert(interner.intern("False"), Value::Class(false_class.clone()));
+        globals.insert(interner.intern("Block"), Value::Class(block_class.clone()));
+        globals.insert(
+            interner.intern("Block1"),
+            Value::Class(block1_class.clone()),
+        );
+        globals.insert(
+            interner.intern("Block2"),
+            Value::Class(block2_class.clone()),
+        );
+        globals.insert(
+            interner.intern("Block3"),
+            Value::Class(block3_class.clone()),
+        );
 
-        globals.insert("true".into(), Value::Boolean(true));
-        globals.insert("false".into(), Value::Boolean(false));
-        globals.insert("nil".into(), Value::Nil);
-        globals.insert("system".into(), Value::System);
+        globals.insert(interner.intern("true"), Value::Boolean(true));
+        globals.insert(interner.intern("false"), Value::Boolean(false));
+        globals.insert(interner.intern("nil"), Value::Nil);
+        globals.insert(interner.intern("system"), Value::System);
 
         Ok(Self {
             globals,
@@ -215,6 +260,7 @@ impl Universe {
 
     /// Load a system class (with an incomplete hierarchy).
     pub fn load_system_class(
+        interner: &mut Interner,
         classpath: &[impl AsRef<Path>],
         class_name: impl Into<String>,
     ) -> Result<SOMRef<Class>, Error> {
@@ -237,19 +283,19 @@ impl Universe {
                 .collect();
 
             // Parse class definition from the tokens.
-            let defn = match som_parser::parse_file(tokens.as_slice()) {
+            let defn = match som_parser::parse_file(contents.as_str(), tokens.as_slice()) {
                 Some(defn) => defn,
                 None => return Err(anyhow!("could not parse the '{}' system class", class_name)),
             };
 
-            if defn.name != class_name {
+            if defn.name.to_str(contents.as_str()) != class_name {
                 return Err(anyhow!(
                     "{}: class name is different from file name.",
                     path.display(),
                 ));
             }
 
-            return Class::from_class_def(defn).map_err(Error::msg);
+            return Class::from_class_def(interner, contents, defn).map_err(Error::msg);
         }
 
         Err(anyhow!("could not find the '{}' system class", class_name))
@@ -275,12 +321,12 @@ impl Universe {
                 .collect();
 
             // Parse class definition from the tokens.
-            let defn = match som_parser::parse_file(tokens.as_slice()) {
+            let defn = match som_parser::parse_file(contents.as_str(), tokens.as_slice()) {
                 Some(defn) => defn,
                 None => continue,
             };
 
-            if defn.name != class_name {
+            if defn.name.to_str(contents.as_str()) != class_name {
                 return Err(anyhow!(
                     "{}: class name is different from file name.",
                     path.display(),
@@ -288,29 +334,31 @@ impl Universe {
             }
 
             let super_class = if let Some(ref super_class) = defn.super_class {
+                let name = super_class.to_str(contents.as_str());
+                let super_class = self.interner.intern(name);
                 match self.lookup_global(super_class) {
                     Some(Value::Class(super_class)) => super_class,
-                    _ => self.load_class(super_class)?,
+                    _ => self.load_class(name)?,
                 }
             } else {
                 self.core.object_class.clone()
             };
 
-            let class = Class::from_class_def(defn).map_err(Error::msg)?;
+            let class =
+                Class::from_class_def(&mut self.interner, contents, defn).map_err(Error::msg)?;
             set_super_class(&class, &super_class, &self.core.metaclass_class);
 
-            fn has_duplicated_field(class: &SOMRef<Class>) -> Option<(String, (String, String))> {
+            fn has_duplicated_field(class: &SOMRef<Class>) -> Option<(Interned, (String, String))> {
                 let super_class_iterator = std::iter::successors(Some(class.clone()), |class| {
                     class.borrow().super_class()
                 });
-                let mut map = HashMap::<String, String>::new();
+                let mut map = HashMap::<Interned, String>::new();
                 for class in super_class_iterator {
                     let class_name = class.borrow().name().to_string();
                     for (field, _) in class.borrow().locals.iter() {
-                        let field_name = field.clone();
-                        match map.entry(field_name.clone()) {
+                        match map.entry(*field) {
                             Entry::Occupied(entry) => {
-                                return Some((field_name, (class_name, entry.get().clone())))
+                                return Some((*field, (class_name, entry.get().clone())))
                             }
                             Entry::Vacant(v) => {
                                 v.insert(class_name.clone());
@@ -324,19 +372,19 @@ impl Universe {
             if let Some((field, (c1, c2))) = has_duplicated_field(&class) {
                 return Err(anyhow!(
                     "the field named '{}' is defined more than once (by '{}' and '{}', where the latter inherits from the former)",
-                    field, c1, c2,
+                    self.interner.lookup(field), c1, c2,
                 ));
             }
 
             if let Some((field, (c1, c2))) = has_duplicated_field(&class.borrow().class()) {
                 return Err(anyhow!(
                     "the field named '{}' is defined more than once (by '{}' and '{}', where the latter inherits from the former)",
-                    field, c1, c2,
+                    self.interner.lookup(field), c1, c2,
                 ));
             }
 
             self.globals.insert(
-                class.borrow().name().to_string(),
+                self.interner.intern(class.borrow().name()),
                 Value::Class(class.clone()),
             );
 
@@ -366,12 +414,12 @@ impl Universe {
             .collect();
 
         // Parse class definition from the tokens.
-        let defn = match som_parser::parse_file(tokens.as_slice()) {
+        let defn = match som_parser::parse_file(contents.as_str(), tokens.as_slice()) {
             Some(defn) => defn,
             None => return Err(Error::msg("could not parse file")),
         };
 
-        if defn.name.as_str() != file_stem {
+        if defn.name.to_str(contents.as_str()) != file_stem {
             return Err(anyhow!(
                 "{}: class name is different from file name.",
                 path.display(),
@@ -379,15 +427,50 @@ impl Universe {
         }
 
         let super_class = if let Some(ref super_class) = defn.super_class {
+            let name = super_class.to_str(contents.as_str());
+            let super_class = self.interner.intern(name);
             match self.lookup_global(super_class) {
                 Some(Value::Class(class)) => class,
-                _ => self.load_class(super_class)?,
+                _ => self.load_class(name)?,
             }
         } else {
             self.core.object_class.clone()
         };
 
-        let class = Class::from_class_def(defn).map_err(Error::msg)?;
+        let class =
+            Class::from_class_def(&mut self.interner, contents, defn).map_err(Error::msg)?;
+        set_super_class(&class, &super_class, &self.core.metaclass_class);
+
+        Ok(class)
+    }
+
+    /// Load a class from a string into this universe.
+    pub fn load_class_from_memory(&mut self, contents: String) -> Result<SOMRef<Class>, Error> {
+        // Collect all tokens from the file.
+        let tokens: Vec<_> = som_lexer::Lexer::new(contents.as_str())
+            .skip_comments(true)
+            .skip_whitespace(true)
+            .collect();
+
+        // Parse class definition from the tokens.
+        let defn = match som_parser::parse_file(contents.as_str(), tokens.as_slice()) {
+            Some(defn) => defn,
+            None => return Err(Error::msg("could not parse file")),
+        };
+
+        let super_class = if let Some(ref super_class) = defn.super_class {
+            let name = super_class.to_str(contents.as_str());
+            let super_class = self.interner.intern(name);
+            match self.lookup_global(super_class) {
+                Some(Value::Class(class)) => class,
+                _ => self.load_class(name)?,
+            }
+        } else {
+            self.core.object_class.clone()
+        };
+
+        let class =
+            Class::from_class_def(&mut self.interner, contents, defn).map_err(Error::msg)?;
         set_super_class(&class, &super_class, &self.core.metaclass_class);
 
         Ok(class)
@@ -485,6 +568,21 @@ impl Universe {
         Frame::method_frame(self.current_frame())
     }
 
+    pub fn span_to_symbol(&mut self, span: Span) -> Interned {
+        self.interner.intern(
+            span.to_str(
+                self.frames
+                    .last()
+                    .expect("no frames left")
+                    .borrow()
+                    .get_method_holder()
+                    .borrow()
+                    .source_code
+                    .as_str(),
+            ),
+        )
+    }
+
     /// Intern a symbol.
     pub fn intern_symbol(&mut self, symbol: &str) -> Interned {
         self.interner.intern(symbol)
@@ -496,41 +594,39 @@ impl Universe {
     }
 
     /// Search for a local binding.
-    pub fn lookup_local(&self, name: impl AsRef<str>) -> Option<Value> {
-        let name = name.as_ref();
-        match name {
+    pub fn lookup_local(&self, name: Interned) -> Option<Value> {
+        let actual_name = self.interner.lookup(name);
+        match actual_name {
             "self" | "super" => {
                 let frame = self.current_frame();
                 let self_value = frame.borrow().get_self();
                 Some(self_value)
             }
-            name => self.current_frame().borrow().lookup_local(name),
+            _ => self.current_frame().borrow().lookup_local(name),
         }
     }
 
     /// Search for a global binding.
-    pub fn lookup_global(&self, name: impl AsRef<str>) -> Option<Value> {
-        let name = name.as_ref();
-        self.globals.get(name).cloned()
+    pub fn lookup_global(&self, name: Interned) -> Option<Value> {
+        self.globals.get(&name).cloned()
     }
 
     /// Assign a value to a local binding.
-    pub fn assign_local(&mut self, name: impl AsRef<str>, value: Value) -> Option<()> {
+    pub fn assign_local(&mut self, name: Interned, value: Value) -> Option<()> {
         self.current_frame().borrow_mut().assign_local(name, value)
     }
 
     /// Assign a value to a global binding.
-    pub fn assign_global(&mut self, name: impl AsRef<str>, value: Value) -> Option<()> {
-        self.globals
-            .insert(name.as_ref().to_string(), value)
-            .map(|_| ())
+    pub fn assign_global(&mut self, name: Interned, value: Value) -> Option<()> {
+        self.globals.insert(name, value).map(|_| ())
     }
 }
 
 impl Universe {
     /// Call `escapedBlock:` on the given value, if it is defined.
     pub fn escaped_block(&mut self, value: Value, block: Rc<Block>) -> Option<Return> {
-        let initialize = value.lookup_method(self, "escapedBlock:")?;
+        let signature = self.interner.intern("escapedBlock:");
+        let initialize = value.lookup_method(self, signature)?;
 
         Some(initialize.invoke(self, vec![value, Value::Block(block)]))
     }
@@ -539,23 +635,23 @@ impl Universe {
     pub fn does_not_understand(
         &mut self,
         value: Value,
-        symbol: impl AsRef<str>,
+        symbol: Interned,
         args: Vec<Value>,
     ) -> Option<Return> {
-        let initialize = value.lookup_method(self, "doesNotUnderstand:arguments:")?;
-        let sym = self.intern_symbol(symbol.as_ref());
-        let sym = Value::Symbol(sym);
+        let signature = self.interner.intern("doesNotUnderstand:arguments:");
+        let initialize = value.lookup_method(self, signature)?;
+        let signature = Value::Symbol(symbol);
         let args = Value::Array(Rc::new(RefCell::new(args)));
 
-        Some(initialize.invoke(self, vec![value, sym, args]))
+        Some(initialize.invoke(self, vec![value, signature, args]))
     }
 
     /// Call `unknownGlobal:` on the given value, if it is defined.
-    pub fn unknown_global(&mut self, value: Value, name: impl AsRef<str>) -> Option<Return> {
-        let sym = self.intern_symbol(name.as_ref());
-        let method = value.lookup_method(self, "unknownGlobal:")?;
+    pub fn unknown_global(&mut self, value: Value, name: Interned) -> Option<Return> {
+        let signature = self.interner.intern("unknownGlobal:");
+        let method = value.lookup_method(self, signature)?;
 
-        match method.invoke(self, vec![value, Value::Symbol(sym)]) {
+        match method.invoke(self, vec![value, Value::Symbol(name)]) {
             Return::Local(value) | Return::NonLocal(value, _) => Some(Return::Local(value)),
             Return::Exception(err) => Some(Return::Exception(format!(
                 "(from 'System>>#unknownGlobal:') {}",
@@ -569,7 +665,8 @@ impl Universe {
 
     /// Call `System>>#initialize:` with the given name, if it is defined.
     pub fn initialize(&mut self, args: Vec<Value>) -> Option<Return> {
-        let initialize = Value::System.lookup_method(self, "initialize:")?;
+        let signature = self.interner.intern("initialize:");
+        let initialize = Value::System.lookup_method(self, signature)?;
         let args = Value::Array(Rc::new(RefCell::new(args)));
 
         Some(initialize.invoke(self, vec![Value::System, args]))

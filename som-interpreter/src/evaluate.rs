@@ -18,6 +18,16 @@ macro_rules! propagate {
     };
 }
 
+macro_rules! resolve_span {
+    ($frame:expr, $span:expr) => {
+        $frame
+            .borrow()
+            .get_method_holder()
+            .borrow()
+            .resolve_span($span)
+    };
+}
+
 /// The trait for evaluating AST nodes.
 pub trait Evaluate {
     /// Evaluate the node within a given universe.
@@ -26,19 +36,23 @@ pub trait Evaluate {
 
 impl Evaluate for ast::Expression {
     fn evaluate(&self, universe: &mut Universe) -> Return {
-        match self {
-            Self::Assignment(name, expr) => {
+        let current_frame = universe.current_frame().clone();
+        match &self.kind {
+            ast::ExpressionKind::Assignment(name, expr) => {
+                let name = universe.span_to_symbol(*name);
                 let value = propagate!(expr.evaluate(universe));
                 universe
                     .assign_local(name, value.clone())
                     .map(|_| Return::Local(value))
                     .unwrap_or_else(|| {
-                        Return::Exception(format!("variable '{}' not found to assign to", name))
+                        Return::Exception(format!(
+                            "variable '{}' not found to assign to",
+                            universe.lookup_symbol(name),
+                        ))
                     })
             }
-            Self::BinaryOp(bin_op) => bin_op.evaluate(universe),
-            Self::Block(blk) => blk.evaluate(universe),
-            Self::Exit(expr) => {
+            ast::ExpressionKind::Block(blk) => blk.evaluate(universe),
+            ast::ExpressionKind::Exit(expr) => {
                 let value = propagate!(expr.evaluate(universe));
                 let frame = universe.current_method_frame();
                 let has_not_escaped = universe
@@ -71,18 +85,76 @@ impl Evaluate for ast::Expression {
                     })
                 }
             }
-            Self::Literal(literal) => literal.evaluate(universe),
-            Self::Reference(name) => (universe.lookup_local(name))
-                .or_else(|| universe.lookup_global(name))
-                .map(Return::Local)
-                .or_else(|| {
-                    let frame = universe.current_frame();
-                    let self_value = frame.borrow().get_self();
-                    universe.unknown_global(self_value, name.as_str())
-                })
-                .unwrap_or_else(|| Return::Exception(format!("variable '{}' not found", name))),
-            Self::Term(term) => term.evaluate(universe),
-            Self::Message(msg) => msg.evaluate(universe),
+            ast::ExpressionKind::Literal(literal) => match literal {
+                ast::Literal::Array(array) => {
+                    let mut output = Vec::with_capacity(array.len());
+                    for literal in array {
+                        let value = propagate!(literal.evaluate(universe));
+                        output.push(value);
+                    }
+                    Return::Local(Value::Array(Rc::new(RefCell::new(output))))
+                }
+                ast::Literal::Integer => {
+                    resolve_span!(current_frame, self.span).parse().map_or_else(
+                        |err: std::num::ParseIntError| Return::Exception(err.to_string()),
+                        |value| Return::Local(Value::Integer(value)),
+                    )
+                }
+                ast::Literal::Double => {
+                    resolve_span!(current_frame, self.span).parse().map_or_else(
+                        |err: std::num::ParseFloatError| Return::Exception(err.to_string()),
+                        |value| Return::Local(Value::Double(value)),
+                    )
+                }
+                ast::Literal::Symbol(span) => {
+                    Return::Local(Value::Symbol(universe.span_to_symbol(*span)))
+                }
+                ast::Literal::String(span) => Return::Local(Value::String(Rc::new({
+                    let string = resolve_span!(current_frame, *span).to_string();
+                    let len = string.len();
+                    let mut iter = string.chars().peekable();
+                    let mut output = String::with_capacity(len);
+                    loop {
+                        match iter.next() {
+                            None => break output,
+                            Some('\\') => {
+                                let ch = iter.next();
+                                match ch {
+                                    Some('t') => output.push('\t'),
+                                    Some('b') => output.push('\x08'),
+                                    Some('n') => output.push('\n'),
+                                    Some('r') => output.push('\r'),
+                                    Some('f') => output.push('\x12'),
+                                    Some('\'') => output.push('\''),
+                                    Some('\\') => output.push('\\'),
+                                    Some('0') => output.push('\0'),
+                                    _ => {}
+                                }
+                            }
+                            Some(ch) => output.push(ch),
+                        }
+                    }
+                }))),
+            },
+            ast::ExpressionKind::Reference => {
+                let name = universe.span_to_symbol(self.span);
+                (universe.lookup_local(name))
+                    .or_else(|| universe.lookup_global(name))
+                    .map(Return::Local)
+                    .or_else(|| {
+                        let frame = universe.current_frame();
+                        let self_value = frame.borrow().get_self();
+                        universe.unknown_global(self_value, name)
+                    })
+                    .unwrap_or_else(|| {
+                        Return::Exception(format!(
+                            "variable '{}' not found",
+                            universe.lookup_symbol(name),
+                        ))
+                    })
+            }
+            ast::ExpressionKind::Term(term) => term.evaluate(universe),
+            ast::ExpressionKind::Message(msg) => msg.evaluate(universe),
         }
     }
 }
@@ -92,44 +164,27 @@ impl Evaluate for ast::BinaryOp {
         let lhs = propagate!(self.lhs.evaluate(universe));
         let rhs = propagate!(self.rhs.evaluate(universe));
 
+        let signature = universe.span_to_symbol(self.op);
+
         // println!(
         //     "invoking {}>>#{}",
         //     lhs.class(universe).borrow().name(),
         //     self.signature
         // );
 
-        if let Some(invokable) = lhs.lookup_method(universe, &self.op) {
+        if let Some(invokable) = lhs.lookup_method(universe, signature) {
             invokable.invoke(universe, vec![lhs, rhs])
         } else {
             universe
-                .does_not_understand(lhs.clone(), &self.op, vec![rhs])
+                .does_not_understand(lhs.clone(), signature, vec![rhs])
                 .unwrap_or_else(|| {
                     Return::Exception(format!(
                         "could not find method '{}>>#{}'",
                         lhs.class(universe).borrow().name(),
-                        self.op
+                        universe.lookup_symbol(signature),
                     ))
                     // Return::Local(Value::Nil)
                 })
-        }
-    }
-}
-
-impl Evaluate for ast::Literal {
-    fn evaluate(&self, universe: &mut Universe) -> Return {
-        match self {
-            Self::Array(array) => {
-                let mut output = Vec::with_capacity(array.len());
-                for literal in array {
-                    let value = propagate!(literal.evaluate(universe));
-                    output.push(value);
-                }
-                Return::Local(Value::Array(Rc::new(RefCell::new(output))))
-            }
-            Self::Integer(int) => Return::Local(Value::Integer(*int)),
-            Self::Double(double) => Return::Local(Value::Double(*double)),
-            Self::Symbol(sym) => Return::Local(Value::Symbol(universe.intern_symbol(sym))),
-            Self::String(string) => Return::Local(Value::String(Rc::new(string.clone()))),
         }
     }
 }
@@ -153,15 +208,20 @@ impl Evaluate for ast::Block {
 
 impl Evaluate for ast::Message {
     fn evaluate(&self, universe: &mut Universe) -> Return {
-        let (receiver, invokable) = match self.receiver.as_ref() {
-            // ast::Expression::Reference(ident) if ident == "self" => {
+        let signature = universe.intern_symbol(self.signature.as_str());
+        let (receiver, invokable) = match self.receiver.kind {
+            // ast::ExpressionKind::Reference
+            //     if resolve_span!(universe.current_frame(), self.receiver.span) == "super" =>
+            // {
             //     let frame = universe.current_frame();
             //     let receiver = frame.borrow().get_self();
             //     let holder = frame.borrow().get_method_holder();
             //     let invokable = holder.borrow().lookup_method(&self.signature);
             //     (receiver, invokable)
             // }
-            ast::Expression::Reference(ident) if ident == "super" => {
+            ast::ExpressionKind::Reference
+                if resolve_span!(universe.current_frame(), self.receiver.span) == "super" =>
+            {
                 let frame = universe.current_frame();
                 let receiver = frame.borrow().get_self();
                 let holder = frame.borrow().get_method_holder();
@@ -173,23 +233,30 @@ impl Evaluate for ast::Message {
                         )
                     }
                 };
-                let invokable = super_class.borrow().lookup_method(&self.signature);
+                let invokable = super_class.borrow().lookup_method(signature);
                 (receiver, invokable)
             }
-            expr => {
-                let receiver = propagate!(expr.evaluate(universe));
-                let invokable = receiver.lookup_method(universe, &self.signature);
+            _ => {
+                let receiver = propagate!(self.receiver.evaluate(universe));
+                let invokable = receiver.lookup_method(universe, signature);
                 (receiver, invokable)
             }
         };
-        let args = {
-            let mut output = Vec::with_capacity(self.values.len() + 1);
-            output.push(receiver.clone());
-            for expr in &self.values {
-                let value = propagate!(expr.evaluate(universe));
-                output.push(value);
+        let args = match &self.kind {
+            ast::MessageKind::Unary => vec![receiver.clone()],
+            ast::MessageKind::Binary { rhs } => {
+                let value = propagate!(rhs.evaluate(universe));
+                vec![receiver.clone(), value]
             }
-            output
+            ast::MessageKind::Positional { values, .. } => {
+                let mut output = Vec::with_capacity(values.len() + 1);
+                output.push(receiver.clone());
+                for expr in values {
+                    let value = propagate!(expr.evaluate(universe));
+                    output.push(value);
+                }
+                output
+            }
         };
 
         // println!(
@@ -205,7 +272,7 @@ impl Evaluate for ast::Message {
                 let mut args = args;
                 args.remove(0);
                 universe
-                    .does_not_understand(receiver.clone(), &self.signature, args)
+                    .does_not_understand(receiver.clone(), signature, args)
                     .unwrap_or_else(|| {
                         Return::Exception(format!(
                             "could not find method '{}>>#{}'",

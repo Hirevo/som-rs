@@ -1,3 +1,34 @@
+use crate::span::Span;
+
+use std::ops;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Spanned<T>(Span, T);
+
+impl<T> ops::Deref for Spanned<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.1
+    }
+}
+
+impl<T> ops::DerefMut for Spanned<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.1
+    }
+}
+
+impl<T> Spanned<T> {
+    pub fn new(span: Span, inner: T) -> Self {
+        Spanned(span, inner)
+    }
+
+    pub fn span(&self) -> Span {
+        self.0
+    }
+}
+
 /// Represents a class definition.
 ///
 /// Example:
@@ -13,15 +44,15 @@
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassDef {
     /// The name of the class.
-    pub name: String,
+    pub name: Span,
     /// The name of the superclass.
-    pub super_class: Option<String>,
+    pub super_class: Option<Span>,
     /// The locals for instances of that class.
-    pub instance_locals: Vec<String>,
+    pub instance_locals: Vec<Span>,
     /// The methods declared for instances of that class.
     pub instance_methods: Vec<MethodDef>,
     /// The static locals for that class.
-    pub static_locals: Vec<String>,
+    pub static_locals: Vec<Span>,
     /// The static methods declared for that class.
     pub static_methods: Vec<MethodDef>,
 }
@@ -40,13 +71,15 @@ pub enum MethodKind {
     Unary,
     /// A positional method definition (keyword-based).
     Positional {
+        /// The keywords for the method's paramters.
+        keywords: Vec<Span>,
         /// The binding names for the method's parameters.
-        parameters: Vec<String>,
+        parameters: Vec<Span>,
     },
     /// A binary operator method definiton.
     Operator {
         /// The binding name for the right-hand side.
-        rhs: String,
+        rhs: Span,
     },
 }
 
@@ -60,6 +93,8 @@ pub enum MethodKind {
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct MethodDef {
+    /// The whole method definition span.
+    pub span: Span,
     /// The method's kind.
     pub kind: MethodKind,
     /// The method's signature (eg. `println`, `at:put:` or `==`).
@@ -79,11 +114,27 @@ pub struct MethodDef {
 /// double: value = ( |clone| clone := double. ^ (double + clone) )
 /// ```
 #[derive(Debug, Clone, PartialEq)]
-pub enum MethodBody {
+pub struct MethodBody {
+    pub span: Span,
+    pub kind: MethodBodyKind,
+}
+
+/// Represents the kind of a method's body.
+///
+/// Exemple:
+/// ```text
+/// "primitive method body"
+/// printString: string = primitive
+///
+/// "actual method body, with a local"
+/// double: value = ( |clone| clone := double. ^ (double + clone) )
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub enum MethodBodyKind {
     /// A primitive (meant to be implemented by the VM itself).
     Primitive,
     /// An actual body for the method, with locals.
-    Body { locals: Vec<String>, body: Body },
+    Body { locals: Vec<Span>, body: Body },
 }
 
 /// Represents the contents of a body (within a term or block).
@@ -124,15 +175,35 @@ pub struct Body {
 /// "term"               ( counter increment )
 /// ```
 #[derive(Debug, Clone, PartialEq)]
-pub enum Expression {
+pub struct Expression {
+    pub span: Span,
+    pub kind: ExpressionKind,
+}
+
+/// Represents the kind of an expression.
+///
+/// Exemple:
+/// ```text
+/// "reference"          counter
+/// "assignment"         counter := 10
+/// "messsage send"      counter incrementBy: 5
+/// "binary operation"   counter <= 5
+/// "exit operation"     ^counter
+/// "literal"            'foo'
+/// "block"              [ :value | counter incrementBy: value ]
+/// "term"               ( counter increment )
+/// ```
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExpressionKind {
     /// A reference to a binding (eg. `counter`).
-    Reference(String),
+    Reference,
     /// An assignment to a binding (eg. `counter := 10`).
-    Assignment(String, Box<Expression>),
+    Assignment(Span, Box<Expression>),
     /// A message send (eg. `counter incrementBy: 5`).
     Message(Message),
-    /// A binary operation (eg. `counter <= 5`).
-    BinaryOp(BinaryOp),
+    // /// A binary operation (eg. `counter <= 5`).
+    // BinaryOp(BinaryOp),
     /// An exit operation (eg. `^counter`).
     Exit(Box<Expression>),
     /// A literal (eg. `'foo'`, `10`, `#foo`, ...).
@@ -163,7 +234,19 @@ pub struct Message {
     /// The signature of the message (eg. "ifTrue:ifFalse:").
     pub signature: String,
     /// The list of dynamic values that are passed.
-    pub values: Vec<Expression>,
+    pub kind: MessageKind,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MessageKind {
+    Unary,
+    Binary {
+        rhs: Box<Expression>,
+    },
+    Positional {
+        keywords: Vec<Span>,
+        values: Vec<Expression>,
+    },
 }
 
 /// Represents a binary operation.
@@ -175,7 +258,7 @@ pub struct Message {
 #[derive(Debug, Clone, PartialEq)]
 pub struct BinaryOp {
     /// Represents the operator symbol.
-    pub op: String,
+    pub op: Span,
     /// Represents the left-hand side.
     pub lhs: Box<Expression>,
     /// Represents the right-hand side.
@@ -198,9 +281,9 @@ pub struct BinaryOp {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Block {
     /// Represents the parameters' names.
-    pub parameters: Vec<String>,
+    pub parameters: Vec<Span>,
     /// The names of the locals.
-    pub locals: Vec<String>,
+    pub locals: Vec<Span>,
     /// Represents the block's body.
     pub body: Body,
 }
@@ -230,13 +313,13 @@ pub struct Term {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     /// Represents a symbol literal (eg. `#foo`).
-    Symbol(String),
+    Symbol(Span),
     /// Represents a string literal (eg. `'hello'`).
-    String(String),
+    String(Span),
     /// Represents a decimal number literal (eg. `3.14`).
-    Double(f64),
+    Double,
     /// Represents a integer number literal (eg. `42`).
-    Integer(i64),
-    /// Represents an array literal (eg. `$(1 2 3)`)
-    Array(Vec<Literal>),
+    Integer,
+    /// Represents an array literal (eg. `#(1 2 3)`)
+    Array(Vec<Expression>),
 }

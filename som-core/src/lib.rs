@@ -6,3 +6,5 @@
 pub mod ast;
 /// The SOM bytecode definitions.
 pub mod bytecode;
+/// Span information.
+pub mod span;

@@ -4,8 +4,10 @@ use std::rc::{Rc, Weak};
 
 use indexmap::IndexMap;
 
-use som_core::ast::{ClassDef, MethodBody};
+use som_core::ast::{ClassDef, MethodBodyKind};
+use som_core::span::Span;
 
+use crate::interner::{Interned, Interner};
 use crate::method::{Method, MethodKind};
 use crate::value::Value;
 use crate::{SOMRef, SOMWeakRef};
@@ -24,29 +26,38 @@ pub enum MaybeWeak<A> {
 pub struct Class {
     /// The class' name.
     pub name: String,
+    /// The class' source code.
+    pub source_code: Rc<String>,
     /// The class of this class.
     pub class: MaybeWeak<Class>,
     /// The superclass of this class.
     // TODO: Should probably be `Option<SOMRef<Class>>`.
     pub super_class: SOMWeakRef<Class>,
     /// The class' locals.
-    pub locals: IndexMap<String, Value>,
+    pub locals: IndexMap<Interned, Value>,
     /// The class' methods/invokables.
-    pub methods: IndexMap<String, Rc<Method>>,
+    pub methods: IndexMap<Interned, Rc<Method>>,
     /// Is this class a static one ?
     pub is_static: bool,
 }
 
 impl Class {
     /// Load up a class from its class definition from the AST.
-    pub fn from_class_def(defn: ClassDef) -> Result<SOMRef<Class>, String> {
+    pub fn from_class_def(
+        interner: &mut Interner,
+        source_code: String,
+        defn: ClassDef,
+    ) -> Result<SOMRef<Class>, String> {
         let static_locals = {
             let mut static_locals = IndexMap::new();
             for field in defn.static_locals.iter() {
-                if static_locals.insert(field.clone(), Value::Nil).is_some() {
+                let field = field.to_str(source_code.as_str());
+                let field_sym = interner.intern(field);
+                if static_locals.insert(field_sym, Value::Nil).is_some() {
                     return Err(format!(
                         "{}: the field named '{}' is already defined in this class",
-                        defn.name, field,
+                        defn.name.to_str(source_code.as_str()),
+                        field,
                     ));
                 }
             }
@@ -56,18 +67,24 @@ impl Class {
         let instance_locals = {
             let mut instance_locals = IndexMap::new();
             for field in defn.instance_locals.iter() {
-                if instance_locals.insert(field.clone(), Value::Nil).is_some() {
+                let field = field.to_str(source_code.as_str());
+                let field_sym = interner.intern(field);
+                if instance_locals.insert(field_sym, Value::Nil).is_some() {
                     return Err(format!(
                         "{}: the field named '{}' is already defined in this class",
-                        defn.name, field,
+                        defn.name.to_str(source_code.as_str()),
+                        field,
                     ));
                 }
             }
             instance_locals
         };
 
+        let source_code = Rc::new(source_code);
+
         let static_class = Rc::new(RefCell::new(Self {
-            name: format!("{} class", defn.name),
+            name: format!("{} class", defn.name.to_str(source_code.as_str())),
+            source_code: source_code.clone(),
             class: MaybeWeak::Weak(Weak::new()),
             super_class: Weak::new(),
             locals: static_locals,
@@ -76,7 +93,8 @@ impl Class {
         }));
 
         let instance_class = Rc::new(RefCell::new(Self {
-            name: defn.name.clone(),
+            name: defn.name.to_str(source_code.as_str()).to_string(),
+            source_code: source_code.clone(),
             class: MaybeWeak::Strong(static_class.clone()),
             super_class: Weak::new(),
             locals: instance_locals,
@@ -89,16 +107,17 @@ impl Class {
             .iter()
             .map(|method| {
                 let signature = method.signature.clone();
-                let kind = match method.body {
-                    MethodBody::Primitive => MethodKind::primitive_from_signature(
-                        defn.name.as_str(),
+                let kind = match method.body.kind {
+                    MethodBodyKind::Primitive => MethodKind::primitive_from_signature(
+                        instance_class.borrow().name(),
                         method.signature.as_str(),
                     ),
-                    MethodBody::Body { .. } => MethodKind::Defined(method.clone()),
+                    MethodBodyKind::Body { .. } => MethodKind::Defined(method.clone()),
                 };
+                let signature = interner.intern(signature.as_str());
                 let method = Method {
                     kind,
-                    signature: signature.clone(),
+                    signature,
                     holder: Rc::downgrade(&static_class),
                 };
                 (signature, Rc::new(method))
@@ -110,16 +129,17 @@ impl Class {
             .iter()
             .map(|method| {
                 let signature = method.signature.clone();
-                let kind = match method.body {
-                    MethodBody::Primitive => MethodKind::primitive_from_signature(
-                        defn.name.as_str(),
+                let kind = match method.body.kind {
+                    MethodBodyKind::Primitive => MethodKind::primitive_from_signature(
+                        instance_class.borrow().name(),
                         method.signature.as_str(),
                     ),
-                    MethodBody::Body { .. } => MethodKind::Defined(method.clone()),
+                    MethodBodyKind::Body { .. } => MethodKind::Defined(method.clone()),
                 };
+                let signature = interner.intern(signature.as_str());
                 let method = Method {
                     kind,
-                    signature: signature.clone(),
+                    signature,
                     holder: Rc::downgrade(&instance_class),
                 };
                 (signature, Rc::new(method))
@@ -167,10 +187,13 @@ impl Class {
         self.super_class = Rc::downgrade(class);
     }
 
+    pub fn resolve_span(&self, span: Span) -> &str {
+        span.to_str(self.source_code.as_str())
+    }
+
     /// Search for a given method within this class.
-    pub fn lookup_method(&self, signature: impl AsRef<str>) -> Option<Rc<Method>> {
-        let signature = signature.as_ref();
-        self.methods.get(signature).cloned().or_else(|| {
+    pub fn lookup_method(&self, signature: Interned) -> Option<Rc<Method>> {
+        self.methods.get(&signature).cloned().or_else(|| {
             self.super_class
                 .upgrade()?
                 .borrow()
@@ -179,18 +202,17 @@ impl Class {
     }
 
     /// Search for a local binding.
-    pub fn lookup_local(&self, name: impl AsRef<str>) -> Option<Value> {
-        let name = name.as_ref();
-        self.locals.get(name).cloned().or_else(|| {
+    pub fn lookup_local(&self, name: Interned) -> Option<Value> {
+        self.locals.get(&name).cloned().or_else(|| {
             let super_class = self.super_class()?;
-            let local = super_class.borrow_mut().lookup_local(name)?;
+            let local = super_class.borrow().lookup_local(name)?;
             Some(local)
         })
     }
 
     /// Assign a value to a local binding.
-    pub fn assign_local(&mut self, name: impl AsRef<str>, value: Value) -> Option<()> {
-        if let Some(local) = self.locals.get_mut(name.as_ref()) {
+    pub fn assign_local(&mut self, name: Interned, value: Value) -> Option<()> {
+        if let Some(local) = self.locals.get_mut(&name) {
             *local = value;
             return Some(());
         }

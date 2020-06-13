@@ -6,6 +6,8 @@ use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::{SOMRef, SOMWeakRef};
 
+use crate::interner::Interned;
+
 /// The kind of a class method.
 #[derive(Clone)]
 pub enum MethodKind {
@@ -65,7 +67,7 @@ impl MethodKind {
 pub struct Method {
     pub kind: MethodKind,
     pub holder: SOMWeakRef<Class>,
-    pub signature: String,
+    pub signature: Interned,
 }
 
 impl Method {
@@ -85,8 +87,8 @@ impl Method {
         &self.holder
     }
 
-    pub fn signature(&self) -> &str {
-        self.signature.as_str()
+    pub fn signature(&self) -> Interned {
+        self.signature
     }
 
     /// Whether this invocable is a primitive.

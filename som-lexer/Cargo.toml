@@ -8,3 +8,5 @@ publish = false
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+# internal
+som-core = { path = "../som-core", version = "0.1.0" }

@@ -3,6 +3,7 @@ use std::convert::TryFrom;
 use std::hash::Hasher;
 
 use crate::class::Class;
+use crate::interner::Interned;
 use crate::invokable::{Invoke, Return};
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
@@ -62,24 +63,22 @@ fn perform(universe: &mut Universe, args: Vec<Value>) -> Return {
 
     expect_args!(SIGNATURE, args, [
         object => object,
-        Value::Symbol(sym) => sym,
+        Value::Symbol(signature) => signature,
     ]);
 
-    let signature = universe.lookup_symbol(sym);
     let method = object.lookup_method(universe, signature);
 
     match method {
         Some(invokable) => invokable.invoke(universe, vec![object]),
         None => {
-            let signature = signature.to_string();
             universe
-                .does_not_understand(object.clone(), signature.as_str(), vec![object.clone()])
+                .does_not_understand(object.clone(), signature, vec![object.clone()])
                 .unwrap_or_else(|| {
                     Return::Exception(format!(
                         "'{}': method '{}' not found for '{}'",
                         SIGNATURE,
-                        signature,
-                        object.to_string(universe)
+                        universe.lookup_symbol(signature),
+                        object.as_display(universe)
                     ))
                     // Return::Local(Value::Nil)
                 })
@@ -92,11 +91,10 @@ fn perform_with_arguments(universe: &mut Universe, args: Vec<Value>) -> Return {
 
     expect_args!(SIGNATURE, args, [
         object => object,
-        Value::Symbol(sym) => sym,
+        Value::Symbol(signature) => signature,
         Value::Array(arr) => arr,
     ]);
 
-    let signature = universe.lookup_symbol(sym);
     let method = object.lookup_method(universe, signature);
 
     match method {
@@ -107,18 +105,17 @@ fn perform_with_arguments(universe: &mut Universe, args: Vec<Value>) -> Return {
             invokable.invoke(universe, args)
         }
         None => {
-            let signature = signature.to_string();
             let args = std::iter::once(object.clone())
                 .chain(arr.replace(Vec::default()).into_iter())
                 .collect();
             universe
-                .does_not_understand(object.clone(), signature.as_str(), args)
+                .does_not_understand(object.clone(), signature, args)
                 .unwrap_or_else(|| {
                     Return::Exception(format!(
                         "'{}': method '{}' not found for '{}'",
                         SIGNATURE,
-                        signature,
-                        object.to_string(universe)
+                        universe.lookup_symbol(signature),
+                        object.as_display(universe)
                     ))
                     // Return::Local(Value::Nil)
                 })
@@ -131,26 +128,24 @@ fn perform_in_super_class(universe: &mut Universe, args: Vec<Value>) -> Return {
 
     expect_args!(SIGNATURE, args, [
         object => object,
-        Value::Symbol(sym) => sym,
+        Value::Symbol(signature) => signature,
         Value::Class(class) => class,
     ]);
 
-    let signature = universe.lookup_symbol(sym);
     let method = class.borrow().lookup_method(signature);
 
     match method {
         Some(invokable) => invokable.invoke(universe, vec![object]),
         None => {
-            let signature = signature.to_string();
             let args = vec![object.clone()];
             universe
-                .does_not_understand(Value::Class(class), signature.as_str(), args)
+                .does_not_understand(Value::Class(class), signature, args)
                 .unwrap_or_else(|| {
                     Return::Exception(format!(
                         "'{}': method '{}' not found for '{}'",
                         SIGNATURE,
-                        signature,
-                        object.to_string(universe)
+                        universe.lookup_symbol(signature),
+                        object.as_display(universe)
                     ))
                     // Return::Local(Value::Nil)
                 })
@@ -163,12 +158,11 @@ fn perform_with_arguments_in_super_class(universe: &mut Universe, args: Vec<Valu
 
     expect_args!(SIGNATURE, args, [
         object => object,
-        Value::Symbol(sym) => sym,
+        Value::Symbol(signature) => signature,
         Value::Array(arr) => arr,
         Value::Class(class) => class,
     ]);
 
-    let signature = universe.lookup_symbol(sym);
     let method = class.borrow().lookup_method(signature);
 
     match method {
@@ -182,15 +176,14 @@ fn perform_with_arguments_in_super_class(universe: &mut Universe, args: Vec<Valu
             let args = std::iter::once(object.clone())
                 .chain(arr.replace(Vec::default()).into_iter())
                 .collect();
-            let signature = signature.to_string();
             universe
-                .does_not_understand(Value::Class(class), signature.as_str(), args)
+                .does_not_understand(Value::Class(class), signature, args)
                 .unwrap_or_else(|| {
                     Return::Exception(format!(
                         "'{}': method '{}' not found for '{}'",
                         SIGNATURE,
-                        signature,
-                        object.to_string(universe)
+                        universe.lookup_symbol(signature),
+                        object.as_display(universe)
                     ))
                     // Return::Local(Value::Nil)
                 })
@@ -213,7 +206,8 @@ fn inst_var_at(universe: &mut Universe, args: Vec<Value>) -> Return {
 
     let locals = gather_locals(universe, object.class(universe));
     let local = locals
-        .get(index)
+        .into_iter()
+        .nth(index)
         .and_then(|local| object.lookup_local(local))
         .unwrap_or(Value::Nil);
 
@@ -236,19 +230,20 @@ fn inst_var_at_put(universe: &mut Universe, args: Vec<Value>) -> Return {
 
     let locals = gather_locals(universe, object.class(universe));
     let local = locals
-        .get(index)
+        .into_iter()
+        .nth(index)
         .and_then(|local| object.assign_local(local, value.clone()).map(|_| value))
         .unwrap_or(Value::Nil);
 
     Return::Local(local)
 }
 
-fn gather_locals(universe: &mut Universe, class: SOMRef<Class>) -> Vec<String> {
+fn gather_locals(universe: &mut Universe, class: SOMRef<Class>) -> Vec<Interned> {
     let mut fields = match class.borrow().super_class() {
         Some(super_class) => gather_locals(universe, super_class),
         None => Vec::new(),
     };
-    fields.extend(class.borrow().locals.keys().cloned());
+    fields.extend(class.borrow().locals.keys().copied());
     fields
 }
 

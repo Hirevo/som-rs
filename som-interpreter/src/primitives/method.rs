@@ -20,15 +20,14 @@ fn holder(_: &mut Universe, args: Vec<Value>) -> Return {
     }
 }
 
-fn signature(universe: &mut Universe, args: Vec<Value>) -> Return {
+fn signature(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Method>>#signature";
 
     expect_args!(SIGNATURE, args, [
         Value::Invokable(invokable) => invokable,
     ]);
 
-    let sym = universe.intern_symbol(invokable.signature());
-    Return::Local(Value::Symbol(sym))
+    Return::Local(Value::Symbol(invokable.signature()))
 }
 
 fn invoke_on_with(universe: &mut Universe, args: Vec<Value>) -> Return {

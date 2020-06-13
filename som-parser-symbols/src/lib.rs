@@ -17,7 +17,7 @@ use som_core::ast::ClassDef;
 use som_lexer::Token;
 
 /// Parses the input of an entire file into an AST.
-pub fn parse_file(input: &[Token]) -> Option<ClassDef> {
-    let (class, _) = lang::file().parse(input)?;
+pub fn parse_file(source: &str, input: &[Token]) -> Option<ClassDef> {
+    let (class, _) = lang::file(source).parse(input)?;
     Some(class)
 }
