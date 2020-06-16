@@ -1,6 +1,6 @@
 use std::collections::hash_map::DefaultHasher;
 use std::convert::TryFrom;
-use std::hash::Hasher;
+use std::hash::{Hash, Hasher};
 
 use crate::class::Class;
 use crate::invokable::{Invoke, Return};
@@ -33,17 +33,10 @@ fn hashcode(_: &mut Universe, args: Vec<Value>) -> Return {
     ]);
 
     let mut hasher = DefaultHasher::new();
+    value.hash(&mut hasher);
+    let hash = (hasher.finish() as i64).abs();
 
-    // Should be fine, since we do not mutate anything ??
-    let raw_bytes: &[u8] = unsafe {
-        std::slice::from_raw_parts(
-            (&value as *const Value) as *const u8,
-            std::mem::size_of_val(&value),
-        )
-    };
-    hasher.write(raw_bytes);
-
-    Return::Local(Value::Integer((hasher.finish() as i64).abs()))
+    Return::Local(Value::Integer(hash))
 }
 
 fn eq(_: &mut Universe, args: Vec<Value>) -> Return {

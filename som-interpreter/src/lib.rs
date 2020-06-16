@@ -13,6 +13,8 @@ pub mod class;
 pub mod evaluate;
 /// Facilities for manipulating stack frames.
 pub mod frame;
+/// Facilities for manipulating values.
+pub mod hashcode;
 /// Facilities for manipulating class instances.
 pub mod instance;
 /// Facilities for string interning.
