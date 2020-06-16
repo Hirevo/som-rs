@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use num_bigint::{BigInt, Sign};
+use num_traits::ToPrimitive;
 use rand::distributions::Uniform;
 use rand::Rng;
 
@@ -10,19 +11,14 @@ use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
 
-macro_rules! promote {
-    ($signature:expr, $value:expr) => {
-        match $value {
-            Value::Integer(value) => value as f64,
-            Value::Double(value) => value,
-            _ => {
-                return Return::Exception(format!(
-                    "'{}': wrong type (expected `integer` or `double`)",
-                    $signature
-                ))
-            }
+macro_rules! demote {
+    ($expr:expr) => {{
+        let value = $expr;
+        match value.to_i64() {
+            Some(value) => Return::Local(Value::Integer(value)),
+            None => Return::Local(Value::BigInteger(value)),
         }
-    };
+    }};
 }
 
 fn from_string(universe: &mut Universe, args: Vec<Value>) -> Return {
@@ -138,17 +134,18 @@ fn plus(_: &mut Universe, args: Vec<Value>) -> Return {
     match (a, b) {
         (Value::Integer(a), Value::Integer(b)) => match a.checked_add(b) {
             Some(value) => Return::Local(Value::Integer(value)),
-            None => Return::Local(Value::BigInteger(BigInt::from(a) + BigInt::from(b))),
+            None => demote!(BigInt::from(a) + BigInt::from(b)),
         },
+        (Value::BigInteger(a), Value::BigInteger(b)) => demote!(a + b),
+        (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
+            demote!(a + BigInt::from(b))
+        }
+        (Value::Double(a), Value::Double(b)) => Return::Local(Value::Double(a + b)),
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
             Return::Local(Value::Double((a as f64) + b))
         }
-        (Value::Double(a), Value::Double(b)) => Return::Local(Value::Double(a + b)),
-        (Value::BigInteger(a), Value::BigInteger(b)) => Return::Local(Value::BigInteger(a + b)),
         _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
     }
-
-    // promoted_expr!(SIGNATURE, a, b, |a, b| a + b)
 }
 
 fn minus(_: &mut Universe, args: Vec<Value>) -> Return {
@@ -162,17 +159,18 @@ fn minus(_: &mut Universe, args: Vec<Value>) -> Return {
     match (a, b) {
         (Value::Integer(a), Value::Integer(b)) => match a.checked_sub(b) {
             Some(value) => Return::Local(Value::Integer(value)),
-            None => Return::Local(Value::BigInteger(BigInt::from(a) - BigInt::from(b))),
+            None => demote!(BigInt::from(a) - BigInt::from(b)),
         },
+        (Value::BigInteger(a), Value::BigInteger(b)) => demote!(a - b),
+        (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
+            demote!(a - BigInt::from(b))
+        }
+        (Value::Double(a), Value::Double(b)) => Return::Local(Value::Double(a - b)),
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
             Return::Local(Value::Double((a as f64) - b))
         }
-        (Value::Double(a), Value::Double(b)) => Return::Local(Value::Double(a - b)),
-        (Value::BigInteger(a), Value::BigInteger(b)) => Return::Local(Value::BigInteger(a - b)),
         _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
     }
-
-    // promoted_expr!(SIGNATURE, a, b, |a, b| a - b)
 }
 
 fn times(_: &mut Universe, args: Vec<Value>) -> Return {
@@ -186,17 +184,18 @@ fn times(_: &mut Universe, args: Vec<Value>) -> Return {
     match (a, b) {
         (Value::Integer(a), Value::Integer(b)) => match a.checked_mul(b) {
             Some(value) => Return::Local(Value::Integer(value)),
-            None => Return::Local(Value::BigInteger(BigInt::from(a) * BigInt::from(b))),
+            None => demote!(BigInt::from(a) * BigInt::from(b)),
         },
+        (Value::BigInteger(a), Value::BigInteger(b)) => demote!(a * b),
+        (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
+            demote!(a * BigInt::from(b))
+        }
+        (Value::Double(a), Value::Double(b)) => Return::Local(Value::Double(a * b)),
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
             Return::Local(Value::Double((a as f64) * b))
         }
-        (Value::Double(a), Value::Double(b)) => Return::Local(Value::Double(a * b)),
-        (Value::BigInteger(a), Value::BigInteger(b)) => Return::Local(Value::BigInteger(a * b)),
         _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
     }
-
-    // promoted_expr!(SIGNATURE, a, b, |a, b| a * b)
 }
 
 fn divide(_: &mut Universe, args: Vec<Value>) -> Return {
@@ -210,19 +209,20 @@ fn divide(_: &mut Universe, args: Vec<Value>) -> Return {
     ]);
 
     match (a, b) {
-        (Value::Integer(a), Value::Integer(b)) => match a.checked_div_euclid(b) {
+        (Value::Integer(a), Value::Integer(b)) => match a.checked_div(b) {
             Some(value) => Return::Local(Value::Integer(value)),
-            None => Return::Local(Value::BigInteger(BigInt::from(a) / BigInt::from(b))),
+            None => demote!(BigInt::from(a) / BigInt::from(b)),
         },
+        (Value::BigInteger(a), Value::BigInteger(b)) => demote!(a / b),
+        (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
+            demote!(a / BigInt::from(b))
+        }
+        (Value::Double(a), Value::Double(b)) => Return::Local(Value::Double(a / b)),
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
             Return::Local(Value::Double((a as f64) / b))
         }
-        (Value::Double(a), Value::Double(b)) => Return::Local(Value::Double(a / b)),
-        (Value::BigInteger(a), Value::BigInteger(b)) => Return::Local(Value::BigInteger(a / b)),
         _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
     }
-
-    // Return::Local(Value::Integer(a.div_euclid(b)))
 }
 
 fn divide_float(_: &mut Universe, args: Vec<Value>) -> Return {
@@ -286,16 +286,22 @@ fn sqrt(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Integer>>#sqrt";
 
     expect_args!(SIGNATURE, args, [
-        Value::Integer(a) => a,
+        a => a,
     ]);
 
-    let sqrt = (a as f64).sqrt();
-    let trucated = sqrt.trunc();
-
-    if sqrt == trucated {
-        Return::Local(Value::Integer(trucated as i64))
-    } else {
-        Return::Local(Value::Double(sqrt))
+    match a {
+        Value::Integer(a) => {
+            let sqrt = (a as f64).sqrt();
+            let trucated = sqrt.trunc();
+            if sqrt == trucated {
+                Return::Local(Value::Integer(trucated as i64))
+            } else {
+                Return::Local(Value::Double(sqrt))
+            }
+        }
+        Value::BigInteger(a) => demote!(a.sqrt()),
+        Value::Double(a) => Return::Local(Value::Double(a.sqrt())),
+        _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
     }
 }
 
@@ -303,22 +309,36 @@ fn bitand(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Integer>>#&";
 
     expect_args!(SIGNATURE, args, [
-        Value::Integer(a) => a,
-        Value::Integer(b) => b,
+        a => a,
+        b => b,
     ]);
 
-    Return::Local(Value::Integer(a & b))
+    match (a, b) {
+        (Value::Integer(a), Value::Integer(b)) => Return::Local(Value::Integer(a & b)),
+        (Value::BigInteger(a), Value::BigInteger(b)) => demote!(a & b),
+        (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
+            demote!(a & BigInt::from(b))
+        }
+        _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
+    }
 }
 
 fn bitxor(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Integer>>#bitXor:";
 
     expect_args!(SIGNATURE, args, [
-        Value::Integer(a) => a,
-        Value::Integer(b) => b,
+        a => a,
+        b => b,
     ]);
 
-    Return::Local(Value::Integer(a ^ b))
+    match (a, b) {
+        (Value::Integer(a), Value::Integer(b)) => Return::Local(Value::Integer(a ^ b)),
+        (Value::BigInteger(a), Value::BigInteger(b)) => demote!(a ^ b),
+        (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
+            demote!(a ^ BigInt::from(b))
+        }
+        _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
+    }
 }
 
 fn lt(_: &mut Universe, args: Vec<Value>) -> Return {
@@ -329,10 +349,19 @@ fn lt(_: &mut Universe, args: Vec<Value>) -> Return {
         b => b,
     ]);
 
-    let a = promote!(SIGNATURE, a);
-    let b = promote!(SIGNATURE, b);
-
-    Return::Local(Value::Boolean(a < b))
+    match (a, b) {
+        (Value::Integer(a), Value::Integer(b)) => Return::Local(Value::Boolean(a < b)),
+        (Value::BigInteger(a), Value::BigInteger(b)) => Return::Local(Value::Boolean(a < b)),
+        (Value::Double(a), Value::Double(b)) => Return::Local(Value::Boolean(a < b)),
+        (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
+            Return::Local(Value::Boolean((a as f64) < b))
+        }
+        (Value::BigInteger(_), Value::Integer(_)) => Return::Local(Value::Boolean(false)),
+        (Value::Integer(_), Value::BigInteger(_)) => Return::Local(Value::Boolean(true)),
+        (a, b) => {
+            return Return::Exception(format!("'{}': wrong types ({:?} | {:?})", SIGNATURE, a, b))
+        }
+    }
 }
 
 fn eq(_: &mut Universe, args: Vec<Value>) -> Return {
@@ -343,7 +372,15 @@ fn eq(_: &mut Universe, args: Vec<Value>) -> Return {
         b => b,
     ]);
 
-    Return::Local(Value::Boolean(a == b))
+    match (a, b) {
+        (Value::Integer(a), Value::Integer(b)) => Return::Local(Value::Boolean(a == b)),
+        (Value::BigInteger(a), Value::BigInteger(b)) => Return::Local(Value::Boolean(a == b)),
+        (Value::Double(a), Value::Double(b)) => Return::Local(Value::Boolean(a == b)),
+        (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
+            Return::Local(Value::Boolean((a as f64) == b))
+        }
+        _ => Return::Local(Value::Boolean(false)),
+    }
 }
 
 fn shift_left(_: &mut Universe, args: Vec<Value>) -> Return {
@@ -355,6 +392,15 @@ fn shift_left(_: &mut Universe, args: Vec<Value>) -> Return {
     ]);
 
     Return::Local(Value::Integer(a << b))
+
+    // match a {
+    //     Value::Integer(a) => match a.checked_shl(b as u32) {
+    //         Some(value) => Return::Local(Value::Integer(value)),
+    //         None => demote!(BigInt::from(a) << (b as usize)),
+    //     },
+    //     Value::BigInteger(a) => demote!(a << (b as usize)),
+    //     _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
+    // }
 }
 
 fn shift_right(_: &mut Universe, args: Vec<Value>) -> Return {
@@ -366,6 +412,15 @@ fn shift_right(_: &mut Universe, args: Vec<Value>) -> Return {
     ]);
 
     Return::Local(Value::Integer(a >> b))
+
+    // match a {
+    //     Value::Integer(a) => match a.checked_shr(b as u32) {
+    //         Some(value) => Return::Local(Value::Integer(value)),
+    //         None => demote!(BigInt::from(a) >> (b as usize)),
+    //     },
+    //     Value::BigInteger(a) => demote!(a >> (b as usize)),
+    //     _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
+    // }
 }
 
 /// Search for a primitive matching the given signature.

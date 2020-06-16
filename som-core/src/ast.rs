@@ -237,6 +237,8 @@ pub enum Literal {
     Double(f64),
     /// Represents a integer number literal (eg. `42`).
     Integer(i64),
+    /// Represents a big integer (bigger than a 64-bit signed integer can represent).
+    BigInteger(String),
     /// Represents an array literal (eg. `$(1 2 3)`)
     Array(Vec<Literal>),
 }

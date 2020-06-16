@@ -42,6 +42,19 @@ pub fn exact_ident<'a, 'b: 'a>(string: &'b str) -> impl Parser<'a, ()> {
     }
 }
 
+pub fn big_integer<'a>() -> impl Parser<'a, String> {
+    move |input: &'a [Token]| {
+        let (sign, input) = optional(exact(Token::Minus)).parse(input)?;
+        let sign = if sign.is_some() { "-" } else { "" };
+
+        let (head, tail) = input.split_first()?;
+        match head {
+            Token::LitBigInteger(value) => Some((format!("{}{}", sign, value), tail)),
+            _ => None,
+        }
+    }
+}
+
 pub fn integer<'a>() -> impl Parser<'a, i64> {
     move |input: &'a [Token]| {
         let (sign, input) = optional(exact(Token::Minus)).parse(input)?;
@@ -149,6 +162,7 @@ pub fn array<'a>() -> impl Parser<'a, Vec<Literal>> {
 pub fn literal<'a>() -> impl Parser<'a, Literal> {
     (double().map(Literal::Double))
         .or(integer().map(Literal::Integer))
+        .or(big_integer().map(Literal::BigInteger))
         .or(string().map(Literal::String))
         .or(symbol().map(Literal::Symbol))
         .or(array().map(Literal::Array))
