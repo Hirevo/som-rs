@@ -1,0 +1,110 @@
+use std::hash::{Hash, Hasher};
+
+use crate::block::Block;
+use crate::class::Class;
+use crate::instance::Instance;
+use crate::method::Method;
+use crate::value::Value;
+
+pub trait Hashcode {
+    fn hashcode<H: Hasher>(&self, hasher: &mut H);
+}
+
+impl Hashcode for Value {
+    fn hashcode<H: Hasher>(&self, hasher: &mut H) {
+        match self {
+            Value::Nil => {
+                hasher.write(b"#nil#");
+            }
+            Value::System => {
+                hasher.write(b"#system#");
+            }
+            Value::Boolean(value) => {
+                hasher.write(b"#bool#");
+                value.hash(hasher);
+            }
+            Value::Integer(value) => {
+                hasher.write(b"#int#");
+                value.hash(hasher);
+            }
+            Value::Double(value) => {
+                hasher.write(b"#double#");
+                let raw_bytes: &[u8] = unsafe {
+                    std::slice::from_raw_parts(
+                        (value as *const f64) as *const u8,
+                        std::mem::size_of::<f64>(),
+                    )
+                };
+                hasher.write(raw_bytes);
+            }
+            Value::Symbol(value) => {
+                hasher.write(b"#sym#");
+                value.hash(hasher);
+            }
+            Value::String(value) => {
+                hasher.write(b"#string#");
+                value.hash(hasher);
+            }
+            Value::Array(value) => {
+                hasher.write(b"#int#");
+                for value in value.borrow().iter() {
+                    value.hashcode(hasher);
+                }
+            }
+            Value::Block(value) => {
+                hasher.write(b"#blk#");
+                value.hashcode(hasher);
+            }
+            Value::Class(value) => {
+                hasher.write(b"#cls#");
+                value.borrow().hashcode(hasher);
+            }
+            Value::Instance(value) => {
+                hasher.write(b"#inst#");
+                value.borrow().hashcode(hasher);
+            }
+            Value::Invokable(value) => {
+                hasher.write(b"#mthd#");
+                value.hashcode(hasher);
+            }
+        }
+    }
+}
+
+impl Hashcode for Class {
+    fn hashcode<H: Hasher>(&self, hasher: &mut H) {
+        self.name.hash(hasher);
+        self.locals.iter().for_each(|(key, value)| {
+            key.hash(hasher);
+            value.hashcode(hasher);
+        });
+    }
+}
+
+impl Hashcode for Instance {
+    fn hashcode<H: Hasher>(&self, hasher: &mut H) {
+        self.class.borrow().hashcode(hasher);
+        self.locals.iter().for_each(|(key, value)| {
+            key.hash(hasher);
+            value.hashcode(hasher);
+        });
+    }
+}
+
+impl Hashcode for Block {
+    fn hashcode<H: Hasher>(&self, hasher: &mut H) {
+        todo!()
+    }
+}
+
+impl Hashcode for Method {
+    fn hashcode<H: Hasher>(&self, hasher: &mut H) {
+        if let Some(holder) = self.holder().upgrade() {
+            holder.borrow().hashcode(hasher);
+        } else {
+            hasher.write(b"??");
+        }
+        hasher.write(b">>");
+        self.signature.hash(hasher);
+    }
+}
