@@ -23,6 +23,10 @@ impl Hash for Value {
                 hasher.write(b"#int#");
                 value.hash(hasher);
             }
+            Value::BigInteger(value) => {
+                hasher.write(b"#bigint#");
+                value.hash(hasher);
+            }
             Value::Double(value) => {
                 hasher.write(b"#double#");
                 let raw_bytes: &[u8] = unsafe {
@@ -42,7 +46,7 @@ impl Hash for Value {
                 value.hash(hasher);
             }
             Value::Array(value) => {
-                hasher.write(b"#int#");
+                hasher.write(b"#arr#");
                 for value in value.borrow().iter() {
                     value.hash(hasher);
                 }
@@ -88,7 +92,7 @@ impl Hash for Instance {
 }
 
 impl Hash for Block {
-    fn hash<H: Hasher>(&self, hasher: &mut H) {
+    fn hash<H: Hasher>(&self, _hasher: &mut H) {
         todo!()
     }
 }
