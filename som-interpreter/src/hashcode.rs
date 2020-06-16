@@ -6,12 +6,8 @@ use crate::instance::Instance;
 use crate::method::Method;
 use crate::value::Value;
 
-pub trait Hashcode {
-    fn hashcode<H: Hasher>(&self, hasher: &mut H);
-}
-
-impl Hashcode for Value {
-    fn hashcode<H: Hasher>(&self, hasher: &mut H) {
+impl Hash for Value {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
         match self {
             Value::Nil => {
                 hasher.write(b"#nil#");
@@ -48,59 +44,59 @@ impl Hashcode for Value {
             Value::Array(value) => {
                 hasher.write(b"#int#");
                 for value in value.borrow().iter() {
-                    value.hashcode(hasher);
+                    value.hash(hasher);
                 }
             }
             Value::Block(value) => {
                 hasher.write(b"#blk#");
-                value.hashcode(hasher);
+                value.hash(hasher);
             }
             Value::Class(value) => {
                 hasher.write(b"#cls#");
-                value.borrow().hashcode(hasher);
+                value.borrow().hash(hasher);
             }
             Value::Instance(value) => {
                 hasher.write(b"#inst#");
-                value.borrow().hashcode(hasher);
+                value.borrow().hash(hasher);
             }
             Value::Invokable(value) => {
                 hasher.write(b"#mthd#");
-                value.hashcode(hasher);
+                value.hash(hasher);
             }
         }
     }
 }
 
-impl Hashcode for Class {
-    fn hashcode<H: Hasher>(&self, hasher: &mut H) {
+impl Hash for Class {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
         self.name.hash(hasher);
         self.locals.iter().for_each(|(key, value)| {
             key.hash(hasher);
-            value.hashcode(hasher);
+            value.hash(hasher);
         });
     }
 }
 
-impl Hashcode for Instance {
-    fn hashcode<H: Hasher>(&self, hasher: &mut H) {
-        self.class.borrow().hashcode(hasher);
+impl Hash for Instance {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        self.class.borrow().hash(hasher);
         self.locals.iter().for_each(|(key, value)| {
             key.hash(hasher);
-            value.hashcode(hasher);
+            value.hash(hasher);
         });
     }
 }
 
-impl Hashcode for Block {
-    fn hashcode<H: Hasher>(&self, hasher: &mut H) {
+impl Hash for Block {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
         todo!()
     }
 }
 
-impl Hashcode for Method {
-    fn hashcode<H: Hasher>(&self, hasher: &mut H) {
+impl Hash for Method {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
         if let Some(holder) = self.holder().upgrade() {
-            holder.borrow().hashcode(hasher);
+            holder.borrow().hash(hasher);
         } else {
             hasher.write(b"??");
         }

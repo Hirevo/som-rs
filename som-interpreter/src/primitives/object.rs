@@ -1,9 +1,8 @@
 use std::collections::hash_map::DefaultHasher;
 use std::convert::TryFrom;
-use std::hash::Hasher;
+use std::hash::{Hash, Hasher};
 
 use crate::class::Class;
-use crate::hashcode::Hashcode;
 use crate::invokable::{Invoke, Return};
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
@@ -34,7 +33,7 @@ fn hashcode(_: &mut Universe, args: Vec<Value>) -> Return {
     ]);
 
     let mut hasher = DefaultHasher::new();
-    value.hashcode(&mut hasher);
+    value.hash(&mut hasher);
     let hash = (hasher.finish() as i64).abs();
 
     Return::Local(Value::Integer(hash))
