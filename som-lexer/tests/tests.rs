@@ -1,49 +1,58 @@
-use som_lexer::{Lexer, Token};
+use som_core::span::Span;
+use som_lexer::{Lexer, TokenKind};
 
 #[test]
 fn empty_class_test() {
-    let mut lexer = Lexer::new("Foo = ()");
+    const CODE: &str = "Foo = ()";
 
-    assert_eq!(lexer.next(), Some(Token::Identifier(String::from("Foo"))));
-    assert_eq!(lexer.next(), Some(Token::Whitespace));
-    assert_eq!(lexer.next(), Some(Token::Equal));
-    assert_eq!(lexer.next(), Some(Token::Whitespace));
-    assert_eq!(lexer.next(), Some(Token::NewTerm));
-    assert_eq!(lexer.next(), Some(Token::EndTerm));
+    let mut lexer = Lexer::new(CODE).map(|token| (token.span().to_str(CODE), token.kind()));
+
+    assert_eq!(lexer.next(), Some(("Foo", TokenKind::Identifier)));
+    assert_eq!(lexer.next(), Some((" ", TokenKind::Whitespace)));
+    assert_eq!(lexer.next(), Some(("=", TokenKind::Equal)));
+    assert_eq!(lexer.next(), Some((" ", TokenKind::Whitespace)));
+    assert_eq!(lexer.next(), Some(("(", TokenKind::NewTerm)));
+    assert_eq!(lexer.next(), Some((")", TokenKind::EndTerm)));
     assert_eq!(lexer.next(), None);
 }
 
 #[test]
 fn symbol_literal_test() {
-    let mut lexer = Lexer::new("#key:word:");
+    const CODE: &str = "#key:word:";
+
+    let mut lexer = Lexer::new(CODE).map(|token| (token.span().to_str(CODE), token.kind()));
 
     assert_eq!(
         lexer.next(),
-        Some(Token::LitSymbol(String::from("key:word:")))
+        Some(("#key:word:", TokenKind::LitSymbol(Span::new(1, 10))))
     );
     assert_eq!(lexer.next(), None);
 }
 
 #[test]
 fn assignment_test() {
-    let mut lexer = Lexer::new("var := 3.14.");
+    const CODE: &str = "var := 3.14.";
 
-    assert_eq!(lexer.next(), Some(Token::Identifier(String::from("var"))));
-    assert_eq!(lexer.next(), Some(Token::Whitespace));
-    assert_eq!(lexer.next(), Some(Token::Assign));
-    assert_eq!(lexer.next(), Some(Token::Whitespace));
-    assert_eq!(lexer.next(), Some(Token::LitDouble(3.14)));
-    assert_eq!(lexer.next(), Some(Token::Period));
+    let mut lexer = Lexer::new(CODE).map(|token| (token.span().to_str(CODE), token.kind()));
+
+    assert_eq!(lexer.next(), Some(("var", TokenKind::Identifier)));
+    assert_eq!(lexer.next(), Some((" ", TokenKind::Whitespace)));
+    assert_eq!(lexer.next(), Some((":=", TokenKind::Assign)));
+    assert_eq!(lexer.next(), Some((" ", TokenKind::Whitespace)));
+    assert_eq!(lexer.next(), Some(("3.14", TokenKind::LitDouble)));
+    assert_eq!(lexer.next(), Some((".", TokenKind::Period)));
     assert_eq!(lexer.next(), None);
 }
 
 #[test]
 fn string_literal_test() {
-    let mut lexer = Lexer::new("'some string with new\nline'");
+    const CODE: &str = "'some string with new\nline'";
+
+    let mut lexer = Lexer::new(CODE).map(|token| (token.span().to_str(CODE), token.kind()));
 
     assert_eq!(
         lexer.next(),
-        Some(Token::LitString(String::from("some string with new\nline")))
+        Some((CODE, TokenKind::LitString(Span::new(1, 26))))
     );
     assert_eq!(lexer.next(), None);
 }

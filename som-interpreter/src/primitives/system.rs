@@ -70,8 +70,7 @@ fn global(universe: &mut Universe, args: Vec<Value>) -> Return {
         Value::Symbol(sym) => sym,
     ]);
 
-    let symbol = universe.lookup_symbol(sym);
-    Return::Local(universe.lookup_global(symbol).unwrap_or(Value::Nil))
+    Return::Local(universe.lookup_global(sym).unwrap_or(Value::Nil))
 }
 
 fn global_put(universe: &mut Universe, args: Vec<Value>) -> Return {
@@ -83,8 +82,7 @@ fn global_put(universe: &mut Universe, args: Vec<Value>) -> Return {
         value => value,
     ]);
 
-    let symbol = universe.lookup_symbol(sym).to_string();
-    universe.assign_global(symbol, value.clone());
+    universe.assign_global(sym, value.clone());
     Return::Local(value)
 }
 

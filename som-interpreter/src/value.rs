@@ -59,16 +59,12 @@ impl Value {
     }
 
     /// Search for a given method for this value.
-    pub fn lookup_method(
-        &self,
-        universe: &Universe,
-        signature: impl AsRef<str>,
-    ) -> Option<Rc<Method>> {
+    pub fn lookup_method(&self, universe: &Universe, signature: Interned) -> Option<Rc<Method>> {
         self.class(universe).borrow().lookup_method(signature)
     }
 
     /// Search for a local binding within this value.
-    pub fn lookup_local(&self, name: impl AsRef<str>) -> Option<Self> {
+    pub fn lookup_local(&self, name: Interned) -> Option<Self> {
         match self {
             Self::Instance(instance) => instance.borrow().lookup_local(name),
             Self::Class(class) => class.borrow().lookup_local(name),
@@ -77,7 +73,7 @@ impl Value {
     }
 
     /// Assign a value to a local binding within this value.
-    pub fn assign_local(&mut self, name: impl AsRef<str>, value: Self) -> Option<()> {
+    pub fn assign_local(&mut self, name: Interned, value: Self) -> Option<()> {
         match self {
             Self::Instance(instance) => instance.borrow_mut().assign_local(name, value),
             Self::Class(class) => class.borrow_mut().assign_local(name, value),
@@ -86,7 +82,7 @@ impl Value {
     }
 
     /// Get the string representation of this value.
-    pub fn to_string(&self, universe: &Universe) -> String {
+    pub fn as_display(&self, universe: &Universe) -> String {
         match self {
             Self::Nil => "nil".to_string(),
             Self::System => "system".to_string(),
@@ -107,7 +103,7 @@ impl Value {
                 let strings: Vec<String> = values
                     .borrow()
                     .iter()
-                    .map(|value| value.to_string(universe))
+                    .map(|value| value.as_display(universe))
                     .collect();
                 format!("#({})", strings.join(" "))
             }
@@ -117,11 +113,40 @@ impl Value {
                 instance.borrow().class().borrow().name(),
             ),
             Self::Class(class) => class.borrow().name().to_string(),
-            Self::Invokable(invokable) => invokable
-                .holder()
-                .upgrade()
-                .map(|holder| format!("{}>>#{}", holder.borrow().name(), invokable.signature()))
-                .unwrap_or_else(|| format!("??>>#{}", invokable.signature())),
+            Self::Invokable(invokable) => {
+                let signature = universe.lookup_symbol(invokable.signature());
+                invokable
+                    .holder()
+                    .upgrade()
+                    .map(|holder| format!("{}>>#{}", holder.borrow().name(), signature))
+                    .unwrap_or_else(|| format!("??>>#{}", signature))
+            }
+        }
+    }
+
+    /// Get the debug string representation of this value.
+    pub fn as_debug(&self, universe: &Universe) -> String {
+        match self {
+            Self::Nil => "Nil".to_string(),
+            Self::System => "System".to_string(),
+            Self::Boolean(val) => format!("Boolean({:?})", val),
+            Self::Integer(val) => format!("Integer({:?})", val),
+            Self::Double(val) => format!("Double({:?})", val),
+            Self::Symbol(val) => format!("Symbol({:?})", val),
+            Self::String(val) => format!("String({:?})", val),
+            Self::Array(val) => format!("Array({:?})", val.borrow()),
+            Self::Block(val) => format!("Block({:?})", val),
+            Self::Instance(val) => format!("Instance({:?})", val.borrow()),
+            Self::Class(val) => format!("Class({:?})", val.borrow()),
+            Self::Invokable(val) => {
+                let signature = universe.lookup_symbol(val.signature());
+                let signature = val
+                    .holder()
+                    .upgrade()
+                    .map(|holder| format!("{}>>#{}", holder.borrow().name(), signature))
+                    .unwrap_or_else(|| format!("??>>#{}", signature));
+                format!("Invokable({})", signature)
+            }
         }
     }
 }
@@ -162,12 +187,12 @@ impl fmt::Debug for Value {
             Self::Instance(val) => f.debug_tuple("Instance").field(&val.borrow()).finish(),
             Self::Class(val) => f.debug_tuple("Class").field(&val.borrow()).finish(),
             Self::Invokable(val) => {
-                let signature = val
+                let holder = val
                     .holder()
                     .upgrade()
-                    .map(|holder| format!("{}>>#{}", holder.borrow().name(), val.signature()))
-                    .unwrap_or_else(|| format!("??>>#{}", val.signature()));
-                f.debug_tuple("Invokable").field(&signature).finish()
+                    .map(|holder| holder.borrow().name().to_string())
+                    .unwrap_or_else(|| "??".to_string());
+                f.debug_tuple("Invokable").field(&holder).finish()
             }
         }
     }

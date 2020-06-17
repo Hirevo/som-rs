@@ -1,6 +1,8 @@
-/// Represents a token from the lexer.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Token {
+use som_core::span::Span;
+
+/// Represents the kind of a token from the lexer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TokenKind {
     /// A tilde, the bitwise 'not' operator (`~`).
     Not,
     /// A ampersand, the binary 'and' operator (`&`).
@@ -54,21 +56,47 @@ pub enum Token {
     /// The separator sequence (`-------`).
     Separator,
     /// An integer literal (`10`).
-    LitInteger(i64),
+    LitInteger,
     /// A floating-point literal (`10.6`).
-    LitDouble(f64),
+    LitDouble,
     /// A string literal (`'hello, world'`).
-    LitString(String),
+    LitString(Span),
     /// A symbol literal (`#foo`).
-    LitSymbol(String),
+    LitSymbol(Span),
     /// An identifier (`foo`).
-    Identifier(String),
+    Identifier,
     /// A keyword (`fromString:`).
-    Keyword(String),
+    Keyword,
     /// A sequence of operators (eg: `>>>`).
-    OperatorSequence(String),
+    OperatorSequence,
     /// A comment (`"what a beautiful and majestic piece of code"`).
-    Comment(String),
+    Comment(Span),
     /// Some whitespace (` `).
     Whitespace,
+}
+
+/// Represents a token from the lexer.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Token {
+    /// The span of the token.
+    span: Span,
+    /// The kind of the token.
+    kind: TokenKind,
+}
+
+impl Token {
+    /// Construct a token given its span and its kind.
+    pub fn new(span: Span, kind: TokenKind) -> Self {
+        Self { span, kind }
+    }
+
+    /// Get the kind of the token.
+    pub fn kind(&self) -> TokenKind {
+        self.kind
+    }
+
+    /// Get the span of the token.
+    pub fn span(&self) -> Span {
+        self.span
+    }
 }

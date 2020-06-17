@@ -73,13 +73,7 @@ fn fields(universe: &mut Universe, args: Vec<Value>) -> Return {
             Some(super_class) => gather_locals(universe, super_class),
             None => Vec::new(),
         };
-        fields.extend(
-            class
-                .borrow()
-                .locals
-                .keys()
-                .map(|field| Value::Symbol(universe.intern_symbol(field))),
-        );
+        fields.extend(class.borrow().locals.keys().copied().map(Value::Symbol));
         fields
     }
 

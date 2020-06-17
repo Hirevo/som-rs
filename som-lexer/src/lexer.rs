@@ -1,22 +1,45 @@
-use crate::token::Token;
+use std::iter::Peekable;
+use std::str::Chars;
+
+use som_core::span::Span;
+
+use crate::token::{Token, TokenKind};
+
+macro_rules! count_while {
+    ($iter:expr, $func:expr) => {{
+        let mut count = 0;
+        loop {
+            match $iter.peek().copied() {
+                Some(ch) if { $func }(ch) => {
+                    $iter.next()?;
+                    count += 1;
+                }
+                _ => break,
+            }
+        }
+        count
+    }};
+}
 
 /// The lexer for the Simple Object Machine.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Lexer {
-    pub(crate) chars: Vec<char>,
+#[derive(Debug, Clone)]
+pub struct Lexer<'a> {
+    pub(crate) current: usize,
+    pub(crate) iter: Peekable<Chars<'a>>,
     pub(crate) skip_comments: bool,
     pub(crate) skip_whitespace: bool,
     pub(crate) skip_separator: bool,
 }
 
-impl Lexer {
+impl<'a> Lexer<'a> {
     const SEPARATOR: &'static str = "----";
     const PRIMITIVE: &'static str = "primitive";
 
     /// Construct a new lexer.
-    pub fn new<T: AsRef<str>>(input: T) -> Lexer {
-        Lexer {
-            chars: input.as_ref().chars().rev().collect(),
+    pub fn new(input: &'a str) -> Self {
+        Self {
+            current: 0,
+            iter: input.chars().peekable(),
             skip_comments: false,
             skip_whitespace: false,
             skip_separator: false,
@@ -24,96 +47,108 @@ impl Lexer {
     }
 
     /// Configure the lexer on whether to skip whitespace or not.
-    pub fn skip_whitespace(mut self, value: bool) -> Lexer {
+    pub fn skip_whitespace(mut self, value: bool) -> Self {
         self.skip_whitespace = value;
         self
     }
 
     /// Configure the lexer on whether to skip comments or not.
-    pub fn skip_comments(mut self, value: bool) -> Lexer {
+    pub fn skip_comments(mut self, value: bool) -> Self {
         self.skip_comments = value;
         self
     }
 
     /// Consume the lexer and return the left-over text.
     pub fn text(self) -> String {
-        self.chars.into_iter().rev().collect()
+        self.iter.rev().collect()
     }
 
-    fn lex_string(&mut self) -> Option<String> {
-        let mut output = String::new();
-        self.chars.pop()?;
+    fn advance(&mut self, length: usize) -> Span {
+        let end = self.current + length;
+        let span = Span {
+            from: self.current,
+            to: end,
+        };
+        self.current = end;
+        span
+    }
+
+    fn lex_string(&mut self) -> Option<(Span, Span)> {
+        let mut length = 0;
+        self.iter.next()?;
+        let start = self.advance(1);
         loop {
-            let ch = self.chars.pop()?;
+            let ch = self.iter.next()?;
             match ch {
-                '\'' => break Some(output),
-                '\\' => {
-                    let ch = self.chars.pop()?;
-                    match ch {
-                        't' => output.push('\t'),
-                        'b' => output.push('\x08'),
-                        'n' => output.push('\n'),
-                        'r' => output.push('\r'),
-                        'f' => output.push('\x12'),
-                        '\'' => output.push('\''),
-                        '\\' => output.push('\\'),
-                        '0' => output.push('\0'),
-                        _ => {}
-                    }
+                '\'' => {
+                    let inner_span = self.advance(length);
+                    let end = self.advance(1);
+                    break Some((Span::between(start, end), inner_span));
                 }
-                ch => output.push(ch),
+                '\\' => {
+                    self.iter.next()?;
+                    length += 2;
+                }
+                _ => {
+                    length += ch.len_utf8();
+                }
             }
         }
     }
 
     fn lex_comment(&mut self) -> Option<Token> {
-        let mut output = String::new();
-        self.chars.pop()?;
+        let mut length = 0;
+        self.iter.next()?;
+        let start = self.advance(1);
         loop {
-            let ch = self.chars.pop()?;
-            if ch == '"' {
-                break if self.skip_comments {
-                    self.next()
-                } else {
-                    Some(Token::Comment(output))
-                };
-            } else {
-                output.push(ch);
+            let ch = self.iter.next()?;
+            match ch {
+                '"' => {
+                    let inner_span = self.advance(length);
+                    let end = self.advance(1);
+                    break if self.skip_comments {
+                        self.next()
+                    } else {
+                        Some(Token::new(
+                            Span::between(start, end),
+                            TokenKind::Comment(inner_span),
+                        ))
+                    };
+                }
+                _ => {
+                    length += ch.len_utf8();
+                }
             }
         }
     }
 
     fn lex_operator(&mut self) -> Option<Token> {
-        let iter = self.chars.iter().rev().copied();
-        let length = iter.take_while(|ch| Lexer::is_operator(*ch)).count();
+        let head = self.iter.next()?;
+        let length = count_while!(self.iter, Self::is_operator);
         match length {
-            0 => None,
-            1 => {
-                let ch = self.chars.pop()?;
-                match ch {
-                    '~' => Some(Token::Not),
-                    '&' => Some(Token::And),
-                    '|' => Some(Token::Or),
-                    '*' => Some(Token::Star),
-                    '/' => Some(Token::Div),
-                    '\\' => Some(Token::Mod),
-                    '+' => Some(Token::Plus),
-                    '=' => Some(Token::Equal),
-                    '>' => Some(Token::More),
-                    '<' => Some(Token::Less),
-                    ',' => Some(Token::Comma),
-                    '@' => Some(Token::At),
-                    '%' => Some(Token::Per),
-                    '-' => Some(Token::Minus),
+            0 => {
+                let span = self.advance(1);
+                match head {
+                    '~' => Some(Token::new(span, TokenKind::Not)),
+                    '&' => Some(Token::new(span, TokenKind::And)),
+                    '|' => Some(Token::new(span, TokenKind::Or)),
+                    '*' => Some(Token::new(span, TokenKind::Star)),
+                    '/' => Some(Token::new(span, TokenKind::Div)),
+                    '\\' => Some(Token::new(span, TokenKind::Mod)),
+                    '+' => Some(Token::new(span, TokenKind::Plus)),
+                    '=' => Some(Token::new(span, TokenKind::Equal)),
+                    '>' => Some(Token::new(span, TokenKind::More)),
+                    '<' => Some(Token::new(span, TokenKind::Less)),
+                    ',' => Some(Token::new(span, TokenKind::Comma)),
+                    '@' => Some(Token::new(span, TokenKind::At)),
+                    '%' => Some(Token::new(span, TokenKind::Per)),
+                    '-' => Some(Token::new(span, TokenKind::Minus)),
                     _ => None,
                 }
             }
             length => {
-                let mut operator = String::with_capacity(length);
-                for _ in 0..length {
-                    operator.push(self.chars.pop()?);
-                }
-                Some(Token::OperatorSequence(operator))
+                let span = self.advance(length + 1);
+                Some(Token::new(span, TokenKind::OperatorSequence))
             }
         }
     }
@@ -126,173 +161,158 @@ impl Lexer {
     }
 }
 
-impl Iterator for Lexer {
+impl<'a> Iterator for Lexer<'a> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut iter = self.chars.iter().rev().copied().peekable();
-        let peeked = iter.peek().copied()?;
+        // let mut iter = self.chars.iter().rev().copied().peekable();
+        let peeked = self.iter.peek().copied()?;
         match peeked {
             _ if peeked.is_whitespace() => {
-                let count = iter.take_while(|c| c.is_whitespace()).count();
-                for _ in 0..count {
-                    self.chars.pop()?;
-                }
+                let length = count_while!(self.iter, char::is_whitespace);
+                let span = self.advance(length);
                 if self.skip_whitespace {
                     self.next()
                 } else {
-                    Some(Token::Whitespace)
+                    Some(Token::new(span, TokenKind::Whitespace))
                 }
             }
-            '\'' => self.lex_string().map(Token::LitString),
+            '\'' => self
+                .lex_string()
+                .map(|(outer, inner)| Token::new(outer, TokenKind::LitString(inner))),
             '"' => self.lex_comment(),
             '[' => {
-                self.chars.pop()?;
-                Some(Token::NewBlock)
+                self.iter.next()?;
+                let span = self.advance(1);
+                Some(Token::new(span, TokenKind::NewBlock))
             }
             ']' => {
-                self.chars.pop()?;
-                Some(Token::EndBlock)
+                self.iter.next()?;
+                let span = self.advance(1);
+                Some(Token::new(span, TokenKind::EndBlock))
             }
             '(' => {
-                self.chars.pop()?;
-                Some(Token::NewTerm)
+                self.iter.next()?;
+                let span = self.advance(1);
+                Some(Token::new(span, TokenKind::NewTerm))
             }
             ')' => {
-                self.chars.pop()?;
-                Some(Token::EndTerm)
+                self.iter.next()?;
+                let span = self.advance(1);
+                Some(Token::new(span, TokenKind::EndTerm))
             }
             '#' => {
-                iter.next()?;
-                match iter.peek().copied() {
+                self.iter.next()?;
+                let start = self.advance(1);
+                match self.iter.peek().copied() {
                     Some('\'') => {
-                        self.chars.pop()?;
-                        let symbol = self.lex_string()?;
-                        Some(Token::LitSymbol(symbol))
+                        let (outer, inner) = self.lex_string()?;
+                        Some(Token::new(
+                            Span::between(start, outer),
+                            TokenKind::LitSymbol(inner),
+                        ))
                     }
                     Some('(') => {
-                        self.chars.pop()?;
-                        self.chars.pop()?;
-                        Some(Token::NewArray)
+                        self.iter.next()?;
+                        let end = self.advance(1);
+                        Some(Token::new(Span::between(start, end), TokenKind::NewArray))
                     }
                     Some(ch) if ch.is_alphabetic() => {
-                        let len = iter
-                            .take_while(|ch| ch.is_alphabetic() || matches!(*ch, ':' | '_'))
-                            .count();
-                        let mut symbol = String::with_capacity(len);
-                        self.chars.pop()?;
-                        for _ in 0..len {
-                            symbol.push(self.chars.pop()?);
-                        }
-                        Some(Token::LitSymbol(symbol))
+                        let length = count_while!(self.iter, |ch: char| ch.is_alphabetic()
+                            || matches!(ch, ':' | '_'));
+                        let end = self.advance(length);
+                        Some(Token::new(
+                            Span::between(start, end),
+                            TokenKind::LitSymbol(end),
+                        ))
                     }
-                    Some(ch) if Lexer::is_operator(ch) => {
-                        let len = iter.take_while(|ch| Lexer::is_operator(*ch)).count();
-                        let mut symbol = String::with_capacity(len);
-                        self.chars.pop()?;
-                        for _ in 0..len {
-                            symbol.push(self.chars.pop()?);
-                        }
-                        Some(Token::LitSymbol(symbol))
+                    Some(ch) if Self::is_operator(ch) => {
+                        let length = count_while!(self.iter, Self::is_operator);
+                        let end = self.advance(length);
+                        Some(Token::new(
+                            Span::between(start, end),
+                            TokenKind::LitSymbol(end),
+                        ))
                     }
                     _ => None,
                 }
             }
             '^' => {
-                self.chars.pop()?;
-                Some(Token::Exit)
+                self.iter.next()?;
+                let span = self.advance(1);
+                Some(Token::new(span, TokenKind::Exit))
             }
             '.' => {
-                self.chars.pop()?;
-                Some(Token::Period)
+                self.iter.next()?;
+                let span = self.advance(1);
+                Some(Token::new(span, TokenKind::Period))
             }
             '-' => {
-                let sep_len = iter.take_while(|ch| *ch == '-').count();
-                if sep_len >= Lexer::SEPARATOR.len() {
-                    for _ in 0..sep_len {
-                        self.chars.pop()?;
+                let length = self.iter.clone().take_while(|ch| *ch == '-').count();
+                if length >= Self::SEPARATOR.len() {
+                    for _ in 0..length {
+                        self.iter.next()?;
                     }
+                    let span = self.advance(length);
                     if self.skip_separator {
                         self.next()
                     } else {
-                        Some(Token::Separator)
+                        Some(Token::new(span, TokenKind::Separator))
                     }
                 } else {
                     self.lex_operator()
                 }
             }
             ':' => {
-                iter.next()?;
-                if let Some('=') = iter.peek().copied() {
-                    self.chars.pop()?;
-                    self.chars.pop()?;
-                    Some(Token::Assign)
+                self.iter.next()?;
+                if let Some('=') = self.iter.peek().copied() {
+                    self.iter.next()?;
+                    let span = self.advance(2);
+                    Some(Token::new(span, TokenKind::Assign))
                 } else {
-                    self.chars.pop()?;
-                    Some(Token::Colon)
+                    let span = self.advance(1);
+                    Some(Token::new(span, TokenKind::Colon))
                 }
             }
-            _ if Lexer::is_operator(peeked) => self.lex_operator(),
+            _ if Self::is_operator(peeked) => self.lex_operator(),
             _ => {
-                let primitive_len = Lexer::PRIMITIVE.chars().count();
-                if iter.take(primitive_len).eq(Lexer::PRIMITIVE.chars()) {
-                    for _ in 0..primitive_len {
-                        self.chars.pop()?;
+                let length = Self::PRIMITIVE.chars().count();
+                if self.iter.clone().take(length).eq(Self::PRIMITIVE.chars()) {
+                    for _ in 0..length {
+                        self.iter.next()?;
                     }
-                    Some(Token::Primitive)
+                    let span = self.advance(length);
+                    Some(Token::new(span, TokenKind::Primitive))
                 } else if peeked.is_alphabetic() {
-                    let mut ident: String = self
-                        .chars
-                        .iter()
-                        .rev()
-                        .copied()
-                        .take_while(|c| c.is_alphanumeric() || *c == '_')
-                        .collect();
-                    let ident_len = ident.chars().count();
-                    for _ in 0..ident_len {
-                        self.chars.pop()?;
-                    }
-                    if let Some(':') = self.chars.last().copied() {
-                        self.chars.pop()?;
-                        ident.push(':');
-                        Some(Token::Keyword(ident))
+                    let length =
+                        count_while!(self.iter, |ch: char| ch.is_alphanumeric() || ch == '_');
+                    let span = self.advance(length);
+                    if let Some(':') = self.iter.peek().copied() {
+                        self.iter.next()?;
+                        let additional = self.advance(1);
+                        Some(Token::new(
+                            Span::between(span, additional),
+                            TokenKind::Keyword,
+                        ))
                     } else {
-                        Some(Token::Identifier(ident))
+                        Some(Token::new(span, TokenKind::Identifier))
                     }
                 } else if peeked.is_digit(10) {
-                    let iter = self.chars.iter().rev().copied();
-                    let int_part_len = iter.clone().take_while(|c| c.is_digit(10)).count();
-                    let mut dec_iter = iter.clone().skip(int_part_len).peekable();
-                    if let Some('.') = dec_iter.peek().copied() {
-                        dec_iter.next()?;
-                        match dec_iter.peek() {
-                            Some(v) if v.is_digit(10) => {
-                                let dec_part_len =
-                                    dec_iter.clone().take_while(|c| c.is_digit(10)).count();
-                                let total_len = int_part_len + dec_part_len + 1;
-                                let repr: String = iter.take(total_len).collect();
-                                let number: f64 = repr.parse().ok()?;
-                                for _ in 0..total_len {
-                                    self.chars.pop()?;
-                                }
-                                Some(Token::LitDouble(number))
-                            }
-                            _ => {
-                                let repr: String = iter.take(int_part_len).collect();
-                                let number: i64 = repr.parse().ok()?;
-                                for _ in 0..int_part_len {
-                                    self.chars.pop()?;
-                                }
-                                Some(Token::LitInteger(number))
-                            }
+                    let int_part_length = count_while!(self.iter, |ch: char| ch.is_digit(10));
+                    let mut iter = self.iter.clone();
+                    match (iter.next(), iter.peek()) {
+                        (Some('.'), Some(ch)) if ch.is_digit(10) => {
+                            self.iter.next()?;
+                            let dec_part_length =
+                                count_while!(self.iter, |ch: char| ch.is_digit(10));
+                            let total_length = int_part_length + dec_part_length + 1;
+                            let span = self.advance(total_length);
+                            Some(Token::new(span, TokenKind::LitDouble))
                         }
-                    } else {
-                        let repr: String = iter.take(int_part_len).collect();
-                        let number: i64 = repr.parse().ok()?;
-                        for _ in 0..int_part_len {
-                            self.chars.pop()?;
+                        _ => {
+                            let span = self.advance(int_part_length);
+                            Some(Token::new(span, TokenKind::LitInteger))
                         }
-                        Some(Token::LitInteger(number))
                     }
                 } else {
                     None
