@@ -32,4 +32,5 @@ jobs:
           pip install rebench
       - name: Run and report benchmarks
         run: |
+          export PATH="${PATH}:${HOME}/.local/bin"
           rebench --without-nice --experiment="CI Benchmark Run ID ${GITHUB_RUN_ID}" --branch="${GITHUB_REF}" -c rebench.conf som-rs
