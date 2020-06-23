@@ -253,7 +253,7 @@ fn modulo(_: &mut Universe, args: Vec<Value>) -> Return {
 
     let result = a % b;
     if result.signum() != b.signum() {
-        Return::Local(Value::Integer(result + b))
+        Return::Local(Value::Integer((result + b) % b))
     } else {
         Return::Local(Value::Integer(result))
     }
@@ -269,7 +269,7 @@ fn remainder(_: &mut Universe, args: Vec<Value>) -> Return {
 
     let result = a % b;
     if result.signum() != a.signum() {
-        Return::Local(Value::Integer(result + a))
+        Return::Local(Value::Integer((result + a) % a))
     } else {
         Return::Local(Value::Integer(result))
     }
