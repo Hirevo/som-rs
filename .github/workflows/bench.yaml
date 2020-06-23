@@ -25,6 +25,9 @@ jobs:
         with:
           command: build
           args: --release -p som-interpreter
+      - name: Install ReBench
+        run: |
+          pip install rebench
       - name: Run and report benchmarks
         run: |
           rebench --without-nice --experiment="CI Benchmark Run ID ${GITHUB_RUN_ID}" --branch="${GITHUB_REF}" -c rebench.conf som-rs
