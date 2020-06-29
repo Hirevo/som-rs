@@ -349,8 +349,12 @@ fn lt(_: &mut Universe, args: Vec<Value>) -> Return {
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
             Return::Local(Value::Boolean((a as f64) < b))
         }
-        (Value::BigInteger(a), Value::Integer(b)) => Return::Local(Value::Boolean(a < BigInt::from(b))),
-        (Value::Integer(a), Value::BigInteger(b)) => Return::Local(Value::Boolean(b < BigInt::from(a))),
+        (Value::BigInteger(a), Value::Integer(b)) => {
+            Return::Local(Value::Boolean(a < BigInt::from(b)))
+        }
+        (Value::Integer(a), Value::BigInteger(b)) => {
+            Return::Local(Value::Boolean(b < BigInt::from(a)))
+        }
         (a, b) => {
             return Return::Exception(format!("'{}': wrong types ({:?} | {:?})", SIGNATURE, a, b))
         }
