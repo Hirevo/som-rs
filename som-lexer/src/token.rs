@@ -55,6 +55,8 @@ pub enum Token {
     Separator,
     /// An integer literal (`10`).
     LitInteger(i64),
+    /// A big integer literal (`1542252643255252434`).
+    LitBigInteger(String),
     /// A floating-point literal (`10.6`).
     LitDouble(f64),
     /// A string literal (`'hello, world'`).

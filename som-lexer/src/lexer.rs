@@ -263,36 +263,29 @@ impl Iterator for Lexer {
                     let iter = self.chars.iter().rev().copied();
                     let int_part_len = iter.clone().take_while(|c| c.is_digit(10)).count();
                     let mut dec_iter = iter.clone().skip(int_part_len).peekable();
-                    if let Some('.') = dec_iter.peek().copied() {
-                        dec_iter.next()?;
-                        match dec_iter.peek() {
-                            Some(v) if v.is_digit(10) => {
-                                let dec_part_len =
-                                    dec_iter.clone().take_while(|c| c.is_digit(10)).count();
-                                let total_len = int_part_len + dec_part_len + 1;
-                                let repr: String = iter.take(total_len).collect();
-                                let number: f64 = repr.parse().ok()?;
-                                for _ in 0..total_len {
-                                    self.chars.pop()?;
-                                }
-                                Some(Token::LitDouble(number))
+                    match (dec_iter.next(), dec_iter.peek()) {
+                        (Some('.'), Some(ch)) if ch.is_digit(10) => {
+                            let dec_part_len =
+                                dec_iter.clone().take_while(|c| c.is_digit(10)).count();
+                            let total_len = int_part_len + dec_part_len + 1;
+                            let repr: String = iter.take(total_len).collect();
+                            let number: f64 = repr.parse().ok()?;
+                            for _ in 0..total_len {
+                                self.chars.pop()?;
                             }
-                            _ => {
-                                let repr: String = iter.take(int_part_len).collect();
-                                let number: i64 = repr.parse().ok()?;
-                                for _ in 0..int_part_len {
-                                    self.chars.pop()?;
-                                }
+                            Some(Token::LitDouble(number))
+                        }
+                        _ => {
+                            let repr: String = iter.take(int_part_len).collect();
+                            for _ in 0..int_part_len {
+                                self.chars.pop()?;
+                            }
+                            if let Ok(number) = repr.parse::<i64>() {
                                 Some(Token::LitInteger(number))
+                            } else {
+                                Some(Token::LitBigInteger(repr))
                             }
                         }
-                    } else {
-                        let repr: String = iter.take(int_part_len).collect();
-                        let number: i64 = repr.parse().ok()?;
-                        for _ in 0..int_part_len {
-                            self.chars.pop()?;
-                        }
-                        Some(Token::LitInteger(number))
                     }
                 } else {
                     None

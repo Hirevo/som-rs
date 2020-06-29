@@ -1,6 +1,8 @@
 use std::fmt;
 use std::rc::Rc;
 
+use num_bigint::BigInt;
+
 use crate::block::Block;
 use crate::class::Class;
 use crate::instance::Instance;
@@ -20,6 +22,8 @@ pub enum Value {
     Boolean(bool),
     /// An integer value.
     Integer(i64),
+    /// A big integer value (arbitrarily big).
+    BigInteger(BigInt),
     /// An floating-point value.
     Double(f64),
     /// An interned symbol value.
@@ -47,6 +51,7 @@ impl Value {
             Self::Boolean(true) => universe.true_class(),
             Self::Boolean(false) => universe.false_class(),
             Self::Integer(_) => universe.integer_class(),
+            Self::BigInteger(_) => universe.integer_class(),
             Self::Double(_) => universe.double_class(),
             Self::Symbol(_) => universe.symbol_class(),
             Self::String(_) => universe.string_class(),
@@ -92,6 +97,7 @@ impl Value {
             Self::System => "system".to_string(),
             Self::Boolean(value) => value.to_string(),
             Self::Integer(value) => value.to_string(),
+            Self::BigInteger(value) => value.to_string(),
             Self::Double(value) => value.to_string(),
             Self::Symbol(value) => {
                 let symbol = universe.lookup_symbol(*value);
@@ -132,9 +138,14 @@ impl PartialEq for Value {
             (Self::Nil, Self::Nil) | (Self::System, Self::System) => true,
             (Self::Boolean(a), Self::Boolean(b)) => a.eq(b),
             (Self::Integer(a), Self::Integer(b)) => a.eq(b),
-            (Self::Integer(a), Self::Double(b)) => (*a as f64).eq(b),
-            (Self::Double(a), Self::Integer(b)) => a.eq(&(*b as f64)),
+            (Self::Integer(a), Self::Double(b)) | (Self::Double(b), Self::Integer(a)) => {
+                (*a as f64).eq(b)
+            }
             (Self::Double(a), Self::Double(b)) => a.eq(b),
+            (Self::BigInteger(a), Self::BigInteger(b)) => a.eq(b),
+            (Self::BigInteger(a), Self::Integer(b)) | (Self::Integer(b), Self::BigInteger(a)) => {
+                a.eq(&BigInt::from(*b))
+            }
             (Self::String(a), Self::String(b)) => a.eq(b),
             (Self::Symbol(a), Self::Symbol(b)) => a.eq(b),
             (Self::Array(a), Self::Array(b)) => a.eq(b),
@@ -154,6 +165,7 @@ impl fmt::Debug for Value {
             Self::System => f.debug_tuple("System").finish(),
             Self::Boolean(val) => f.debug_tuple("Boolean").field(val).finish(),
             Self::Integer(val) => f.debug_tuple("Integer").field(val).finish(),
+            Self::BigInteger(val) => f.debug_tuple("BigInteger").field(val).finish(),
             Self::Double(val) => f.debug_tuple("Double").field(val).finish(),
             Self::Symbol(val) => f.debug_tuple("Symbol").field(val).finish(),
             Self::String(val) => f.debug_tuple("String").field(val).finish(),

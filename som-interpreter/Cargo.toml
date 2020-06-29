@@ -32,6 +32,7 @@ indexmap = "1.4.0"
 
 # big integers
 num-bigint = "0.2.6"
+num-traits = "0.2.11"
 
 # random numbers
 rand = "0.7.3"

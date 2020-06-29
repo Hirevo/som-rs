@@ -127,6 +127,10 @@ impl Evaluate for ast::Literal {
                 Return::Local(Value::Array(Rc::new(RefCell::new(output))))
             }
             Self::Integer(int) => Return::Local(Value::Integer(*int)),
+            Self::BigInteger(int) => match int.parse() {
+                Ok(value) => Return::Local(Value::BigInteger(value)),
+                Err(err) => Return::Exception(err.to_string()),
+            },
             Self::Double(double) => Return::Local(Value::Double(*double)),
             Self::Symbol(sym) => Return::Local(Value::Symbol(universe.intern_symbol(sym))),
             Self::String(string) => Return::Local(Value::String(Rc::new(string.clone()))),
