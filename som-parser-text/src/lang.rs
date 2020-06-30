@@ -242,7 +242,11 @@ pub fn unary_send<'a>() -> impl Parser<'a, Expression> {
     move |input: &'a [char]| {
         let (receiver, input) = primary().parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
-        let (signatures, input) = sep_by(many(spacing()), identifier()).parse(input)?;
+        let (signatures, input) = sep_by(
+            many(spacing()),
+            identifier().and_left(not(peek(exact(':')))),
+        )
+        .parse(input)?;
 
         let expr = signatures
             .into_iter()

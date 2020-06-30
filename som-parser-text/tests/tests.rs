@@ -149,7 +149,7 @@ fn expression_test_2() {
 
 #[test]
 fn primary_test() {
-    let tokens: Vec<char> = "[ (self fib: (n - 1)) + (self fib: (n - 2)) ]"
+    let tokens: Vec<char> = "[ self fib: (n - 1) + (self fib: (n - 2)) ]"
         .chars()
         .collect();
     let parser = primary();
@@ -165,52 +165,45 @@ fn primary_test() {
             parameters: vec![],
             locals: vec![],
             body: Body {
-                exprs: vec![Expression::Term(Term {
-                    body: Body {
-                        exprs: vec![Expression::Message(Message {
-                            receiver: Box::new(Expression::Reference(String::from("self"))),
-                            signature: String::from("fib:"),
-                            values: vec![Expression::BinaryOp(BinaryOp {
-                                op: String::from("+"),
-                                lhs: Box::new(Expression::Term(Term {
-                                    body: Body {
-                                        exprs: vec![Expression::BinaryOp(BinaryOp {
-                                            op: String::from("-"),
-                                            lhs: Box::new(Expression::Reference(String::from("n"))),
-                                            rhs: Box::new(Expression::Literal(Literal::Integer(1))),
-                                        })],
-                                        full_stopped: false,
-                                    }
-                                })),
-                                rhs: Box::new(Expression::Term(Term {
-                                    body: Body {
-                                        exprs: vec![Expression::Message(Message {
-                                            receiver: Box::new(Expression::Reference(
-                                                String::from("self")
-                                            )),
-                                            signature: String::from("fib:"),
-                                            values: vec![Expression::Term(Term {
-                                                body: Body {
-                                                    exprs: vec![Expression::BinaryOp(BinaryOp {
-                                                        op: String::from("-"),
-                                                        lhs: Box::new(Expression::Reference(
-                                                            String::from("n")
-                                                        )),
-                                                        rhs: Box::new(Expression::Literal(
-                                                            Literal::Integer(2)
-                                                        )),
-                                                    })],
-                                                    full_stopped: false,
-                                                }
+                exprs: vec![Expression::Message(Message {
+                    receiver: Box::new(Expression::Reference(String::from("self"))),
+                    signature: String::from("fib:"),
+                    values: vec![Expression::BinaryOp(BinaryOp {
+                        op: String::from("+"),
+                        lhs: Box::new(Expression::Term(Term {
+                            body: Body {
+                                exprs: vec![Expression::BinaryOp(BinaryOp {
+                                    op: String::from("-"),
+                                    lhs: Box::new(Expression::Reference(String::from("n"))),
+                                    rhs: Box::new(Expression::Literal(Literal::Integer(1))),
+                                })],
+                                full_stopped: false,
+                            }
+                        })),
+                        rhs: Box::new(Expression::Term(Term {
+                            body: Body {
+                                exprs: vec![Expression::Message(Message {
+                                    receiver: Box::new(Expression::Reference(String::from("self"))),
+                                    signature: String::from("fib:"),
+                                    values: vec![Expression::Term(Term {
+                                        body: Body {
+                                            exprs: vec![Expression::BinaryOp(BinaryOp {
+                                                op: String::from("-"),
+                                                lhs: Box::new(Expression::Reference(String::from(
+                                                    "n"
+                                                ))),
+                                                rhs: Box::new(Expression::Literal(
+                                                    Literal::Integer(2)
+                                                )),
                                             })],
-                                        })],
-                                        full_stopped: false,
-                                    }
-                                }))
-                            })],
-                        })],
-                        full_stopped: false
-                    }
+                                            full_stopped: false,
+                                        }
+                                    })],
+                                })],
+                                full_stopped: false,
+                            }
+                        }))
+                    })],
                 })],
                 full_stopped: false,
             }
