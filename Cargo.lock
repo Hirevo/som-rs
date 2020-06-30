@@ -206,6 +206,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "som-compiler"
+version = "0.1.0"
+dependencies = [
+ "anyhow 1.0.31 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-bigint 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "som-core 0.1.0",
+]
+
+[[package]]
 name = "som-core"
 version = "0.1.0"
 

@@ -1,0 +1,18 @@
+[package]
+name = "som-compiler"
+version = "0.1.0"
+description = "A bytecode compiler for the Simple Object Machine"
+authors = ["Nicolas Polomack <nmp21@kent.ac.uk>"]
+edition = "2018"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+# internal
+som-core = { path = "../som-core", version = "0.1.0" }
+
+# error handling
+anyhow = "1.0.31"
+
+# big integers
+num-bigint = "0.2.6"
