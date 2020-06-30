@@ -28,3 +28,21 @@ jobs:
       - name: Run test suite
         run: |
           ./target/release/som-interpreter -c core-lib/Smalltalk core-lib/TestSuite -- TestHarness
+
+  run_own_tests:
+    name: Run own tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout master branch
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: default
+          toolchain: stable
+      - name: Run all tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
