@@ -1,9 +1,8 @@
 use som_core::ast::*;
+use som_parser_core::combinators::*;
+use som_parser_core::Parser;
 
-use crate::combinators::*;
-use crate::parser::Parser;
-
-pub fn eof<'a>() -> impl Parser<'a, ()> {
+pub fn eof<'a>() -> impl Parser<(), &'a [char]> {
     move |input: &'a [char]| {
         if input.is_empty() {
             Some(((), input))
@@ -13,7 +12,7 @@ pub fn eof<'a>() -> impl Parser<'a, ()> {
     }
 }
 
-pub fn exact<'a>(ch: char) -> impl Parser<'a, char> {
+pub fn exact<'a>(ch: char) -> impl Parser<char, &'a [char]> {
     move |input: &'a [char]| {
         let (head, tail) = input.split_first()?;
         if *head == ch {
@@ -24,9 +23,9 @@ pub fn exact<'a>(ch: char) -> impl Parser<'a, char> {
     }
 }
 
-pub fn exact_str<'a, 'b: 'a>(string: &'b str) -> impl Parser<'a, ()> {
+pub fn exact_str<'a, 'b: 'a>(string: &'b str) -> impl Parser<(), &'a [char]> {
     move |mut input: &'a [char]| {
-        for parser in string.chars().map(exact) {
+        for mut parser in string.chars().map(exact) {
             let (_, new_input) = parser.parse(input)?;
             input = new_input;
         }
@@ -34,7 +33,7 @@ pub fn exact_str<'a, 'b: 'a>(string: &'b str) -> impl Parser<'a, ()> {
     }
 }
 
-pub fn one_of<'a, 'b: 'a>(string: &'b str) -> impl Parser<'a, char> {
+pub fn one_of<'a, 'b: 'a>(string: &'b str) -> impl Parser<char, &'a [char]> {
     move |input: &'a [char]| {
         let (head, tail) = input.split_first()?;
         if let Some(ch) = string.chars().find(|ch| ch == head) {
@@ -45,7 +44,7 @@ pub fn one_of<'a, 'b: 'a>(string: &'b str) -> impl Parser<'a, char> {
     }
 }
 
-pub fn not_exact<'a>(ch: char) -> impl Parser<'a, char> {
+pub fn not_exact<'a>(ch: char) -> impl Parser<char, &'a [char]> {
     move |input: &'a [char]| {
         let (head, tail) = input.split_first()?;
         if *head != ch {
@@ -56,7 +55,7 @@ pub fn not_exact<'a>(ch: char) -> impl Parser<'a, char> {
     }
 }
 
-pub fn whitespace<'a>() -> impl Parser<'a, char> {
+pub fn whitespace<'a>() -> impl Parser<char, &'a [char]> {
     move |input: &'a [char]| {
         let (head, tail) = input.split_first()?;
         if head.is_whitespace() {
@@ -67,19 +66,19 @@ pub fn whitespace<'a>() -> impl Parser<'a, char> {
     }
 }
 
-pub fn comment<'a>() -> impl Parser<'a, String> {
+pub fn comment<'a>() -> impl Parser<String, &'a [char]> {
     between(exact('"'), many(not_exact('"')), exact('"')).map(|chars| chars.into_iter().collect())
 }
 
-pub fn separator<'a>() -> impl Parser<'a, ()> {
+pub fn separator<'a>() -> impl Parser<(), &'a [char]> {
     exact_str("----").and(many(exact('-'))).map(|_| ())
 }
 
-pub fn spacing<'a>() -> impl Parser<'a, ()> {
+pub fn spacing<'a>() -> impl Parser<(), &'a [char]> {
     whitespace().map(|_| ()).or(comment().map(|_| ()))
 }
 
-pub fn digit<'a>() -> impl Parser<'a, i64> {
+pub fn digit<'a>() -> impl Parser<i64, &'a [char]> {
     move |input: &'a [char]| {
         let (head, tail) = input.split_first()?;
         match head {
@@ -98,7 +97,7 @@ pub fn digit<'a>() -> impl Parser<'a, i64> {
     }
 }
 
-pub fn integer<'a>() -> impl Parser<'a, i64> {
+pub fn integer<'a>() -> impl Parser<i64, &'a [char]> {
     optional(exact('-'))
         .and(some(digit()))
         .map(|(sign, digits)| {
@@ -107,7 +106,7 @@ pub fn integer<'a>() -> impl Parser<'a, i64> {
         })
 }
 
-pub fn double<'a>() -> impl Parser<'a, f64> {
+pub fn double<'a>() -> impl Parser<f64, &'a [char]> {
     move |input: &'a [char]| {
         let (sign, input) = optional(exact('-')).parse(input)?;
         let sign = if sign.is_some() { "-" } else { "" };
@@ -120,7 +119,7 @@ pub fn double<'a>() -> impl Parser<'a, f64> {
     }
 }
 
-pub fn lower<'a>() -> impl Parser<'a, char> {
+pub fn lower<'a>() -> impl Parser<char, &'a [char]> {
     move |input: &'a [char]| {
         let (head, tail) = input.split_first()?;
         if head.is_lowercase() {
@@ -131,7 +130,7 @@ pub fn lower<'a>() -> impl Parser<'a, char> {
     }
 }
 
-pub fn upper<'a>() -> impl Parser<'a, char> {
+pub fn upper<'a>() -> impl Parser<char, &'a [char]> {
     move |input: &'a [char]| {
         let (head, tail) = input.split_first()?;
         if head.is_uppercase() {
@@ -142,7 +141,7 @@ pub fn upper<'a>() -> impl Parser<'a, char> {
     }
 }
 
-pub fn digitc<'a>() -> impl Parser<'a, char> {
+pub fn digitc<'a>() -> impl Parser<char, &'a [char]> {
     move |input: &'a [char]| {
         let (head, tail) = input.split_first()?;
         match head {
@@ -152,7 +151,7 @@ pub fn digitc<'a>() -> impl Parser<'a, char> {
     }
 }
 
-pub fn single_operator<'a>() -> impl Parser<'a, char> {
+pub fn single_operator<'a>() -> impl Parser<char, &'a [char]> {
     move |input: &'a [char]| {
         let (head, tail) = input.split_first()?;
         match head {
@@ -164,17 +163,17 @@ pub fn single_operator<'a>() -> impl Parser<'a, char> {
     }
 }
 
-pub fn operator<'a>() -> impl Parser<'a, String> {
+pub fn operator<'a>() -> impl Parser<String, &'a [char]> {
     some(single_operator()).map(|chars| chars.into_iter().collect())
 }
 
-pub fn identifier<'a>() -> impl Parser<'a, String> {
+pub fn identifier<'a>() -> impl Parser<String, &'a [char]> {
     (lower().or(upper()))
         .and(many(lower().or(upper()).or(digitc()).or(exact('_'))))
         .map(|(fst, tail)| std::iter::once(fst).chain(tail).collect())
 }
 
-pub fn string<'a>() -> impl Parser<'a, String> {
+pub fn string<'a>() -> impl Parser<String, &'a [char]> {
     move |input: &'a [char]| {
         let single_char = exact('\\')
             .and(one_of("tbnrf\'\\"))
@@ -190,14 +189,13 @@ pub fn string<'a>() -> impl Parser<'a, String> {
                 _ => vec![a, b],
             })
             .or(not_exact('\'').map(|a| vec![a]));
-        let parser = between(exact('\''), many(single_char), exact('\''));
-        let (value, input) = parser.parse(input)?;
+        let (value, input) = between(exact('\''), many(single_char), exact('\'')).parse(input)?;
         let value: String = value.into_iter().flatten().collect();
         Some((value, input))
     }
 }
 
-pub fn symbol<'a>() -> impl Parser<'a, String> {
+pub fn symbol<'a>() -> impl Parser<String, &'a [char]> {
     exact('#').and_right(
         (some(keyword()).map(|words| words.into_iter().collect()))
             .or(identifier())
@@ -206,7 +204,7 @@ pub fn symbol<'a>() -> impl Parser<'a, String> {
     )
 }
 
-pub fn array<'a>() -> impl Parser<'a, Vec<Literal>> {
+pub fn array<'a>() -> impl Parser<Vec<Literal>, &'a [char]> {
     move |input: &'a [char]| {
         let (_, input) = exact('#').parse(input)?;
         let (_, input) = exact('(').parse(input)?;
@@ -218,7 +216,7 @@ pub fn array<'a>() -> impl Parser<'a, Vec<Literal>> {
     }
 }
 
-pub fn literal<'a>() -> impl Parser<'a, Literal> {
+pub fn literal<'a>() -> impl Parser<Literal, &'a [char]> {
     (double().map(Literal::Double))
         .or(integer().map(Literal::Integer))
         .or(string().map(Literal::String))
@@ -226,7 +224,7 @@ pub fn literal<'a>() -> impl Parser<'a, Literal> {
         .or(array().map(Literal::Array))
 }
 
-pub fn keyword<'a>() -> impl Parser<'a, String> {
+pub fn keyword<'a>() -> impl Parser<String, &'a [char]> {
     (lower().or(upper()))
         .and(many(lower().or(upper()).or(digitc()).or(exact('_'))))
         .and(exact(':'))
@@ -238,7 +236,7 @@ pub fn keyword<'a>() -> impl Parser<'a, String> {
         })
 }
 
-pub fn unary_send<'a>() -> impl Parser<'a, Expression> {
+pub fn unary_send<'a>() -> impl Parser<Expression, &'a [char]> {
     move |input: &'a [char]| {
         let (receiver, input) = primary().parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
@@ -262,7 +260,7 @@ pub fn unary_send<'a>() -> impl Parser<'a, Expression> {
     }
 }
 
-pub fn binary_send<'a>() -> impl Parser<'a, Expression> {
+pub fn binary_send<'a>() -> impl Parser<Expression, &'a [char]> {
     move |input: &'a [char]| {
         let (lhs, input) = unary_send().parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
@@ -285,7 +283,7 @@ pub fn binary_send<'a>() -> impl Parser<'a, Expression> {
     }
 }
 
-pub fn positional_send<'a>() -> impl Parser<'a, Expression> {
+pub fn positional_send<'a>() -> impl Parser<Expression, &'a [char]> {
     let parameters = move |input: &'a [char]| {
         let (_, input) = many(spacing()).parse(input)?;
         let (keyword, input) = keyword().parse(input)?;
@@ -312,7 +310,7 @@ pub fn positional_send<'a>() -> impl Parser<'a, Expression> {
     }
 }
 
-pub fn locals<'a>() -> impl Parser<'a, Vec<String>> {
+pub fn locals<'a>() -> impl Parser<Vec<String>, &'a [char]> {
     move |input: &'a [char]| {
         let (_, input) = exact('|').parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
@@ -323,7 +321,7 @@ pub fn locals<'a>() -> impl Parser<'a, Vec<String>> {
     }
 }
 
-pub fn body<'a>() -> impl Parser<'a, Body> {
+pub fn body<'a>() -> impl Parser<Body, &'a [char]> {
     move |input: &'a [char]| {
         let (exprs, input) = sep_by(
             exact('.').and(many(spacing())),
@@ -341,7 +339,7 @@ pub fn body<'a>() -> impl Parser<'a, Body> {
     }
 }
 
-pub fn block<'a>() -> impl Parser<'a, Expression> {
+pub fn block<'a>() -> impl Parser<Expression, &'a [char]> {
     let parameters = move |input: &'a [char]| {
         let parameter = move |input: &'a [char]| {
             let (_, input) = exact(':').parse(input)?;
@@ -372,7 +370,7 @@ pub fn block<'a>() -> impl Parser<'a, Expression> {
     }
 }
 
-pub fn term<'a>() -> impl Parser<'a, Expression> {
+pub fn term<'a>() -> impl Parser<Expression, &'a [char]> {
     move |input: &'a [char]| {
         let (_, input) = exact('(').parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
@@ -386,7 +384,7 @@ pub fn term<'a>() -> impl Parser<'a, Expression> {
     }
 }
 
-pub fn exit<'a>() -> impl Parser<'a, Expression> {
+pub fn exit<'a>() -> impl Parser<Expression, &'a [char]> {
     move |input: &'a [char]| {
         let (_, input) = exact('^').parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
@@ -397,18 +395,18 @@ pub fn exit<'a>() -> impl Parser<'a, Expression> {
     }
 }
 
-pub fn expression<'a>() -> impl Parser<'a, Expression> {
+pub fn expression<'a>() -> impl Parser<Expression, &'a [char]> {
     positional_send()
 }
 
-pub fn primary<'a>() -> impl Parser<'a, Expression> {
+pub fn primary<'a>() -> impl Parser<Expression, &'a [char]> {
     (identifier().map(Expression::Reference))
         .or(term())
         .or(block())
         .or(literal().map(Expression::Literal))
 }
 
-pub fn assignment<'a>() -> impl Parser<'a, Expression> {
+pub fn assignment<'a>() -> impl Parser<Expression, &'a [char]> {
     move |input: &'a [char]| {
         let (name, input) = identifier().parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
@@ -420,15 +418,15 @@ pub fn assignment<'a>() -> impl Parser<'a, Expression> {
     }
 }
 
-pub fn statement<'a>() -> impl Parser<'a, Expression> {
+pub fn statement<'a>() -> impl Parser<Expression, &'a [char]> {
     assignment().or(expression())
 }
 
-pub fn primitive<'a>() -> impl Parser<'a, MethodBody> {
+pub fn primitive<'a>() -> impl Parser<MethodBody, &'a [char]> {
     exact_str("primitive").map(|_| MethodBody::Primitive)
 }
 
-pub fn method_body<'a>() -> impl Parser<'a, MethodBody> {
+pub fn method_body<'a>() -> impl Parser<MethodBody, &'a [char]> {
     move |input: &'a [char]| {
         let (_, input) = exact('(').parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
@@ -442,7 +440,7 @@ pub fn method_body<'a>() -> impl Parser<'a, MethodBody> {
     }
 }
 
-pub fn unary_method_def<'a>() -> impl Parser<'a, MethodDef> {
+pub fn unary_method_def<'a>() -> impl Parser<MethodDef, &'a [char]> {
     move |input: &'a [char]| {
         let (signature, input) = identifier().parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
@@ -459,7 +457,7 @@ pub fn unary_method_def<'a>() -> impl Parser<'a, MethodDef> {
     }
 }
 
-pub fn positional_method_def<'a>() -> impl Parser<'a, MethodDef> {
+pub fn positional_method_def<'a>() -> impl Parser<MethodDef, &'a [char]> {
     let parameter = move |input: &'a [char]| {
         let (keyword, input) = keyword().parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
@@ -483,7 +481,7 @@ pub fn positional_method_def<'a>() -> impl Parser<'a, MethodDef> {
     }
 }
 
-pub fn operator_method_def<'a>() -> impl Parser<'a, MethodDef> {
+pub fn operator_method_def<'a>() -> impl Parser<MethodDef, &'a [char]> {
     move |input: &'a [char]| {
         let (signature, input) = operator().parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
@@ -502,14 +500,14 @@ pub fn operator_method_def<'a>() -> impl Parser<'a, MethodDef> {
     }
 }
 
-pub fn method_def<'a>() -> impl Parser<'a, MethodDef> {
+pub fn method_def<'a>() -> impl Parser<MethodDef, &'a [char]> {
     unary_method_def()
         .or(positional_method_def())
         .or(operator_method_def())
 }
 
-pub fn class_def<'a>() -> impl Parser<'a, ClassDef> {
-    let class_section = move |input: &'a [char]| {
+pub fn class_def<'a>() -> impl Parser<ClassDef, &'a [char]> {
+    let mut class_section = move |input: &'a [char]| {
         let (locals, input) = default(locals().and_left(many(spacing()))).parse(input)?;
         let (methods, input) = sep_by(many(spacing()), method_def()).parse(input)?;
         Some(((locals, methods), input))
@@ -547,7 +545,7 @@ pub fn class_def<'a>() -> impl Parser<'a, ClassDef> {
     }
 }
 
-pub fn file<'a>() -> impl Parser<'a, ClassDef> {
+pub fn file<'a>() -> impl Parser<ClassDef, &'a [char]> {
     move |input: &'a [char]| {
         let (_, input) = many(spacing()).parse(input)?;
         let (class_def, input) = class_def().parse(input)?;

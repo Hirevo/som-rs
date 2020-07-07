@@ -3,6 +3,7 @@ members = [
     "som-core",
     "som-interpreter",
     "som-lexer",
-    "som-parser-text",
+    "som-parser-core",
     "som-parser-symbols",
+    "som-parser-text",
 ]

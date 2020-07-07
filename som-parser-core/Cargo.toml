@@ -1,0 +1,10 @@
+[package]
+name = "som-parser-core"
+version = "0.1.0"
+description = "The parsing core library for the Simple Object Machine"
+authors = ["Nicolas Polomack <nmp21@kent.ac.uk>"]
+edition = "2018"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[dependencies]

@@ -6,7 +6,6 @@ use anyhow::Error;
 
 use som_lexer::{Lexer, Token};
 use som_parser::lang;
-use som_parser::Parser;
 
 use som_interpreter::evaluate::Evaluate;
 use som_interpreter::frame::FrameKind;
@@ -57,9 +56,9 @@ pub fn interactive(universe: &mut Universe, verbose: bool) -> Result<(), Error> 
         }
 
         let start = Instant::now();
-        let expr = match lang::expression().parse(tokens.as_slice()) {
-            Some((expr, rest)) if rest.is_empty() => expr,
-            Some(_) | None => {
+        let expr = match som_parser::apply(lang::expression(), tokens.as_slice()) {
+            Some(expr) => expr,
+            None => {
                 println!("ERROR: could not fully parse the given expression");
                 continue;
             }

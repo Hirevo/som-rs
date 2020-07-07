@@ -1,19 +1,20 @@
 use std::marker::PhantomData;
 
-use som_lexer::Token;
+/// Generic parser combinators.
+pub mod combinators;
 
 /// Defines a parser.
 ///
 /// It is basically a function that takes an input and returns a parsed result along with the rest of input (which can be parsed further).
-pub trait Parser<'a, T>: Sized {
+pub trait Parser<T, I>: Sized {
     /// Applies the parser on some input.
     ///
     /// It returns the parsed value and the rest of the unparsed input as `Some`, if successful.  
     /// Failing that, it returns `None`.  
-    fn parse(&self, input: &'a [Token]) -> Option<(T, &'a [Token])>;
+    fn parse(&mut self, input: I) -> Option<(T, I)>;
 
     /// Sequences two parsers, one after the other, collecting both results.
-    fn and<U, P: Parser<'a, U>>(self, parser: P) -> And<Self, P> {
+    fn and<U, P: Parser<U, I>>(self, parser: P) -> And<Self, P> {
         And {
             p1: self,
             p2: parser,
@@ -21,7 +22,7 @@ pub trait Parser<'a, T>: Sized {
     }
 
     /// Tries to apply the first parser, if it fails, it tries to apply the second parser.
-    fn or<P: Parser<'a, T>>(self, parser: P) -> Or<Self, P> {
+    fn or<P: Parser<T, I>>(self, parser: P) -> Or<Self, P> {
         Or {
             p1: self,
             p2: parser,
@@ -38,7 +39,7 @@ pub trait Parser<'a, T>: Sized {
     }
 
     /// Sequences two parsers, one after the other, but discards the output of the second one.
-    fn and_left<P: Parser<'a, U>, U>(self, parser: P) -> AndLeft<Self, P, U> {
+    fn and_left<P: Parser<U, I>, U>(self, parser: P) -> AndLeft<Self, P, U> {
         AndLeft {
             p1: self,
             p2: parser,
@@ -47,7 +48,7 @@ pub trait Parser<'a, T>: Sized {
     }
 
     /// Sequences two parsers, one after the other, but discards the output of the first one.
-    fn and_right<P: Parser<'a, U>, U>(self, parser: P) -> AndRight<Self, P, T> {
+    fn and_right<P: Parser<U, I>, U>(self, parser: P) -> AndRight<Self, P, T> {
         AndRight {
             p1: self,
             p2: parser,
@@ -62,12 +63,12 @@ pub struct And<A, B> {
     p2: B,
 }
 
-impl<'a, T1, T2, A, B> Parser<'a, (T1, T2)> for And<A, B>
+impl<T1, T2, A, B, I> Parser<(T1, T2), I> for And<A, B>
 where
-    A: Parser<'a, T1>,
-    B: Parser<'a, T2>,
+    A: Parser<T1, I>,
+    B: Parser<T2, I>,
 {
-    fn parse(&self, input: &'a [Token]) -> Option<((T1, T2), &'a [Token])> {
+    fn parse<'a>(&mut self, input: I) -> Option<((T1, T2), I)> {
         let (v1, input) = self.p1.parse(input)?;
         let (v2, input) = self.p2.parse(input)?;
         Some(((v1, v2), input))
@@ -80,13 +81,14 @@ pub struct Or<A, B> {
     p2: B,
 }
 
-impl<'a, T, A, B> Parser<'a, T> for Or<A, B>
+impl<T, A, B, I> Parser<T, I> for Or<A, B>
 where
-    A: Parser<'a, T>,
-    B: Parser<'a, T>,
+    I: Clone,
+    A: Parser<T, I>,
+    B: Parser<T, I>,
 {
-    fn parse(&self, input: &'a [Token]) -> Option<(T, &'a [Token])> {
-        self.p1.parse(input).or_else(|| self.p2.parse(input))
+    fn parse(&mut self, input: I) -> Option<(T, I)> {
+        self.p1.parse(input.clone()).or_else(|| self.p2.parse(input))
     }
 }
 
@@ -97,12 +99,12 @@ pub struct Map<P, F, T> {
     _phantom: PhantomData<T>,
 }
 
-impl<'a, P, T, F, U> Parser<'a, U> for Map<P, F, T>
+impl<P, T, F, U, I> Parser<U, I> for Map<P, F, T>
 where
-    P: Parser<'a, T>,
+    P: Parser<T, I>,
     F: Fn(T) -> U,
 {
-    fn parse(&self, input: &'a [Token]) -> Option<(U, &'a [Token])> {
+    fn parse<'a>(&mut self, input: I) -> Option<(U, I)> {
         let (value, input) = self.parser.parse(input)?;
         Some(((self.func)(value), input))
     }
@@ -115,12 +117,12 @@ pub struct AndLeft<A, B, U> {
     _phantom: PhantomData<U>,
 }
 
-impl<'a, A, B, T, U> Parser<'a, T> for AndLeft<A, B, U>
+impl<A, B, T, U, I> Parser<T, I> for AndLeft<A, B, U>
 where
-    A: Parser<'a, T>,
-    B: Parser<'a, U>,
+    A: Parser<T, I>,
+    B: Parser<U, I>,
 {
-    fn parse(&self, input: &'a [Token]) -> Option<(T, &'a [Token])> {
+    fn parse(&mut self, input: I) -> Option<(T, I)> {
         let (value, input) = self.p1.parse(input)?;
         let (_, input) = self.p2.parse(input)?;
         Some((value, input))
@@ -134,12 +136,12 @@ pub struct AndRight<A, B, T> {
     _phantom: PhantomData<T>,
 }
 
-impl<'a, A, B, T, U> Parser<'a, U> for AndRight<A, B, T>
+impl<A, B, T, U, I> Parser<U, I> for AndRight<A, B, T>
 where
-    A: Parser<'a, T>,
-    B: Parser<'a, U>,
+    A: Parser<T, I>,
+    B: Parser<U, I>,
 {
-    fn parse(&self, input: &'a [Token]) -> Option<(U, &'a [Token])> {
+    fn parse(&mut self, input: I) -> Option<(U, I)> {
         let (_, input) = self.p1.parse(input)?;
         let (value, input) = self.p2.parse(input)?;
         Some((value, input))
@@ -148,14 +150,14 @@ where
 
 /// Because a `Parser` is basically a function of the following signature.
 /// ```text
-/// (&[Token]) -> (T, &[Token])
+/// (I) -> (T, I)
 /// ```
-/// We can implement it for any `Fn(&[Token]) -> (T, &[Token])`.
-impl<'a, T, F> Parser<'a, T> for F
+/// We can implement it for any bare `Fn(I) -> (T, I)`.
+impl<T, F, I> Parser<T, I> for F
 where
-    F: Fn(&'a [Token]) -> Option<(T, &'a [Token])>,
+    F: FnMut(I) -> Option<(T, I)>,
 {
-    fn parse(&self, input: &'a [Token]) -> Option<(T, &'a [Token])> {
+    fn parse(&mut self, input: I) -> Option<(T, I)> {
         (self)(input)
     }
 }
