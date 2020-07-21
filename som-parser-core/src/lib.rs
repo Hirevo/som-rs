@@ -88,7 +88,9 @@ where
     B: Parser<T, I>,
 {
     fn parse(&mut self, input: I) -> Option<(T, I)> {
-        self.p1.parse(input.clone()).or_else(|| self.p2.parse(input))
+        self.p1
+            .parse(input.clone())
+            .or_else(|| self.p2.parse(input))
     }
 }
 
