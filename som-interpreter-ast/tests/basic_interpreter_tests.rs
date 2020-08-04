@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
-use som_interpreter::evaluate::Evaluate;
-use som_interpreter::frame::FrameKind;
-use som_interpreter::invokable::Return;
-use som_interpreter::universe::Universe;
-use som_interpreter::value::Value;
+use som_interpreter_ast::evaluate::Evaluate;
+use som_interpreter_ast::frame::FrameKind;
+use som_interpreter_ast::invokable::Return;
+use som_interpreter_ast::universe::Universe;
+use som_interpreter_ast::value::Value;
 use som_lexer::{Lexer, Token};
 
 use som_parser::lang;

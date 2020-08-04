@@ -11,9 +11,9 @@ use structopt::StructOpt;
 
 mod shell;
 
-use som_interpreter::invokable::Return;
-use som_interpreter::universe::Universe;
-use som_interpreter::value::Value;
+use som_interpreter_ast::invokable::Return;
+use som_interpreter_ast::universe::Universe;
+use som_interpreter_ast::value::Value;
 
 #[derive(Debug, Clone, PartialEq, StructOpt)]
 #[structopt(about, author)]

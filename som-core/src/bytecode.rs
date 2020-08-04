@@ -2,24 +2,23 @@ use std::fmt;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[rustfmt::skip]
 pub enum Bytecode {
-    Halt           = 0,
-    Dup            = 1,
-    PushLocal      = 2,
-    PushArgument   = 3,
-    PushField      = 4,
-    PushBlock      = 5,
-    PushConstant   = 6,
-    PushGlobal     = 7,
-    Pop            = 8,
-    PopLocal       = 9,
-    PopArgument    = 10,
-    PopField       = 11,
-    Send           = 12,
-    SuperSend      = 13,
-    ReturnLocal    = 14,
-    ReturnNonLocal = 15,
+    Halt,
+    Dup,
+    PushLocal(u8, u8),
+    PushArgument(u8, u8),
+    PushField(u8),
+    PushBlock(u8),
+    PushConstant(u8),
+    PushGlobal(u8),
+    Pop,
+    PopLocal(u8, u8),
+    PopArgument(u8, u8),
+    PopField(u8),
+    Send(u8),
+    SuperSend(u8),
+    ReturnLocal,
+    ReturnNonLocal,
 }
 
 impl Bytecode {
@@ -28,22 +27,22 @@ impl Bytecode {
     pub fn name(self) -> &'static str {
         // NAMES[self as usize]
         match self {
-            Self::Halt           => "HALT",
-            Self::Dup            => "DUP",
-            Self::PushLocal      => "PUSH_LOCAL",
-            Self::PushArgument   => "PUSH_ARGUMENT",
-            Self::PushField      => "PUSH_FIELD",
-            Self::PushBlock      => "PUSH_BLOCK",
-            Self::PushConstant   => "PUSH_CONSTANT",
-            Self::PushGlobal     => "PUSH_GLOBAL",
-            Self::Pop            => "POP",
-            Self::PopLocal       => "POP_LOCAL",
-            Self::PopArgument    => "POP_ARGUMENT",
-            Self::PopField       => "POP_FIELD",
-            Self::Send           => "SEND",
-            Self::SuperSend      => "SUPER_SEND",
-            Self::ReturnLocal    => "RETURN_LOCAL",
-            Self::ReturnNonLocal => "RETURN_NON_LOCAL",
+            Self::Halt               => "HALT",
+            Self::Dup                => "DUP",
+            Self::PushLocal(_, _)    => "PUSH_LOCAL",
+            Self::PushArgument(_, _) => "PUSH_ARGUMENT",
+            Self::PushField(_)       => "PUSH_FIELD",
+            Self::PushBlock(_)       => "PUSH_BLOCK",
+            Self::PushConstant(_)    => "PUSH_CONSTANT",
+            Self::PushGlobal(_)      => "PUSH_GLOBAL",
+            Self::Pop                => "POP",
+            Self::PopLocal(_, _)     => "POP_LOCAL",
+            Self::PopArgument(_, _)  => "POP_ARGUMENT",
+            Self::PopField(_)        => "POP_FIELD",
+            Self::Send(_)            => "SEND",
+            Self::SuperSend(_)       => "SUPER_SEND",
+            Self::ReturnLocal        => "RETURN_LOCAL",
+            Self::ReturnNonLocal     => "RETURN_NON_LOCAL",
         }
     }
 
@@ -52,69 +51,22 @@ impl Bytecode {
     pub fn padded_name(self) -> &'static str {
         // PADDED_NAMES[self as usize]
         match self {
-            Self::Halt           => "HALT            ",
-            Self::Dup            => "DUP             ",
-            Self::PushLocal      => "PUSH_LOCAL      ",
-            Self::PushArgument   => "PUSH_ARGUMENT   ",
-            Self::PushField      => "PUSH_FIELD      ",
-            Self::PushBlock      => "PUSH_BLOCK      ",
-            Self::PushConstant   => "PUSH_CONSTANT   ",
-            Self::PushGlobal     => "PUSH_GLOBAL     ",
-            Self::Pop            => "POP             ",
-            Self::PopLocal       => "POP_LOCAL       ",
-            Self::PopArgument    => "POP_ARGUMENT    ",
-            Self::PopField       => "POP_FIELD       ",
-            Self::Send           => "SEND            ",
-            Self::SuperSend      => "SUPER_SEND      ",
-            Self::ReturnLocal    => "RETURN_LOCAL    ",
-            Self::ReturnNonLocal => "RETURN_NON_LOCAL",
-        }
-    }
-
-    /// Get the number of bytes to read to process the instruction.
-    #[rustfmt::skip]
-    pub fn bytecode_len(self) -> usize {
-        match self {
-            Self::Halt           => 1,
-            Self::Dup            => 1,
-            Self::PushLocal      => 3,
-            Self::PushArgument   => 3,
-            Self::PushField      => 2,
-            Self::PushBlock      => 2,
-            Self::PushConstant   => 2,
-            Self::PushGlobal     => 2,
-            Self::Pop            => 1,
-            Self::PopLocal       => 3,
-            Self::PopArgument    => 3,
-            Self::PopField       => 2,
-            Self::Send           => 2,
-            Self::SuperSend      => 2,
-            Self::ReturnLocal    => 1,
-            Self::ReturnNonLocal => 1,
-        }
-    }
-
-    /// Attempt to convert a raw byte to an instruction.
-    #[rustfmt::skip]
-    pub fn from_byte(byte: u8) -> Option<Self> {
-        match byte {
-             0 => Some(Self::Halt),
-             1 => Some(Self::Dup),
-             2 => Some(Self::PushLocal),
-             3 => Some(Self::PushArgument),
-             4 => Some(Self::PushField),
-             5 => Some(Self::PushBlock),
-             6 => Some(Self::PushConstant),
-             7 => Some(Self::PushGlobal),
-             8 => Some(Self::Pop),
-             9 => Some(Self::PopLocal),
-            10 => Some(Self::PopArgument),
-            11 => Some(Self::PopField),
-            12 => Some(Self::Send),
-            13 => Some(Self::SuperSend),
-            14 => Some(Self::ReturnLocal),
-            15 => Some(Self::ReturnNonLocal),
-             _ => None,
+            Self::Halt               => "HALT            ",
+            Self::Dup                => "DUP             ",
+            Self::PushLocal(_, _)    => "PUSH_LOCAL      ",
+            Self::PushArgument(_, _) => "PUSH_ARGUMENT   ",
+            Self::PushField(_)       => "PUSH_FIELD      ",
+            Self::PushBlock(_)       => "PUSH_BLOCK      ",
+            Self::PushConstant(_)    => "PUSH_CONSTANT   ",
+            Self::PushGlobal(_)      => "PUSH_GLOBAL     ",
+            Self::Pop                => "POP             ",
+            Self::PopLocal(_, _)     => "POP_LOCAL       ",
+            Self::PopArgument(_, _)  => "POP_ARGUMENT    ",
+            Self::PopField(_)        => "POP_FIELD       ",
+            Self::Send(_)            => "SEND            ",
+            Self::SuperSend(_)       => "SUPER_SEND      ",
+            Self::ReturnLocal        => "RETURN_LOCAL    ",
+            Self::ReturnNonLocal     => "RETURN_NON_LOCAL",
         }
     }
 }
@@ -158,7 +110,25 @@ pub static PADDED_NAMES: [&str; 16] = [
 ];
 
 impl fmt::Display for Bytecode {
+    #[rustfmt::skip]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.name())
+        match self {
+            Self::Halt                      => write!(f, "HALT"),
+            Self::Dup                       => write!(f, "DUP"),
+            Self::PushLocal(up_idx, idx)    => write!(f, "PUSH_LOCAL {}, {}", up_idx, idx),
+            Self::PushArgument(up_idx, idx) => write!(f, "PUSH_ARGUMENT {}, {}", up_idx, idx),
+            Self::PushField(idx)            => write!(f, "PUSH_FIELD {}", idx),
+            Self::PushBlock(idx)            => write!(f, "PUSH_BLOCK {}", idx),
+            Self::PushConstant(idx)         => write!(f, "PUSH_CONSTANT {}", idx),
+            Self::PushGlobal(idx)           => write!(f, "PUSH_GLOBAL {}", idx),
+            Self::Pop                       => write!(f, "POP"),
+            Self::PopLocal(up_idx, idx)     => write!(f, "POP_LOCAL {}, {}", up_idx, idx),
+            Self::PopArgument(up_idx, idx)  => write!(f, "POP_ARGUMENT {}, {}", up_idx, idx),
+            Self::PopField(idx)             => write!(f, "POP_FIELD {}", idx),
+            Self::Send(idx)                 => write!(f, "SEND {}", idx),
+            Self::SuperSend(idx)            => write!(f, "SUPER_SEND {}", idx),
+            Self::ReturnLocal               => write!(f, "RETURN_LOCAL", ),
+            Self::ReturnNonLocal            => write!(f, "RETURN_NON_LOCAL", ),
+        }
     }
 }
