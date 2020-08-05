@@ -45,7 +45,7 @@ impl Interpreter {
         loop {
             let frame = match self.current_frame() {
                 Some(frame) => frame,
-                None => return dbg!(Some(Value::Nil)),
+                None => return Some(Value::Nil),
             };
 
             let opt_bytecode = frame.borrow().get_current_bytecode();
@@ -335,21 +335,12 @@ impl Interpreter {
                         .position(|live_frame| Rc::ptr_eq(&live_frame, &method_frame));
 
                     if let Some(count) = escaped_frames {
-                        dbg!(&value);
-                        match frame.borrow().kind() {
-                            FrameKind::Block { .. } => eprintln!("from: blk"),
-                            FrameKind::Method { method, .. } => eprintln!("from: '{}'", method.signature()),
-                        };
                         (0..count).for_each(|_| self.pop_frame());
                         self.pop_frame();
                         if let Some(frame) = self.current_frame() {
-                            match frame.borrow().kind() {
-                                FrameKind::Block { .. } => eprintln!("from: blk"),
-                                FrameKind::Method { method, .. } => eprintln!("to: '{}'", method.signature()),
-                            };
                             frame.borrow_mut().stack.push(value);
                         } else {
-                            return dbg!(Some(value));
+                            return Some(value);
                         }
                     } else {
                         // Block has escaped its method frame.

@@ -82,7 +82,11 @@ pub fn interactive(
         }
 
         let object_class = universe.object_class();
-        let class = match compiler::compile_class(&mut universe.interner, &class_def, Some(&object_class)) {
+        let class = match compiler::compile_class(
+            &mut universe.interner,
+            &class_def,
+            Some(&object_class),
+        ) {
             Some(class) => class,
             None => {
                 writeln!(&mut stdout, "could not compile expression")?;

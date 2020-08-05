@@ -18,7 +18,9 @@ pub mod block1 {
             Value::Block(block) => block,
         ]);
 
-        let kind = FrameKind::Block { block: block.clone() };
+        let kind = FrameKind::Block {
+            block: block.clone(),
+        };
 
         interpreter.push_frame(kind);
     }
@@ -57,7 +59,9 @@ pub mod block2 {
             argument => argument,
         ]);
 
-        let kind = FrameKind::Block { block: block.clone() };
+        let kind = FrameKind::Block {
+            block: block.clone(),
+        };
 
         let frame = interpreter.push_frame(kind);
         frame.borrow_mut().args.push(argument);
@@ -87,7 +91,9 @@ pub mod block3 {
             argument2 => argument2,
         ]);
 
-        let kind = FrameKind::Block { block: block.clone() };
+        let kind = FrameKind::Block {
+            block: block.clone(),
+        };
 
         let frame = interpreter.push_frame(kind);
         frame.borrow_mut().args.push(argument1);

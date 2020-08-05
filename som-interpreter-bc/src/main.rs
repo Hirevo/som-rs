@@ -11,8 +11,8 @@ use structopt::StructOpt;
 
 mod shell;
 
-use som_interpreter_bc::universe::Universe;
 use som_interpreter_bc::interpreter::Interpreter;
+use som_interpreter_bc::universe::Universe;
 use som_interpreter_bc::value::Value;
 
 #[derive(Debug, Clone, PartialEq, StructOpt)]
@@ -42,7 +42,7 @@ fn main() -> anyhow::Result<()> {
 
     let mut interpreter = Interpreter::new();
 
-    match dbg!(opts.file) {
+    match opts.file {
         None => {
             let mut universe = Universe::with_classpath(opts.classpath)?;
             shell::interactive(&mut interpreter, &mut universe, opts.verbose)?
@@ -80,7 +80,9 @@ fn main() -> anyhow::Result<()> {
                 .map(Value::String)
                 .collect();
 
-            universe.initialize(&mut interpreter, args).expect("issue running program");
+            universe
+                .initialize(&mut interpreter, args)
+                .expect("issue running program");
 
             interpreter.run(&mut universe);
 

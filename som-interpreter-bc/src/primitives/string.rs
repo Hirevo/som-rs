@@ -3,11 +3,11 @@ use std::convert::TryFrom;
 use std::hash::Hasher;
 use std::rc::Rc;
 
-use crate::{expect_args, reverse};
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
+use crate::{expect_args, reverse};
 
 fn length(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &str = "String>>#length";
@@ -54,7 +54,10 @@ fn hashcode(interpreter: &mut Interpreter, universe: &mut Universe) {
     //     Err(err) => panic!("'{}': {}", SIGNATURE, err),
     // }
 
-    frame.borrow_mut().stack.push(Value::Integer((hasher.finish() as i64).abs()))
+    frame
+        .borrow_mut()
+        .stack
+        .push(Value::Integer((hasher.finish() as i64).abs()))
 }
 
 fn is_letters(interpreter: &mut Interpreter, universe: &mut Universe) {
@@ -138,7 +141,10 @@ fn concatenate(interpreter: &mut Interpreter, universe: &mut Universe) {
         _ => panic!("'{}': wrong types", SIGNATURE),
     };
 
-    frame.borrow_mut().stack.push(Value::String(Rc::new(format!("{}{}", s1, s2))))
+    frame
+        .borrow_mut()
+        .stack
+        .push(Value::String(Rc::new(format!("{}{}", s1, s2))))
 }
 
 fn as_symbol(interpreter: &mut Interpreter, universe: &mut Universe) {
@@ -151,9 +157,10 @@ fn as_symbol(interpreter: &mut Interpreter, universe: &mut Universe) {
     ]);
 
     match value {
-        Value::String(ref value) => {
-            frame.borrow_mut().stack.push(Value::Symbol(universe.intern_symbol(value.as_str())))
-        }
+        Value::String(ref value) => frame
+            .borrow_mut()
+            .stack
+            .push(Value::Symbol(universe.intern_symbol(value.as_str()))),
         Value::Symbol(sym) => frame.borrow_mut().stack.push(Value::Symbol(sym)),
         _ => panic!("'{}': invalid self type", SIGNATURE),
     }

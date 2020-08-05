@@ -80,7 +80,10 @@ fn global(interpreter: &mut Interpreter, universe: &mut Universe) {
         Value::Symbol(sym) => sym,
     ]);
 
-    frame.borrow_mut().stack.push(universe.lookup_global(sym).unwrap_or(Value::Nil))
+    frame
+        .borrow_mut()
+        .stack
+        .push(universe.lookup_global(sym).unwrap_or(Value::Nil))
 }
 
 fn global_put(interpreter: &mut Interpreter, universe: &mut Universe) {

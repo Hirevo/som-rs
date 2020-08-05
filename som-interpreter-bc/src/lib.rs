@@ -19,14 +19,14 @@ pub mod hashcode;
 pub mod instance;
 /// Facilities for string interning.
 pub mod interner;
+/// The interpreter's main data structure.
+pub mod interpreter;
 /// Facilities for manipulating class methods.
 pub mod method;
 /// Definitions for all supported primitives.
 pub mod primitives;
 /// The collection of all known SOM objects during execution.
 pub mod universe;
-/// The interpreter's main data structure.
-pub mod interpreter;
 /// Facilities for manipulating values.
 pub mod value;
 

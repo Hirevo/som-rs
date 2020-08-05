@@ -64,11 +64,7 @@ impl Value {
     }
 
     /// Search for a given method for this value.
-    pub fn lookup_method(
-        &self,
-        universe: &Universe,
-        signature: Interned,
-    ) -> Option<Rc<Method>> {
+    pub fn lookup_method(&self, universe: &Universe, signature: Interned) -> Option<Rc<Method>> {
         self.class(universe).borrow().lookup_method(signature)
     }
 

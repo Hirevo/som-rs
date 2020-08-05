@@ -5,11 +5,11 @@ use num_traits::ToPrimitive;
 use rand::distributions::Uniform;
 use rand::Rng;
 
-use crate::{expect_args, reverse};
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
+use crate::{expect_args, reverse};
 
 macro_rules! demote {
     ($frame:expr, $expr:expr) => {{
