@@ -6,7 +6,6 @@ use anyhow::Error;
 
 use som_lexer::{Lexer, Token};
 use som_parser::lang;
-use som_parser::Parser;
 
 use som_interpreter_bc::compiler;
 use som_interpreter_bc::frame::FrameKind;
@@ -64,9 +63,9 @@ pub fn interactive(
         }
 
         let start = Instant::now();
-        let class_def = match lang::class_def().parse(tokens.as_slice()) {
-            Some((expr, rest)) if rest.is_empty() => expr,
-            Some(_) | None => {
+        let class_def = match som_parser::apply(lang::class_def(), tokens.as_slice()) {
+            Some(class_def) => class_def,
+            None => {
                 println!("ERROR: could not fully parse the given expression");
                 continue;
             }

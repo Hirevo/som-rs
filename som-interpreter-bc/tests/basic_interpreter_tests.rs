@@ -7,7 +7,6 @@ use som_interpreter_bc::universe::Universe;
 use som_interpreter_bc::value::Value;
 use som_lexer::{Lexer, Token};
 use som_parser::lang;
-use som_parser::Parser;
 
 fn setup_universe() -> Universe {
     let classpath = vec![
@@ -140,12 +139,7 @@ fn basic_interpreter_tests() {
             "could not fully tokenize test expression"
         );
 
-        let (class_def, rest) = lang::class_def().parse(tokens.as_slice()).unwrap();
-        assert!(
-            rest.is_empty(),
-            "could not fully parse test expression: {:?}",
-            rest
-        );
+        let class_def = som_parser::apply(lang::class_def(), tokens.as_slice()).unwrap();
 
         let object_class = universe.object_class();
         let class =
