@@ -10,11 +10,6 @@ jobs:
   rebench:
     name: Run and report benchmarks
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        interpreter:
-          - som-interpreter-ast
-          - som-interpreter-bc
     steps:
       - name: Checkout master branch
         uses: actions/checkout@v2
