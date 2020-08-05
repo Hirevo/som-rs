@@ -29,9 +29,6 @@ struct Options {
     #[structopt(short, long)]
     classpath: Vec<PathBuf>,
 
-    // /// enable disassembling
-    // #[structopt(short = "d")]
-    // disassembling: bool,
     /// Enable verbose output (with timing information).
     #[structopt(short = "v")]
     verbose: bool,
@@ -71,11 +68,11 @@ fn main() -> anyhow::Result<()> {
             });
 
             // let class = universe.load_class_from_path(file)?;
-            // let instance = som_interpreter::instance::Instance::from_class(class);
-            // let instance = Value::Instance(Rc::new(std::cell::RefCell::new(instance)));
+            // let instance = Instance::from_class(class);
+            // let instance = Value::Instance(Rc::new(RefCell::new(instance)));
 
             // let invokable = instance.lookup_method(&universe, "run").unwrap();
-            // let output = som_interpreter::invokable::Invoke::invoke(invokable.as_ref(), &mut universe, vec![instance]);
+            // let output = invokable.invoke(&mut universe, vec![instance]);
 
             match output {
                 Return::Exception(message) => println!("ERROR: {}", message),

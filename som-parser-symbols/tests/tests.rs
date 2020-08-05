@@ -1,8 +1,8 @@
 use som_core::ast::*;
 use som_lexer::{Lexer, Token};
-use som_parser_symbols::combinators::*;
+use som_parser_core::combinators::*;
+use som_parser_core::Parser;
 use som_parser_symbols::lang::*;
-use som_parser_symbols::Parser;
 
 #[test]
 fn literal_tests() {
@@ -10,8 +10,7 @@ fn literal_tests() {
         .skip_whitespace(true)
         .collect();
 
-    let parser = many(literal());
-    let result = parser.parse(tokens.as_slice());
+    let result = many(literal()).parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (literals, rest) = result.unwrap();
@@ -31,8 +30,7 @@ fn expression_test_1() {
         .skip_whitespace(true)
         .collect();
 
-    let parser = expression();
-    let result = parser.parse(tokens.as_slice());
+    let result = expression().parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (expression, rest) = result.unwrap();
@@ -59,8 +57,7 @@ fn block_test() {
             .skip_whitespace(true)
             .collect();
 
-    let parser = block();
-    let result = parser.parse(tokens.as_slice());
+    let result = block().parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (block, rest) = result.unwrap();
@@ -99,8 +96,7 @@ fn expression_test_2() {
     .skip_whitespace(true)
     .collect();
 
-    let parser = expression();
-    let result = parser.parse(tokens.as_slice());
+    let result = expression().parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (expression, rest) = result.unwrap();
@@ -159,8 +155,8 @@ fn primary_test() {
     let tokens: Vec<Token> = Lexer::new("[ self fib: (n - 1) + (self fib: (n - 2)) ]")
         .skip_whitespace(true)
         .collect();
-    let parser = primary();
-    let result = parser.parse(tokens.as_slice());
+
+    let result = primary().parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (primary, rest) = result.unwrap();

@@ -6,8 +6,8 @@ use som_interpreter::invokable::Return;
 use som_interpreter::universe::Universe;
 use som_interpreter::value::Value;
 use som_lexer::{Lexer, Token};
+
 use som_parser::lang;
-use som_parser::Parser;
 
 fn setup_universe() -> Universe {
     let classpath = vec![
@@ -140,12 +140,7 @@ fn basic_interpreter_tests() {
             "could not fully tokenize test expression"
         );
 
-        let (ast, rest) = lang::expression().parse(tokens.as_slice()).unwrap();
-        assert!(
-            rest.is_empty(),
-            "could not fully parse test expression: {:?}",
-            rest
-        );
+        let ast = som_parser::apply(lang::expression(), tokens.as_slice()).unwrap();
 
         let kind = FrameKind::Method {
             holder: universe.system_class(),

@@ -1,8 +1,7 @@
 use som_core::ast::*;
 use som_lexer::Token;
-
-use crate::combinators::*;
-use crate::parser::Parser;
+use som_parser_core::combinators::*;
+use som_parser_core::Parser;
 
 macro_rules! opaque {
     ($expr:expr) => {{
@@ -11,7 +10,7 @@ macro_rules! opaque {
 }
 
 /// A parser that expects to be nothing left in its input.
-pub fn eof<'a>() -> impl Parser<'a, ()> {
+pub fn eof<'a>() -> impl Parser<(), &'a [Token]> {
     move |input: &'a [Token]| {
         if input.is_empty() {
             Some(((), input))
@@ -21,7 +20,7 @@ pub fn eof<'a>() -> impl Parser<'a, ()> {
     }
 }
 
-pub fn exact<'a>(ch: Token) -> impl Parser<'a, ()> {
+pub fn exact<'a>(ch: Token) -> impl Parser<(), &'a [Token]> {
     move |input: &'a [Token]| {
         let (head, tail) = input.split_first()?;
         if *head == ch {
@@ -32,7 +31,7 @@ pub fn exact<'a>(ch: Token) -> impl Parser<'a, ()> {
     }
 }
 
-pub fn exact_ident<'a, 'b: 'a>(string: &'b str) -> impl Parser<'a, ()> {
+pub fn exact_ident<'a, 'b: 'a>(string: &'b str) -> impl Parser<(), &'a [Token]> {
     move |input: &'a [Token]| {
         let (head, tail) = input.split_first()?;
         match head {
@@ -42,7 +41,7 @@ pub fn exact_ident<'a, 'b: 'a>(string: &'b str) -> impl Parser<'a, ()> {
     }
 }
 
-pub fn big_integer<'a>() -> impl Parser<'a, String> {
+pub fn big_integer<'a>() -> impl Parser<String, &'a [Token]> {
     move |input: &'a [Token]| {
         let (sign, input) = optional(exact(Token::Minus)).parse(input)?;
         let sign = if sign.is_some() { "-" } else { "" };
@@ -55,7 +54,7 @@ pub fn big_integer<'a>() -> impl Parser<'a, String> {
     }
 }
 
-pub fn integer<'a>() -> impl Parser<'a, i64> {
+pub fn integer<'a>() -> impl Parser<i64, &'a [Token]> {
     move |input: &'a [Token]| {
         let (sign, input) = optional(exact(Token::Minus)).parse(input)?;
         let sign = if sign.is_some() { -1 } else { 1 };
@@ -68,7 +67,7 @@ pub fn integer<'a>() -> impl Parser<'a, i64> {
     }
 }
 
-pub fn double<'a>() -> impl Parser<'a, f64> {
+pub fn double<'a>() -> impl Parser<f64, &'a [Token]> {
     move |input: &'a [Token]| {
         let (sign, input) = optional(exact(Token::Minus)).parse(input)?;
         let sign = if sign.is_some() { -1.0 } else { 1.0 };
@@ -81,7 +80,7 @@ pub fn double<'a>() -> impl Parser<'a, f64> {
     }
 }
 
-pub fn single_operator<'a>() -> impl Parser<'a, &'static str> {
+pub fn single_operator<'a>() -> impl Parser<&'static str, &'a [Token]> {
     move |input: &'a [Token]| {
         let (head, tail) = input.split_first()?;
         match head {
@@ -104,7 +103,7 @@ pub fn single_operator<'a>() -> impl Parser<'a, &'static str> {
     }
 }
 
-pub fn operator_sequence<'a>() -> impl Parser<'a, String> {
+pub fn operator_sequence<'a>() -> impl Parser<String, &'a [Token]> {
     move |input: &'a [Token]| {
         let (head, tail) = input.split_first()?;
         match head {
@@ -114,11 +113,11 @@ pub fn operator_sequence<'a>() -> impl Parser<'a, String> {
     }
 }
 
-pub fn operator<'a>() -> impl Parser<'a, String> {
+pub fn operator<'a>() -> impl Parser<String, &'a [Token]> {
     single_operator().map(String::from).or(operator_sequence())
 }
 
-pub fn identifier<'a>() -> impl Parser<'a, String> {
+pub fn identifier<'a>() -> impl Parser<String, &'a [Token]> {
     move |input: &'a [Token]| {
         let (head, tail) = input.split_first()?;
         match head {
@@ -128,7 +127,7 @@ pub fn identifier<'a>() -> impl Parser<'a, String> {
     }
 }
 
-pub fn string<'a>() -> impl Parser<'a, String> {
+pub fn string<'a>() -> impl Parser<String, &'a [Token]> {
     move |input: &'a [Token]| {
         let (head, tail) = input.split_first()?;
         match head {
@@ -138,7 +137,7 @@ pub fn string<'a>() -> impl Parser<'a, String> {
     }
 }
 
-pub fn symbol<'a>() -> impl Parser<'a, String> {
+pub fn symbol<'a>() -> impl Parser<String, &'a [Token]> {
     move |input: &'a [Token]| {
         let (head, tail) = input.split_first()?;
         match head {
@@ -148,7 +147,7 @@ pub fn symbol<'a>() -> impl Parser<'a, String> {
     }
 }
 
-pub fn array<'a>() -> impl Parser<'a, Vec<Literal>> {
+pub fn array<'a>() -> impl Parser<Vec<Literal>, &'a [Token]> {
     move |input: &'a [Token]| {
         between(
             exact(Token::NewArray),
@@ -159,7 +158,7 @@ pub fn array<'a>() -> impl Parser<'a, Vec<Literal>> {
     }
 }
 
-pub fn literal<'a>() -> impl Parser<'a, Literal> {
+pub fn literal<'a>() -> impl Parser<Literal, &'a [Token]> {
     (double().map(Literal::Double))
         .or(integer().map(Literal::Integer))
         .or(big_integer().map(Literal::BigInteger))
@@ -168,7 +167,7 @@ pub fn literal<'a>() -> impl Parser<'a, Literal> {
         .or(array().map(Literal::Array))
 }
 
-pub fn keyword<'a>() -> impl Parser<'a, String> {
+pub fn keyword<'a>() -> impl Parser<String, &'a [Token]> {
     move |input: &'a [Token]| {
         let (head, tail) = input.split_first()?;
         match head {
@@ -178,7 +177,7 @@ pub fn keyword<'a>() -> impl Parser<'a, String> {
     }
 }
 
-pub fn unary_send<'a>() -> impl Parser<'a, Expression> {
+pub fn unary_send<'a>() -> impl Parser<Expression, &'a [Token]> {
     opaque!(primary())
         .and(many(identifier()))
         .map(|(receiver, signatures)| {
@@ -194,7 +193,7 @@ pub fn unary_send<'a>() -> impl Parser<'a, Expression> {
         })
 }
 
-pub fn binary_send<'a>() -> impl Parser<'a, Expression> {
+pub fn binary_send<'a>() -> impl Parser<Expression, &'a [Token]> {
     unary_send()
         .and(many(operator().and(unary_send().map(Box::new))))
         .map(|(lhs, operands)| {
@@ -208,7 +207,7 @@ pub fn binary_send<'a>() -> impl Parser<'a, Expression> {
         })
 }
 
-pub fn positional_send<'a>() -> impl Parser<'a, Expression> {
+pub fn positional_send<'a>() -> impl Parser<Expression, &'a [Token]> {
     binary_send()
         .and(many(keyword().and(binary_send())))
         .map(|(receiver, pairs)| {
@@ -226,7 +225,7 @@ pub fn positional_send<'a>() -> impl Parser<'a, Expression> {
         })
 }
 
-pub fn body<'a>() -> impl Parser<'a, Body> {
+pub fn body<'a>() -> impl Parser<Body, &'a [Token]> {
     sep_by(exact(Token::Period), exit().or(statement()))
         .and(optional(exact(Token::Period)))
         .map(|(exprs, stopped)| Body {
@@ -235,19 +234,19 @@ pub fn body<'a>() -> impl Parser<'a, Body> {
         })
 }
 
-pub fn locals<'a>() -> impl Parser<'a, Vec<String>> {
+pub fn locals<'a>() -> impl Parser<Vec<String>, &'a [Token]> {
     between(exact(Token::Or), many(identifier()), exact(Token::Or))
 }
 
-pub fn parameter<'a>() -> impl Parser<'a, String> {
+pub fn parameter<'a>() -> impl Parser<String, &'a [Token]> {
     exact(Token::Colon).and_right(identifier())
 }
 
-pub fn parameters<'a>() -> impl Parser<'a, Vec<String>> {
+pub fn parameters<'a>() -> impl Parser<Vec<String>, &'a [Token]> {
     some(parameter()).and_left(exact(Token::Or))
 }
 
-pub fn block<'a>() -> impl Parser<'a, Expression> {
+pub fn block<'a>() -> impl Parser<Expression, &'a [Token]> {
     between(
         exact(Token::NewBlock),
         default(parameters()).and(default(locals())).and(body()),
@@ -262,44 +261,44 @@ pub fn block<'a>() -> impl Parser<'a, Expression> {
     })
 }
 
-pub fn term<'a>() -> impl Parser<'a, Expression> {
+pub fn term<'a>() -> impl Parser<Expression, &'a [Token]> {
     between(exact(Token::NewTerm), body(), exact(Token::EndTerm))
         .map(|body| Expression::Term(Term { body }))
 }
 
-pub fn exit<'a>() -> impl Parser<'a, Expression> {
+pub fn exit<'a>() -> impl Parser<Expression, &'a [Token]> {
     exact(Token::Exit)
         .and_right(statement())
         .map(|expr| Expression::Exit(Box::new(expr)))
 }
 
-pub fn expression<'a>() -> impl Parser<'a, Expression> {
+pub fn expression<'a>() -> impl Parser<Expression, &'a [Token]> {
     positional_send()
 }
 
-pub fn primary<'a>() -> impl Parser<'a, Expression> {
+pub fn primary<'a>() -> impl Parser<Expression, &'a [Token]> {
     (identifier().map(Expression::Reference))
         .or(term())
         .or(block())
         .or(literal().map(Expression::Literal))
 }
 
-pub fn assignment<'a>() -> impl Parser<'a, Expression> {
+pub fn assignment<'a>() -> impl Parser<Expression, &'a [Token]> {
     identifier()
         .and_left(exact(Token::Assign))
         .and(opaque!(statement()))
         .map(|(name, expr)| Expression::Assignment(name, Box::new(expr)))
 }
 
-pub fn statement<'a>() -> impl Parser<'a, Expression> {
+pub fn statement<'a>() -> impl Parser<Expression, &'a [Token]> {
     assignment().or(expression())
 }
 
-pub fn primitive<'a>() -> impl Parser<'a, MethodBody> {
+pub fn primitive<'a>() -> impl Parser<MethodBody, &'a [Token]> {
     exact(Token::Primitive).map(|_| MethodBody::Primitive)
 }
 
-pub fn method_body<'a>() -> impl Parser<'a, MethodBody> {
+pub fn method_body<'a>() -> impl Parser<MethodBody, &'a [Token]> {
     between(
         exact(Token::NewTerm),
         default(locals()).and(body()),
@@ -308,7 +307,7 @@ pub fn method_body<'a>() -> impl Parser<'a, MethodBody> {
     .map(|(locals, body)| MethodBody::Body { locals, body })
 }
 
-pub fn unary_method_def<'a>() -> impl Parser<'a, MethodDef> {
+pub fn unary_method_def<'a>() -> impl Parser<MethodDef, &'a [Token]> {
     identifier()
         .and_left(exact(Token::Equal))
         .and(primitive().or(method_body()))
@@ -319,7 +318,7 @@ pub fn unary_method_def<'a>() -> impl Parser<'a, MethodDef> {
         })
 }
 
-pub fn positional_method_def<'a>() -> impl Parser<'a, MethodDef> {
+pub fn positional_method_def<'a>() -> impl Parser<MethodDef, &'a [Token]> {
     some(keyword().and(identifier()))
         .and_left(exact(Token::Equal))
         .and(primitive().or(method_body()))
@@ -334,7 +333,7 @@ pub fn positional_method_def<'a>() -> impl Parser<'a, MethodDef> {
         })
 }
 
-pub fn operator_method_def<'a>() -> impl Parser<'a, MethodDef> {
+pub fn operator_method_def<'a>() -> impl Parser<MethodDef, &'a [Token]> {
     operator()
         .and(identifier())
         .and_left(exact(Token::Equal))
@@ -346,13 +345,13 @@ pub fn operator_method_def<'a>() -> impl Parser<'a, MethodDef> {
         })
 }
 
-pub fn method_def<'a>() -> impl Parser<'a, MethodDef> {
+pub fn method_def<'a>() -> impl Parser<MethodDef, &'a [Token]> {
     unary_method_def()
         .or(positional_method_def())
         .or(operator_method_def())
 }
 
-pub fn class_def<'a>() -> impl Parser<'a, ClassDef> {
+pub fn class_def<'a>() -> impl Parser<ClassDef, &'a [Token]> {
     identifier()
         .and_left(exact(Token::Equal))
         .and(optional(identifier()))
@@ -378,6 +377,6 @@ pub fn class_def<'a>() -> impl Parser<'a, ClassDef> {
         })
 }
 
-pub fn file<'a>() -> impl Parser<'a, ClassDef> {
+pub fn file<'a>() -> impl Parser<ClassDef, &'a [Token]> {
     class_def().and_left(eof())
 }

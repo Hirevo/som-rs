@@ -229,11 +229,16 @@ name = "som-lexer"
 version = "0.1.0"
 
 [[package]]
+name = "som-parser-core"
+version = "0.1.0"
+
+[[package]]
 name = "som-parser-symbols"
 version = "0.1.0"
 dependencies = [
  "som-core 0.1.0",
  "som-lexer 0.1.0",
+ "som-parser-core 0.1.0",
 ]
 
 [[package]]
@@ -241,6 +246,7 @@ name = "som-parser-text"
 version = "0.1.0"
 dependencies = [
  "som-core 0.1.0",
+ "som-parser-core 0.1.0",
 ]
 
 [[package]]

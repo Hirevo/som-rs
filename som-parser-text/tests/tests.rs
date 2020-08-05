@@ -1,14 +1,13 @@
 use som_core::ast::*;
-use som_parser_text::combinators::*;
+use som_parser_core::combinators::*;
+use som_parser_core::Parser;
 use som_parser_text::lang::*;
-use som_parser_text::Parser;
 
 #[test]
 fn literal_tests() {
     let tokens: Vec<char> = "1.2 5 #foo 'test'".chars().collect();
 
-    let parser = sep_by(spacing(), literal());
-    let result = parser.parse(tokens.as_slice());
+    let result = sep_by(spacing(), literal()).parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (literals, rest) = result.unwrap();
@@ -26,8 +25,7 @@ fn literal_tests() {
 fn expression_test_1() {
     let tokens: Vec<char> = "3 + counter get".chars().collect();
 
-    let parser = expression();
-    let result = parser.parse(tokens.as_slice());
+    let result = expression().parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (expression, rest) = result.unwrap();
@@ -53,8 +51,7 @@ fn block_test() {
         .chars()
         .collect();
 
-    let parser = block();
-    let result = parser.parse(tokens.as_slice());
+    let result = block().parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (block, rest) = result.unwrap();
@@ -92,8 +89,7 @@ fn expression_test_2() {
             .chars()
             .collect();
 
-    let parser = expression();
-    let result = parser.parse(tokens.as_slice());
+    let result = expression().parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (expression, rest) = result.unwrap();
@@ -152,8 +148,8 @@ fn primary_test() {
     let tokens: Vec<char> = "[ self fib: (n - 1) + (self fib: (n - 2)) ]"
         .chars()
         .collect();
-    let parser = primary();
-    let result = parser.parse(tokens.as_slice());
+
+    let result = primary().parse(tokens.as_slice());
 
     assert!(result.is_some(), "input did not parse successfully");
     let (primary, rest) = result.unwrap();
