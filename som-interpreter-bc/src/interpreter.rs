@@ -258,10 +258,10 @@ impl Interpreter {
                     };
                     let signature = universe.lookup_symbol(symbol);
                     let nb_params = nb_params(signature);
-                    let self_value = frame.borrow().get_self();
 
-                    let method = self_value
-                        .class(universe)
+                    let method = frame
+                        .borrow()
+                        .get_method_holder()
                         .borrow()
                         .super_class()
                         .unwrap()
