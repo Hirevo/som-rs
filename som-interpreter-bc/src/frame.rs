@@ -48,30 +48,32 @@ impl Frame {
         match &kind {
             FrameKind::Block { block } => {
                 let locals = block.locals.iter().map(|_| Value::Nil).collect();
+                let stack = Vec::with_capacity(block.stack_size);
                 Self {
                     kind,
                     locals,
+                    stack,
                     args: vec![],
-                    stack: vec![],
                     bytecode_idx: 0,
                 }
             }
             FrameKind::Method { method, .. } => {
                 if let MethodKind::Defined(env) = method.kind() {
                     let locals = env.locals.iter().map(|_| Value::Nil).collect();
+                    let stack = Vec::with_capacity(env.stack_size);
                     Self {
                         kind,
                         locals,
+                        stack,
                         args: vec![],
-                        stack: vec![],
                         bytecode_idx: 0,
                     }
                 } else {
                     Self {
                         kind,
+                        stack: vec![],
                         locals: vec![],
                         args: vec![],
-                        stack: vec![],
                         bytecode_idx: 0,
                     }
                 }
