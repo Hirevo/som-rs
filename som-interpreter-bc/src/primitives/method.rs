@@ -7,14 +7,12 @@ use crate::{expect_args, reverse};
 fn holder(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Method>>#holder";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         Value::Invokable(invokable) => invokable,
     ]);
 
     match invokable.holder().upgrade() {
-        Some(holder) => frame.borrow_mut().stack.push(Value::Class(holder)),
+        Some(holder) => interpreter.stack.push(Value::Class(holder)),
         None => panic!("'{}': method sholder has been collected", SIGNATURE),
     }
 }
@@ -22,22 +20,18 @@ fn holder(interpreter: &mut Interpreter, _: &mut Universe) {
 fn signature(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &str = "Method>>#signature";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         Value::Invokable(invokable) => invokable,
     ]);
 
     let sym = universe.intern_symbol(invokable.signature());
-    frame.borrow_mut().stack.push(Value::Symbol(sym))
+    interpreter.stack.push(Value::Symbol(sym))
 }
 
 fn invoke_on_with(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &str = "Method>>#invokeOn:with:";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         Value::Invokable(invokable) => invokable,
         receiver => receiver,
         Value::Array(args) => args,

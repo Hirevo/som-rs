@@ -29,11 +29,11 @@ pub type PrimitiveFn = fn(interpreter: &mut Interpreter, universe: &mut Universe
 
 #[macro_export]
 macro_rules! reverse {
-    ($signature:expr, $frame:expr, [], [ $( $ptrn:pat $( => $name:ident )? ),* $(,)? ]) => {
+    ($signature:expr, $interpreter:expr, [], [ $( $ptrn:pat $( => $name:ident )? ),* $(,)? ]) => {
         #[allow(unused_mut)]
         let ($($(mut $name,)?)*) = {
             $(#[allow(unreachable_patterns)]
-            $(let $name =)? match $frame.borrow_mut().stack.pop() {
+            $(let $name =)? match $interpreter.stack.pop() {
                 Some($ptrn) => {$($name)?},
                 Some(_) => panic!("'{}': wrong type", $signature),
                 None => panic!("'{}': missing argument", $signature),

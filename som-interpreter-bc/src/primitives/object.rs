@@ -11,25 +11,17 @@ use crate::{expect_args, reverse};
 fn class(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &'static str = "Object>>#class";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         object => object,
     ]);
 
-    frame
-        .borrow_mut()
-        .stack
-        .push(Value::Class(object.class(universe)));
+    interpreter.stack.push(Value::Class(object.class(universe)));
 }
 
 fn object_size(interpreter: &mut Interpreter, _: &mut Universe) {
     const _: &'static str = "Object>>#objectSize";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    frame
-        .borrow_mut()
+    interpreter
         .stack
         .push(Value::Integer(std::mem::size_of::<Value>() as i64));
 }
@@ -37,9 +29,7 @@ fn object_size(interpreter: &mut Interpreter, _: &mut Universe) {
 fn hashcode(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &'static str = "Object>>#hashcode";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         value => value,
     ]);
 
@@ -47,28 +37,24 @@ fn hashcode(interpreter: &mut Interpreter, _: &mut Universe) {
     value.hash(&mut hasher);
     let hash = (hasher.finish() as i64).abs();
 
-    frame.borrow_mut().stack.push(Value::Integer(hash));
+    interpreter.stack.push(Value::Integer(hash));
 }
 
 fn eq(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &'static str = "Object>>#==";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
         b => b,
     ]);
 
-    frame.borrow_mut().stack.push(Value::Boolean(a == b));
+    interpreter.stack.push(Value::Boolean(a == b));
 }
 
 fn perform(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &'static str = "Object>>#perform:";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         object => object,
         Value::Symbol(sym) => sym,
     ]);
@@ -100,9 +86,7 @@ fn perform(interpreter: &mut Interpreter, universe: &mut Universe) {
 fn perform_with_arguments(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &'static str = "Object>>#perform:withArguments:";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         object => object,
         Value::Symbol(sym) => sym,
         Value::Array(arr) => arr,
@@ -139,9 +123,7 @@ fn perform_with_arguments(interpreter: &mut Interpreter, universe: &mut Universe
 fn perform_in_super_class(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &'static str = "Object>>#perform:inSuperclass:";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         object => object,
         Value::Symbol(sym) => sym,
         Value::Class(class) => class,
@@ -173,9 +155,7 @@ fn perform_in_super_class(interpreter: &mut Interpreter, universe: &mut Universe
 fn perform_with_arguments_in_super_class(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &'static str = "Object>>#perform:withArguments:inSuperclass:";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         object => object,
         Value::Symbol(sym) => sym,
         Value::Array(arr) => arr,
@@ -213,9 +193,7 @@ fn perform_with_arguments_in_super_class(interpreter: &mut Interpreter, universe
 fn inst_var_at(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &'static str = "Object>>#instVarAt:";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         object => object,
         Value::Integer(index) => index,
     ]);
@@ -227,15 +205,13 @@ fn inst_var_at(interpreter: &mut Interpreter, _: &mut Universe) {
 
     let local = object.lookup_local(index).unwrap_or(Value::Nil);
 
-    frame.borrow_mut().stack.push(local);
+    interpreter.stack.push(local);
 }
 
 fn inst_var_at_put(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &'static str = "Object>>#instVarAt:put:";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         object => object,
         Value::Integer(index) => index,
         value => value,
@@ -251,7 +227,7 @@ fn inst_var_at_put(interpreter: &mut Interpreter, _: &mut Universe) {
         .map(|_| value)
         .unwrap_or(Value::Nil);
 
-    frame.borrow_mut().stack.push(local);
+    interpreter.stack.push(local);
 }
 
 /// Search for a primitive matching the given signature.

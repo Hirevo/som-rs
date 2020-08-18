@@ -15,6 +15,8 @@ use crate::SOMRef;
 pub struct Interpreter {
     /// The interpreter's stack frames.
     pub frames: Vec<SOMRef<Frame>>,
+    /// The evaluation stack.
+    pub stack: Vec<Value>,
     /// The time record of the interpreter's creation.
     pub start_time: Instant,
 }
@@ -23,6 +25,7 @@ impl Interpreter {
     pub fn new() -> Self {
         Self {
             frames: vec![],
+            stack: vec![],
             start_time: Instant::now(),
         }
     }
@@ -53,8 +56,7 @@ impl Interpreter {
                 Some(bytecode) => bytecode,
                 None => {
                     self.pop_frame();
-                    self.current_frame()
-                        .map(|frame| frame.borrow_mut().stack.push(Value::Nil));
+                    self.stack.push(Value::Nil);
                     continue;
                 }
             };
@@ -66,8 +68,8 @@ impl Interpreter {
                     return Some(Value::Nil);
                 }
                 Bytecode::Dup => {
-                    let value = frame.borrow().stack.last().cloned().unwrap();
-                    frame.borrow_mut().stack.push(value);
+                    let value = self.stack.last().cloned().unwrap();
+                    self.stack.push(value);
                 }
                 Bytecode::PushLocal(up_idx, idx) => {
                     let mut from = frame.clone();
@@ -81,7 +83,7 @@ impl Interpreter {
                         from = temp;
                     }
                     let value = from.borrow().lookup_local(idx as usize).unwrap();
-                    frame.borrow_mut().stack.push(value);
+                    self.stack.push(value);
                 }
                 Bytecode::PushArgument(up_idx, idx) => {
                     let mut from = frame.clone();
@@ -95,7 +97,7 @@ impl Interpreter {
                         from = temp;
                     }
                     let value = from.borrow().lookup_argument(idx as usize).unwrap();
-                    frame.borrow_mut().stack.push(value);
+                    self.stack.push(value);
                 }
                 Bytecode::PushField(idx) => {
                     let holder = frame.borrow().get_method_holder();
@@ -105,7 +107,7 @@ impl Interpreter {
                         let self_value = frame.borrow().get_self();
                         self_value.lookup_local(idx as usize).unwrap()
                     };
-                    frame.borrow_mut().stack.push(value);
+                    self.stack.push(value);
                 }
                 Bytecode::PushBlock(idx) => {
                     let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
@@ -114,12 +116,12 @@ impl Interpreter {
                         _ => return None,
                     };
                     block.frame.replace(Rc::clone(frame));
-                    frame.borrow_mut().stack.push(Value::Block(Rc::new(block)));
+                    self.stack.push(Value::Block(Rc::new(block)));
                 }
                 Bytecode::PushConstant(idx) => {
                     let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
                     let value = convert_literal(frame, literal).unwrap();
-                    frame.borrow_mut().stack.push(value);
+                    self.stack.push(value);
                 }
                 Bytecode::PushGlobal(idx) => {
                     let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
@@ -128,18 +130,18 @@ impl Interpreter {
                         _ => return None,
                     };
                     if let Some(value) = universe.lookup_global(symbol) {
-                        frame.borrow_mut().stack.push(value);
+                        self.stack.push(value);
                     } else {
                         let self_value = frame.borrow().get_self();
                         universe.unknown_global(self, self_value, symbol).unwrap();
                     }
                 }
                 Bytecode::Pop => {
-                    frame.borrow_mut().stack.pop();
+                    self.stack.pop();
                 }
                 Bytecode::PopLocal(up_idx, idx) => {
-                    let value = frame.borrow_mut().stack.pop().unwrap();
-                    let mut from = frame.clone();
+                    let value = self.stack.pop().unwrap();
+                    let mut from = self.current_frame().unwrap().clone();
                     for _ in 0..up_idx {
                         let temp = match from.borrow().kind() {
                             FrameKind::Block { block } => block.frame.clone().unwrap(),
@@ -152,8 +154,8 @@ impl Interpreter {
                     from.borrow_mut().assign_local(idx as usize, value).unwrap();
                 }
                 Bytecode::PopArgument(up_idx, idx) => {
-                    let value = frame.borrow_mut().stack.pop().unwrap();
-                    let mut from = frame.clone();
+                    let value = self.stack.pop().unwrap();
+                    let mut from = self.current_frame().unwrap().clone();
                     for _ in 0..up_idx {
                         let temp = match from.borrow().kind() {
                             FrameKind::Block { block } => block.frame.clone().unwrap(),
@@ -170,7 +172,8 @@ impl Interpreter {
                         .unwrap();
                 }
                 Bytecode::PopField(idx) => {
-                    let value = frame.borrow_mut().stack.pop().unwrap();
+                    let value = self.stack.pop().unwrap();
+                    let frame = self.current_frame().unwrap();
                     let holder = frame.borrow().get_method_holder();
                     if holder.borrow().is_static {
                         holder
@@ -192,8 +195,7 @@ impl Interpreter {
                     };
                     let signature = universe.lookup_symbol(symbol);
                     let nb_params = nb_params(signature);
-                    let method = frame
-                        .borrow()
+                    let method = self
                         .stack
                         .iter()
                         .nth_back(nb_params)
@@ -206,10 +208,10 @@ impl Interpreter {
                                 let mut args = Vec::with_capacity(nb_params + 1);
 
                                 for _ in 0..nb_params {
-                                    let arg = frame.borrow_mut().stack.pop().unwrap();
+                                    let arg = self.stack.pop().unwrap();
                                     args.push(arg);
                                 }
-                                let self_value = frame.borrow_mut().stack.pop().unwrap();
+                                let self_value = self.stack.pop().unwrap();
                                 args.push(self_value.clone());
 
                                 args.reverse();
@@ -235,10 +237,10 @@ impl Interpreter {
                         let mut args = Vec::with_capacity(nb_params + 1);
 
                         for _ in 0..nb_params {
-                            let arg = frame.borrow_mut().stack.pop().unwrap();
+                            let arg = self.stack.pop().unwrap();
                             args.push(arg);
                         }
-                        let self_value = frame.borrow_mut().stack.pop().unwrap();
+                        let self_value = self.stack.pop().unwrap();
 
                         args.reverse();
 
@@ -274,10 +276,10 @@ impl Interpreter {
                                 let mut args = Vec::with_capacity(nb_params + 1);
 
                                 for _ in 0..nb_params {
-                                    let arg = frame.borrow_mut().stack.pop().unwrap();
+                                    let arg = self.stack.pop().unwrap();
                                     args.push(arg);
                                 }
-                                let self_value = frame.borrow_mut().stack.pop().unwrap();
+                                let self_value = self.stack.pop().unwrap();
                                 args.push(self_value.clone());
 
                                 args.reverse();
@@ -303,10 +305,10 @@ impl Interpreter {
                         let mut args = Vec::with_capacity(nb_params + 1);
 
                         for _ in 0..nb_params {
-                            let arg = frame.borrow_mut().stack.pop().unwrap();
+                            let arg = self.stack.pop().unwrap();
                             args.push(arg);
                         }
-                        let self_value = frame.borrow_mut().stack.pop().unwrap();
+                        let self_value = self.stack.pop().unwrap();
 
                         args.reverse();
 
@@ -317,16 +319,13 @@ impl Interpreter {
                     }
                 }
                 Bytecode::ReturnLocal => {
-                    let value = frame.borrow_mut().stack.pop().unwrap();
+                    let value = self.stack.pop().unwrap();
                     self.pop_frame();
-                    if let Some(frame) = self.current_frame() {
-                        frame.borrow_mut().stack.push(value);
-                    } else {
-                        return Some(value);
-                    }
+                    self.stack.push(value);
                 }
                 Bytecode::ReturnNonLocal => {
-                    let value = frame.borrow_mut().stack.pop().unwrap();
+                    let value = self.stack.pop().unwrap();
+                    let frame = self.current_frame().unwrap();
                     let method_frame = Frame::method_frame(&frame);
                     let escaped_frames = self
                         .frames
@@ -337,11 +336,7 @@ impl Interpreter {
                     if let Some(count) = escaped_frames {
                         (0..count).for_each(|_| self.pop_frame());
                         self.pop_frame();
-                        if let Some(frame) = self.current_frame() {
-                            frame.borrow_mut().stack.push(value);
-                        } else {
-                            return Some(value);
-                        }
+                        self.stack.push(value);
                     } else {
                         // Block has escaped its method frame.
                         let instance = frame.borrow().get_self();
