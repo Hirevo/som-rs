@@ -327,7 +327,7 @@ impl Interpreter {
         ) -> Option<Rc<Method>> {
             match frame.borrow().kind() {
                 FrameKind::Block { block } => {
-                    let mut inline_cache = block.inline_cache.borrow_mut();
+                    let mut inline_cache = block.blk_info.inline_cache.borrow_mut();
 
                     // SAFETY: this access is actually safe because the bytecode compiler
                     // makes sure the cache has as many entries as there are bytecode instructions,
