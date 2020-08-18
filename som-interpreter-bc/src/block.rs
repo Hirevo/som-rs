@@ -12,16 +12,21 @@ use crate::universe::Universe;
 use crate::value::Value;
 use crate::SOMRef;
 
+#[derive(Clone)]
+pub struct BlockInfo {
+    pub locals: Vec<Value>,
+    pub literals: Vec<Literal>,
+    pub body: Vec<Bytecode>,
+    pub nb_params: usize,
+    pub inline_cache: RefCell<Vec<Option<(*const Class, Rc<Method>)>>>,
+}
+
 /// Represents an executable block.
 #[derive(Clone)]
 pub struct Block {
     /// Reference to the captured stack frame.
     pub frame: Option<SOMRef<Frame>>,
-    pub locals: Vec<Value>,
-    pub literals: Vec<Literal>,
-    pub body: Vec<Bytecode>,
-    pub nb_params: usize,
-    pub inline_cache: Rc<RefCell<Vec<Option<(*const Class, Rc<Method>)>>>>,
+    pub blk_info: Rc<BlockInfo>,
 }
 
 impl Block {
@@ -37,7 +42,7 @@ impl Block {
 
     /// Retrieve the number of parameters this block accepts.
     pub fn nb_parameters(&self) -> usize {
-        self.nb_params
+        self.blk_info.nb_params
     }
 }
 
