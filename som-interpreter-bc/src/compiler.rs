@@ -7,6 +7,7 @@ use std::rc::{Rc, Weak};
 
 use indexmap::{IndexMap, IndexSet};
 use num_bigint::BigInt;
+use smartstring::alias::String as SmallString;
 
 use som_core::ast;
 use som_core::bytecode::Bytecode;
@@ -21,7 +22,7 @@ use crate::SOMRef;
 #[derive(Debug, Clone)]
 pub enum Literal {
     Symbol(Interned),
-    String(Rc<String>),
+    String(SmallString),
     Double(f64),
     Integer(i64),
     BigInteger(BigInt),
@@ -290,7 +291,7 @@ impl MethodCodegen for ast::Expression {
                         ast::Literal::Symbol(val) => {
                             Literal::Symbol(ctxt.intern_symbol(val.as_str()))
                         }
-                        ast::Literal::String(val) => Literal::String(Rc::new(val.clone())),
+                        ast::Literal::String(val) => Literal::String(val.into()),
                         ast::Literal::Double(val) => Literal::Double(*val),
                         ast::Literal::Integer(val) => Literal::Integer(*val),
                         ast::Literal::BigInteger(val) => Literal::BigInteger(val.parse().unwrap()),

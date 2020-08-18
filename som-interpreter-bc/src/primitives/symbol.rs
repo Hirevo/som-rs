@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
@@ -15,9 +13,9 @@ fn as_string(interpreter: &mut Interpreter, universe: &mut Universe) {
         Value::Symbol(sym) => sym,
     ]);
 
-    frame.borrow_mut().stack.push(Value::String(Rc::new(
-        universe.lookup_symbol(sym).to_string(),
-    )));
+    frame.borrow_mut().stack.push(Value::String(
+        universe.lookup_symbol(sym).to_string().into(),
+    ));
 }
 
 /// Search for a primitive matching the given signature.
