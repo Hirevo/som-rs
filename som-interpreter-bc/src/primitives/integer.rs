@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use num_bigint::{BigInt, Sign};
 use num_traits::ToPrimitive;
 use rand::distributions::Uniform;
@@ -71,7 +69,10 @@ fn as_string(interpreter: &mut Interpreter, _: &mut Universe) {
     };
 
     {
-        frame.borrow_mut().stack.push(Value::String(Rc::new(value)));
+        frame
+            .borrow_mut()
+            .stack
+            .push(Value::String(value.to_string().into()));
         return;
     }
 }

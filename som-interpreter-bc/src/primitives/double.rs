@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
@@ -49,7 +47,7 @@ fn as_string(interpreter: &mut Interpreter, _: &mut Universe) {
     frame
         .borrow_mut()
         .stack
-        .push(Value::String(Rc::new(value.to_string())));
+        .push(Value::String(value.to_string().into()));
 }
 
 fn as_integer(interpreter: &mut Interpreter, _: &mut Universe) {

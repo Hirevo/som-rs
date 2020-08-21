@@ -29,3 +29,6 @@ num-traits = "0.2.11"
 
 # random numbers
 rand = "0.7.3"
+
+# small string optimisation
+smartstring = "0.2.3"

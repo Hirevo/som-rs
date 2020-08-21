@@ -4,7 +4,6 @@
 #![warn(missing_docs)]
 
 use std::path::PathBuf;
-use std::rc::Rc;
 
 use anyhow::anyhow;
 use structopt::StructOpt;
@@ -76,7 +75,7 @@ fn main() -> anyhow::Result<()> {
 
             let args = std::iter::once(String::from(file_stem))
                 .chain(opts.args.iter().cloned())
-                .map(Rc::new)
+                .map(Into::into)
                 .map(Value::String)
                 .collect();
 

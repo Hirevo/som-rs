@@ -2,6 +2,7 @@ use std::fmt;
 use std::rc::Rc;
 
 use num_bigint::BigInt;
+use smartstring::alias::String as SmallString;
 
 use crate::block::Block;
 use crate::class::Class;
@@ -29,7 +30,7 @@ pub enum Value {
     /// An interned symbol value.
     Symbol(Interned),
     /// A string value.
-    String(Rc<String>),
+    String(SmallString),
     /// An array of values.
     Array(SOMRef<Vec<Self>>),
     /// A block value, ready to be evaluated.
