@@ -2,6 +2,7 @@
 //! This is the bytecode compiler for the Simple Object Machine.
 //!
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::rc::{Rc, Weak};
 
@@ -410,6 +411,7 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
                     locals: ctxt.inner.locals.iter().map(|_| Value::Nil).collect(),
                     literals: ctxt.inner.literals.into_iter().collect(),
                     body: ctxt.inner.body.unwrap_or_default(),
+                    inline_cache: RefCell::new(HashMap::new()),
                 };
                 MethodKind::Defined(env)
             }
@@ -450,6 +452,7 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
         literals: ctxt.literals.into_iter().collect(),
         body: ctxt.body.unwrap_or_default(),
         nb_params: ctxt.args.len(),
+        inline_cache: Rc::new(RefCell::new(HashMap::new())),
     };
 
     // println!("(system) compiled block !");

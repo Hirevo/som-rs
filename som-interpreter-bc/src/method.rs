@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
@@ -18,6 +20,7 @@ pub struct MethodEnv {
     pub locals: Vec<Value>,
     pub literals: Vec<Literal>,
     pub body: Vec<Bytecode>,
+    pub inline_cache: RefCell<HashMap<(*const Class, usize), Rc<Method>>>,
 }
 
 /// The kind of a class method.

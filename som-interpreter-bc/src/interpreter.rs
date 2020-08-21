@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::hash_map::Entry;
 use std::rc::Rc;
 use std::time::Instant;
 
@@ -43,11 +44,12 @@ impl Interpreter {
 
     pub fn run(&mut self, universe: &mut Universe) -> Option<Value> {
         loop {
-            let frame = match self.current_frame() {
+            let frame = match self.current_frame().map(Rc::clone) {
                 Some(frame) => frame,
                 None => return Some(Value::Nil),
             };
 
+            let bytecode_idx = frame.borrow().bytecode_idx;
             let opt_bytecode = frame.borrow().get_current_bytecode();
             let bytecode = match opt_bytecode {
                 Some(bytecode) => bytecode,
@@ -113,12 +115,12 @@ impl Interpreter {
                         Literal::Block(blk) => Block::clone(&blk),
                         _ => return None,
                     };
-                    block.frame.replace(Rc::clone(frame));
+                    block.frame.replace(Rc::clone(&frame));
                     frame.borrow_mut().stack.push(Value::Block(Rc::new(block)));
                 }
                 Bytecode::PushConstant(idx) => {
                     let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
-                    let value = convert_literal(frame, literal).unwrap();
+                    let value = convert_literal(&frame, literal).unwrap();
                     frame.borrow_mut().stack.push(value);
                 }
                 Bytecode::PushGlobal(idx) => {
@@ -192,13 +194,43 @@ impl Interpreter {
                     };
                     let signature = universe.lookup_symbol(symbol);
                     let nb_params = nb_params(signature);
-                    let method = frame
-                        .borrow()
-                        .stack
-                        .iter()
-                        .nth_back(nb_params)
-                        .unwrap()
-                        .lookup_method(universe, symbol);
+                    let method = {
+                        let borrow = frame.borrow();
+                        let receiver = borrow.stack.iter().nth_back(nb_params)?;
+                        let receiver_class = receiver.class(universe);
+                        let cache_key = (receiver_class.as_ptr() as *const _, bytecode_idx);
+                        match frame.borrow().kind() {
+                            FrameKind::Block { block } => {
+                                match block.inline_cache.borrow_mut().entry(cache_key) {
+                                    Entry::Occupied(entry) => Some(Rc::clone(entry.get())),
+                                    Entry::Vacant(entry) => {
+                                        let method = receiver_class.borrow().lookup_method(symbol);
+                                        if let Some(method) = method.as_ref() {
+                                            entry.insert(Rc::clone(&method));
+                                        }
+                                        method
+                                    }
+                                }
+                            }
+                            FrameKind::Method { method, .. } => {
+                                if let MethodKind::Defined(env) = method.kind() {
+                                    match env.inline_cache.borrow_mut().entry(cache_key) {
+                                        Entry::Occupied(entry) => Some(Rc::clone(entry.get())),
+                                        Entry::Vacant(entry) => {
+                                            let method =
+                                                receiver_class.borrow().lookup_method(symbol);
+                                            if let Some(method) = method.as_ref() {
+                                                entry.insert(Rc::clone(&method));
+                                            }
+                                            method
+                                        }
+                                    }
+                                } else {
+                                    receiver_class.borrow().lookup_method(symbol)
+                                }
+                            }
+                        }
+                    };
 
                     if let Some(method) = method {
                         match method.kind() {
@@ -215,13 +247,11 @@ impl Interpreter {
                                 args.reverse();
 
                                 let holder = method.holder.upgrade().unwrap();
-                                self.push_frame(FrameKind::Method {
+                                let frame = self.push_frame(FrameKind::Method {
                                     self_value,
                                     method,
                                     holder,
                                 });
-
-                                let frame = self.current_frame().unwrap();
                                 frame.borrow_mut().args = args;
                             }
                             MethodKind::Primitive(func) => {
@@ -258,15 +288,42 @@ impl Interpreter {
                     };
                     let signature = universe.lookup_symbol(symbol);
                     let nb_params = nb_params(signature);
+                    let holder = frame.borrow().get_method_holder();
+                    let method = {
+                        let super_class = holder.borrow().super_class()?;
+                        let cache_key = (super_class.as_ptr() as *const _, bytecode_idx);
 
-                    let method = frame
-                        .borrow()
-                        .get_method_holder()
-                        .borrow()
-                        .super_class()
-                        .unwrap()
-                        .borrow()
-                        .lookup_method(symbol);
+                        match frame.borrow().kind() {
+                            FrameKind::Block { block } => {
+                                match block.inline_cache.borrow_mut().entry(cache_key) {
+                                    Entry::Occupied(entry) => Some(Rc::clone(entry.get())),
+                                    Entry::Vacant(entry) => {
+                                        let method = super_class.borrow().lookup_method(symbol);
+                                        if let Some(method) = method.as_ref() {
+                                            entry.insert(Rc::clone(&method));
+                                        }
+                                        method
+                                    }
+                                }
+                            }
+                            FrameKind::Method { method, .. } => {
+                                if let MethodKind::Defined(env) = method.kind() {
+                                    match env.inline_cache.borrow_mut().entry(cache_key) {
+                                        Entry::Occupied(entry) => Some(Rc::clone(entry.get())),
+                                        Entry::Vacant(entry) => {
+                                            let method = super_class.borrow().lookup_method(symbol);
+                                            if let Some(method) = method.as_ref() {
+                                                entry.insert(Rc::clone(&method));
+                                            }
+                                            method
+                                        }
+                                    }
+                                } else {
+                                    super_class.borrow().lookup_method(symbol)
+                                }
+                            }
+                        }
+                    };
 
                     if let Some(method) = method {
                         match method.kind() {
@@ -283,13 +340,11 @@ impl Interpreter {
                                 args.reverse();
 
                                 let holder = method.holder.upgrade().unwrap();
-                                self.push_frame(FrameKind::Method {
+                                let frame = self.push_frame(FrameKind::Method {
                                     self_value,
                                     method,
                                     holder,
                                 });
-
-                                let frame = self.current_frame().unwrap();
                                 frame.borrow_mut().args = args;
                             }
                             MethodKind::Primitive(func) => {
