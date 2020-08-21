@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Interned","An interned string."],["Interner","A string interner."]]});

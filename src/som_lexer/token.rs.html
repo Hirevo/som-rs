@@ -1,0 +1,155 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source to the Rust file `som-lexer/src/token.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>token.rs.html -- source</title><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../dark.css"><link rel="stylesheet" type="text/css" href="../../light.css" id="themeStyle"><script src="../../storage.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="shortcut icon" href="../../favicon.ico"><style type="text/css">#crate-search{background-image:url("../../down-arrow.svg");}</style></head><body class="rustdoc source"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><a href='../../som_lexer/index.html'><div class='logo-container'><img src='../../rust-logo.png' alt='logo'></div></a></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!"><img src="../../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices"></div></div><script src="../../theme.js"></script><nav class="sub"><form class="search-form"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" disabled autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><a id="settings-menu" href="../../settings.html"><img src="../../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><pre class="line-numbers"><span id="1"> 1</span>
+<span id="2"> 2</span>
+<span id="3"> 3</span>
+<span id="4"> 4</span>
+<span id="5"> 5</span>
+<span id="6"> 6</span>
+<span id="7"> 7</span>
+<span id="8"> 8</span>
+<span id="9"> 9</span>
+<span id="10">10</span>
+<span id="11">11</span>
+<span id="12">12</span>
+<span id="13">13</span>
+<span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+</pre><div class="example-wrap"><pre class="rust ">
+<span class="doccomment">/// Represents a token from the lexer.</span>
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">PartialEq</span>)]</span>
+<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">Token</span> {
+    <span class="doccomment">/// A tilde, the bitwise &#39;not&#39; operator (`~`).</span>
+    <span class="ident">Not</span>,
+    <span class="doccomment">/// A ampersand, the binary &#39;and&#39; operator (`&amp;`).</span>
+    <span class="ident">And</span>,
+    <span class="doccomment">/// A vertical bar, the binary &#39;or&#39; operator (`|`).</span>
+    <span class="ident">Or</span>,
+    <span class="doccomment">/// A star, the multiplication operator (`*`).</span>
+    <span class="ident">Star</span>,
+    <span class="doccomment">/// A forward slash, the division operator (`/`).</span>
+    <span class="ident">Div</span>,
+    <span class="doccomment">/// A backward slash (`\\`).</span>
+    <span class="ident">Mod</span>,
+    <span class="doccomment">/// A plus, the addition operator (&#39;+&#39;).</span>
+    <span class="ident">Plus</span>,
+    <span class="doccomment">/// A minus sign, the substraction operator (`-`)</span>
+    <span class="ident">Minus</span>,
+    <span class="doccomment">/// An equal sign, the equality operator (`=`).</span>
+    <span class="ident">Equal</span>,
+    <span class="doccomment">/// A greater-than sign, the greater-than operator (`&gt;`).</span>
+    <span class="ident">More</span>,
+    <span class="doccomment">/// A lesser-than sign, the lesser-than operator (`&gt;`).</span>
+    <span class="ident">Less</span>,
+    <span class="doccomment">/// A comma (`,`).</span>
+    <span class="ident">Comma</span>,
+    <span class="doccomment">/// An at-sign (`@`).</span>
+    <span class="ident">At</span>,
+    <span class="doccomment">/// A percentage sign, the modulo operator (`%`).</span>
+    <span class="ident">Per</span>,
+    <span class="doccomment">/// An opening square-bracket (`[`).</span>
+    <span class="ident">NewBlock</span>,
+    <span class="doccomment">/// A closing square-bracket (`]`).</span>
+    <span class="ident">EndBlock</span>,
+    <span class="doccomment">/// A colon (`:`).</span>
+    <span class="ident">Colon</span>,
+    <span class="doccomment">/// A period, the statement terminator (`.`).</span>
+    <span class="ident">Period</span>,
+    <span class="doccomment">/// A caret, the return operator (`^`).</span>
+    <span class="ident">Exit</span>,
+    <span class="doccomment">/// The assignment operator (`:=`).</span>
+    <span class="ident">Assign</span>,
+    <span class="doccomment">/// An opening parenthesis (`(`).</span>
+    <span class="ident">NewTerm</span>,
+    <span class="doccomment">/// A closing parenthesis (`)`).</span>
+    <span class="ident">EndTerm</span>,
+    <span class="doccomment">/// A pound sign immediately followed by opening parenthesis (`#(`).</span>
+    <span class="ident">NewArray</span>,
+    <span class="doccomment">/// A pound sign (`#`).</span>
+    <span class="ident">Pound</span>,
+    <span class="doccomment">/// The primitive keyword (`primitive`).</span>
+    <span class="ident">Primitive</span>,
+    <span class="doccomment">/// The separator sequence (`-------`).</span>
+    <span class="ident">Separator</span>,
+    <span class="doccomment">/// An integer literal (`10`).</span>
+    <span class="ident">LitInteger</span>(<span class="ident">i64</span>),
+    <span class="doccomment">/// A big integer literal (`1542252643255252434`).</span>
+    <span class="ident">LitBigInteger</span>(<span class="ident">String</span>),
+    <span class="doccomment">/// A floating-point literal (`10.6`).</span>
+    <span class="ident">LitDouble</span>(<span class="ident">f64</span>),
+    <span class="doccomment">/// A string literal (`&#39;hello, world&#39;`).</span>
+    <span class="ident">LitString</span>(<span class="ident">String</span>),
+    <span class="doccomment">/// A symbol literal (`#foo`).</span>
+    <span class="ident">LitSymbol</span>(<span class="ident">String</span>),
+    <span class="doccomment">/// An identifier (`foo`).</span>
+    <span class="ident">Identifier</span>(<span class="ident">String</span>),
+    <span class="doccomment">/// A keyword (`fromString:`).</span>
+    <span class="ident">Keyword</span>(<span class="ident">String</span>),
+    <span class="doccomment">/// A sequence of operators (eg: `&gt;&gt;&gt;`).</span>
+    <span class="ident">OperatorSequence</span>(<span class="ident">String</span>),
+    <span class="doccomment">/// A comment (`&quot;what a beautiful and majestic piece of code&quot;`).</span>
+    <span class="ident">Comment</span>(<span class="ident">String</span>),
+    <span class="doccomment">/// Some whitespace (` `).</span>
+    <span class="ident">Whitespace</span>,
+}
+</pre></div>
+</section><section id="search" class="content hidden"></section><section class="footer"></section><script>window.rootPath = "../../";window.currentCrate = "som_lexer";</script><script src="../../main.js"></script><script src="../../source-script.js"></script><script src="../../source-files.js"></script><script defer src="../../search-index.js"></script></body></html>

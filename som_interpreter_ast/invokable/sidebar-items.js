@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["Return","Represents the kinds of possible returns from an invocation."]],"trait":[["Invoke","The trait for invoking methods and primitives."]]});

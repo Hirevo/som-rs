@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["MethodKind","The kind of a class method."]],"struct":[["Method","Represents a class method."]]});

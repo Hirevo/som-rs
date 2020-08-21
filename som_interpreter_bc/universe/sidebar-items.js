@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["CoreClasses","The core classes of the SOM interpreter."],["Universe","The central data structure for the interpreter."]]});

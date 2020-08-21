@@ -1,0 +1,1 @@
+initSidebarItems({"trait":[["Evaluate","The trait for evaluating AST nodes."]]});

@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["Value","Represents an SOM value."]]});

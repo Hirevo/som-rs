@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["apply","Applies a parser and returns the output value if the entirety of the input has been parsed successfully."],["parse_file","Parses the input of an entire file into an AST."]],"mod":[["lang","SOM-specific parser combinators."]]});
