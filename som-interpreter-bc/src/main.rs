@@ -11,9 +11,9 @@ use structopt::StructOpt;
 
 mod shell;
 
-use som_interpreter::invokable::Return;
-use som_interpreter::universe::Universe;
-use som_interpreter::value::Value;
+use som_interpreter_bc::interpreter::Interpreter;
+use som_interpreter_bc::universe::Universe;
+use som_interpreter_bc::value::Value;
 
 #[derive(Debug, Clone, PartialEq, StructOpt)]
 #[structopt(about, author)]
@@ -29,6 +29,9 @@ struct Options {
     #[structopt(short, long)]
     classpath: Vec<PathBuf>,
 
+    // /// enable disassembling
+    // #[structopt(short = "d")]
+    // disassembling: bool,
     /// Enable verbose output (with timing information).
     #[structopt(short = "v")]
     verbose: bool,
@@ -37,10 +40,12 @@ struct Options {
 fn main() -> anyhow::Result<()> {
     let opts: Options = Options::from_args();
 
+    let mut interpreter = Interpreter::new();
+
     match opts.file {
         None => {
             let mut universe = Universe::with_classpath(opts.classpath)?;
-            shell::interactive(&mut universe, opts.verbose)?
+            shell::interactive(&mut interpreter, &mut universe, opts.verbose)?
         }
         Some(file) => {
             let file_stem = file
@@ -57,28 +62,42 @@ fn main() -> anyhow::Result<()> {
 
             let mut universe = Universe::with_classpath(classpath)?;
 
+            // let class = universe.load_class("System");
+            // if let Ok(class) = class {
+            //     for method in class.borrow().methods.values() {
+            //         println!("System>>#{}", method.signature);
+            //         if let som_interpreter_bc::method::MethodKind::Defined(env) = &method.kind {
+            //             for bytecode in &env.body {
+            //                 println!("    {}", bytecode);
+            //             }
+            //         }
+            //     }
+            // }
+
             let args = std::iter::once(String::from(file_stem))
                 .chain(opts.args.iter().cloned())
                 .map(Rc::new)
                 .map(Value::String)
                 .collect();
 
-            let output = universe.initialize(args).unwrap_or_else(|| {
-                Return::Exception(format!("could not find 'System>>#initialize:'"))
-            });
+            universe
+                .initialize(&mut interpreter, args)
+                .expect("issue running program");
+
+            interpreter.run(&mut universe);
 
             // let class = universe.load_class_from_path(file)?;
-            // let instance = Instance::from_class(class);
-            // let instance = Value::Instance(Rc::new(RefCell::new(instance)));
+            // let instance = som_interpreter::instance::Instance::from_class(class);
+            // let instance = Value::Instance(Rc::new(std::cell::RefCell::new(instance)));
 
             // let invokable = instance.lookup_method(&universe, "run").unwrap();
-            // let output = invokable.invoke(&mut universe, vec![instance]);
+            // let output = som_interpreter::invokable::Invoke::invoke(invokable.as_ref(), &mut universe, vec![instance]);
 
-            match output {
-                Return::Exception(message) => println!("ERROR: {}", message),
-                Return::Restart => println!("ERROR: asked for a restart to the top-level"),
-                _ => {}
-            }
+            // match output {
+            //     Return::Exception(message) => println!("ERROR: {}", message),
+            //     Return::Restart => println!("ERROR: asked for a restart to the top-level"),
+            //     _ => {}
+            // }
         }
     }
 

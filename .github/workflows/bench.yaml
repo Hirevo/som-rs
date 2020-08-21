@@ -24,7 +24,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release -p som-interpreter
+          args: --release -p som-interpreter-ast -p som-interpreter-bc
       - name: Install ReBench
         run: |
           pip install setuptools

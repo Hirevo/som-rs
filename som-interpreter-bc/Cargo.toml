@@ -1,18 +1,11 @@
 [package]
-name = "som-interpreter"
+name = "som-interpreter-bc"
 version = "0.1.0"
-description = "An interpreter for the Simple Object Machine"
+description = "A bytecode compiler for the Simple Object Machine"
 authors = ["Nicolas Polomack <nmp21@kent.ac.uk>"]
 edition = "2018"
 publish = false
 license = "MIT OR Apache-2.0"
-
-[lib]
-path = "src/lib.rs"
-
-[[bin]]
-name = "som-interpreter"
-path = "src/main.rs"
 
 [dependencies]
 # internal
@@ -36,4 +29,3 @@ num-traits = "0.2.11"
 
 # random numbers
 rand = "0.7.3"
-

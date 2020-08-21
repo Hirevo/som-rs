@@ -1,12 +1,11 @@
 use std::path::PathBuf;
 
-use som_interpreter::evaluate::Evaluate;
-use som_interpreter::frame::FrameKind;
-use som_interpreter::invokable::Return;
-use som_interpreter::universe::Universe;
-use som_interpreter::value::Value;
+use som_interpreter_bc::compiler;
+use som_interpreter_bc::frame::FrameKind;
+use som_interpreter_bc::interpreter::Interpreter;
+use som_interpreter_bc::universe::Universe;
+use som_interpreter_bc::value::Value;
 use som_lexer::{Lexer, Token};
-
 use som_parser::lang;
 
 fn setup_universe() -> Universe {
@@ -21,8 +20,11 @@ fn setup_universe() -> Universe {
 fn basic_interpreter_tests() {
     let mut universe = setup_universe();
 
-    universe.load_class("Return").unwrap();
-    universe.load_class("CompilerSimplification").unwrap();
+    let return_class = Value::Class(universe.load_class("Return").unwrap());
+    let compiler_simplification_class =
+        Value::Class(universe.load_class("CompilerSimplification").unwrap());
+
+    let method_name = universe.intern_symbol("run");
 
     let tests: &[(&str, Value)] = &[
         // {"Self", "assignSuper", 42, ProgramDefinitionError.class},
@@ -37,18 +39,9 @@ fn basic_interpreter_tests() {
         ("Blocks testArg2", Value::Integer(77)),
         ("Blocks testArgAndLocal", Value::Integer(8)),
         ("Blocks testArgAndContext", Value::Integer(8)),
-        (
-            "Return testReturnSelf",
-            universe.lookup_global("Return").unwrap(),
-        ),
-        (
-            "Return testReturnSelfImplicitly",
-            universe.lookup_global("Return").unwrap(),
-        ),
-        (
-            "Return testNoReturnReturnsSelf",
-            universe.lookup_global("Return").unwrap(),
-        ),
+        ("Return testReturnSelf", return_class.clone()),
+        ("Return testReturnSelfImplicitly", return_class.clone()),
+        ("Return testNoReturnReturnsSelf", return_class.clone()),
         (
             "Return testBlockReturnsImplicitlyLastValue",
             Value::Integer(4),
@@ -66,11 +59,11 @@ fn basic_interpreter_tests() {
         ),
         (
             "CompilerSimplification testReturnSelf",
-            universe.lookup_global("CompilerSimplification").unwrap(),
+            compiler_simplification_class.clone(),
         ),
         (
             "CompilerSimplification testReturnSelfImplicitly",
-            universe.lookup_global("CompilerSimplification").unwrap(),
+            compiler_simplification_class.clone(),
         ),
         (
             "CompilerSimplification testReturnArgumentN",
@@ -130,31 +123,55 @@ fn basic_interpreter_tests() {
         ("NumberOfTests numberOfTests", Value::Integer(52)),
     ];
 
-    for (expr, expected) in tests {
+    for (counter, (expr, expected)) in tests.iter().enumerate() {
+        let mut interpreter = Interpreter::new();
         println!("testing: '{}'", expr);
 
-        let mut lexer = Lexer::new(expr).skip_comments(true).skip_whitespace(true);
+        let line = format!(
+            "BasicInterpreterTest{} = ( run = ( ^ ( {} ) ) )",
+            counter, expr
+        );
+
+        let mut lexer = Lexer::new(line).skip_comments(true).skip_whitespace(true);
         let tokens: Vec<Token> = lexer.by_ref().collect();
         assert!(
             lexer.text().is_empty(),
             "could not fully tokenize test expression"
         );
 
-        let ast = som_parser::apply(lang::expression(), tokens.as_slice()).unwrap();
+        let class_def = som_parser::apply(lang::class_def(), tokens.as_slice()).unwrap();
 
+        let object_class = universe.object_class();
+        let class =
+            compiler::compile_class(&mut universe.interner, &class_def, Some(&object_class));
+        assert!(class.is_some(), "could not compile test expression");
+        let class = class.unwrap();
+
+        let metaclass_class = universe.metaclass_class();
+        class.borrow_mut().set_super_class(&object_class);
+        class
+            .borrow()
+            .class()
+            .borrow_mut()
+            .set_super_class(&object_class.borrow().class());
+        class
+            .borrow()
+            .class()
+            .borrow_mut()
+            .set_class(&metaclass_class);
+
+        let method = class
+            .borrow()
+            .lookup_method(method_name)
+            .expect("method not found ??");
         let kind = FrameKind::Method {
-            holder: universe.system_class(),
-            self_value: Value::System,
+            method,
+            holder: class.clone(),
+            self_value: Value::Class(class),
         };
-        let output = universe.with_frame(kind, |universe| ast.evaluate(universe));
-
-        match &output {
-            Return::Local(output) => assert_eq!(output, expected, "unexpected test output value"),
-            Return::NonLocal(_, _) => {
-                panic!("unexpected non-local return from basic interpreter test")
-            }
-            Return::Restart => panic!("unexpected `restart` from basic interpreter test"),
-            Return::Exception(err) => panic!("unexpected exception: '{}'", err),
+        interpreter.push_frame(kind);
+        if let Some(output) = interpreter.run(&mut universe) {
+            assert_eq!(&output, expected, "unexpected test output value");
         }
     }
 }

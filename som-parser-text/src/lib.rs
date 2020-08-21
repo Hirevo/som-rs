@@ -12,8 +12,7 @@ use som_parser_core::Parser;
 
 /// Parses the input of an entire file into an AST.
 pub fn parse_file(input: &[char]) -> Option<ClassDef> {
-    let (class, _) = lang::file().parse(input)?;
-    Some(class)
+    self::apply(lang::file(), input)
 }
 
 /// Applies a parser and returns the output value if the entirety of the input has been parsed successfully.

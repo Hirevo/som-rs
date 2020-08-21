@@ -1,0 +1,32 @@
+[package]
+name = "som-interpreter-ast"
+version = "0.1.0"
+description = "An interpreter for the Simple Object Machine"
+authors = ["Nicolas Polomack <nmp21@kent.ac.uk>"]
+edition = "2018"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+# internal
+som-core = { path = "../som-core", version = "0.1.0" }
+som-lexer = { path = "../som-lexer", version = "0.1.0" }
+som-parser = { package = "som-parser-symbols", path = "../som-parser-symbols", version = "0.1.0" }
+# som-parser = { package = "som-parser-text", path = "../som-parser-text", version = "0.1.0" }
+
+# CLI interface
+structopt = "0.3.14"
+
+# error handling
+anyhow = "1.0.31"
+
+# consistently-ordered hashmaps
+indexmap = "1.4.0"
+
+# big integers
+num-bigint = "0.2.6"
+num-traits = "0.2.11"
+
+# random numbers
+rand = "0.7.3"
+

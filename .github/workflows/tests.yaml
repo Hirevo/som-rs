@@ -10,6 +10,11 @@ jobs:
   run_test_suite:
     name: Run SOM Test Suite
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        interpreter:
+          - som-interpreter-ast
+          - som-interpreter-bc
     steps:
       - name: Checkout master branch
         uses: actions/checkout@v2
@@ -24,10 +29,10 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release -p som-interpreter
+          args: --release -p ${{ matrix.interpreter }}
       - name: Run test suite
         run: |
-          ./target/release/som-interpreter -c core-lib/Smalltalk core-lib/TestSuite -- TestHarness
+          ./target/release/${{ matrix.interpreter }} -c core-lib/Smalltalk core-lib/TestSuite -- TestHarness
 
   run_own_tests:
     name: Run own tests
