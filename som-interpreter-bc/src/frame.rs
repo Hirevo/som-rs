@@ -47,7 +47,7 @@ impl Frame {
     pub fn from_kind(kind: FrameKind) -> Self {
         match &kind {
             FrameKind::Block { block } => {
-                let locals = block.locals.iter().map(|_| Value::Nil).collect();
+                let locals = block.blk_info.locals.iter().map(|_| Value::Nil).collect();
                 Self {
                     kind,
                     locals,
@@ -110,7 +110,7 @@ impl Frame {
                 MethodKind::Primitive(_) => None,
                 MethodKind::NotImplemented(_) => None,
             },
-            FrameKind::Block { block, .. } => block.body.get(idx).copied(),
+            FrameKind::Block { block, .. } => block.blk_info.body.get(idx).copied(),
         }
     }
 
@@ -121,7 +121,7 @@ impl Frame {
 
     pub fn lookup_constant(&self, idx: usize) -> Option<Literal> {
         match self.kind() {
-            FrameKind::Block { block } => block.literals.get(idx).cloned(),
+            FrameKind::Block { block } => block.blk_info.literals.get(idx).cloned(),
             FrameKind::Method { method, .. } => match method.kind() {
                 MethodKind::Defined(env) => env.literals.get(idx).cloned(),
                 MethodKind::Primitive(_) => None,

@@ -91,10 +91,10 @@ impl Hash for Instance {
 
 impl Hash for Block {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
-        self.literals.iter().for_each(|it| it.hash(hasher));
-        self.locals.iter().for_each(|it| it.hash(hasher));
-        self.nb_params.hash(hasher);
-        self.body.iter().for_each(|it| it.hash(hasher));
+        self.blk_info.literals.iter().for_each(|it| it.hash(hasher));
+        self.blk_info.locals.iter().for_each(|it| it.hash(hasher));
+        self.blk_info.nb_params.hash(hasher);
+        self.blk_info.body.iter().for_each(|it| it.hash(hasher));
     }
 }
 

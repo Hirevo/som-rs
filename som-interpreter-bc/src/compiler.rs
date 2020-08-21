@@ -11,7 +11,7 @@ use num_bigint::BigInt;
 use som_core::ast;
 use som_core::bytecode::Bytecode;
 
-use crate::block::Block;
+use crate::block::{Block, BlockInfo};
 use crate::class::{Class, MaybeWeak};
 use crate::interner::{Interned, Interner};
 use crate::method::{Method, MethodEnv, MethodKind};
@@ -446,10 +446,12 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
 
     let block = Block {
         frame: None,
-        locals: ctxt.locals.into_iter().map(|_| Value::Nil).collect(),
-        literals: ctxt.literals.into_iter().collect(),
-        body: ctxt.body.unwrap_or_default(),
-        nb_params: ctxt.args.len(),
+        blk_info: Rc::new(BlockInfo {
+            locals: ctxt.locals.into_iter().map(|_| Value::Nil).collect(),
+            literals: ctxt.literals.into_iter().collect(),
+            body: ctxt.body.unwrap_or_default(),
+            nb_params: ctxt.args.len(),
+        }),
     };
 
     // println!("(system) compiled block !");
