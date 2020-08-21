@@ -12,9 +12,7 @@ pub mod block1 {
     fn value(interpreter: &mut Interpreter, _: &mut Universe) {
         const SIGNATURE: &str = "Block1>>#value";
 
-        let frame = interpreter.current_frame().expect("no current frame");
-
-        expect_args!(SIGNATURE, frame, [
+        expect_args!(SIGNATURE, interpreter, [
             Value::Block(block) => block,
         ]);
 
@@ -28,10 +26,9 @@ pub mod block1 {
     fn restart(interpreter: &mut Interpreter, _: &mut Universe) {
         const SIGNATURE: &str = "Block>>#restart";
 
+        expect_args!(SIGNATURE, interpreter, [Value::Block(_)]);
+
         let frame = interpreter.current_frame().expect("no current frame");
-
-        expect_args!(SIGNATURE, frame, [Value::Block(_)]);
-
         frame.borrow_mut().bytecode_idx = 0;
     }
 
@@ -52,9 +49,7 @@ pub mod block2 {
     fn value(interpreter: &mut Interpreter, _: &mut Universe) {
         const SIGNATURE: &str = "Block2>>#value:";
 
-        let frame = interpreter.current_frame().expect("no current frame");
-
-        expect_args!(SIGNATURE, frame, [
+        expect_args!(SIGNATURE, interpreter, [
             Value::Block(block) => block,
             argument => argument,
         ]);
@@ -83,9 +78,7 @@ pub mod block3 {
     fn value_with(interpreter: &mut Interpreter, _: &mut Universe) {
         const SIGNATURE: &str = "Block3>>#value:with:";
 
-        let frame = interpreter.current_frame().expect("no current frame");
-
-        expect_args!(SIGNATURE, frame, [
+        expect_args!(SIGNATURE, interpreter, [
             Value::Block(block) => block,
             argument1 => argument1,
             argument2 => argument2,

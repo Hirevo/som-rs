@@ -129,9 +129,8 @@ impl Method {
                 frame.borrow_mut().args.append(&mut args);
             }
             MethodKind::Primitive(func) => {
-                let frame = interpreter.current_frame().unwrap();
-                frame.borrow_mut().stack.push(receiver);
-                frame.borrow_mut().stack.append(&mut args);
+                interpreter.stack.push(receiver);
+                interpreter.stack.append(&mut args);
                 func(interpreter, universe)
             }
             MethodKind::NotImplemented(_) => todo!(),

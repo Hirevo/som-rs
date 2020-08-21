@@ -36,8 +36,6 @@ pub struct Frame {
     pub args: Vec<Value>,
     /// The bindings within this frame.
     pub locals: Vec<Value>,
-    /// Execution stack.
-    pub stack: Vec<Value>,
     /// Bytecode index.
     pub bytecode_idx: usize,
 }
@@ -52,7 +50,6 @@ impl Frame {
                     kind,
                     locals,
                     args: vec![],
-                    stack: vec![],
                     bytecode_idx: 0,
                 }
             }
@@ -63,7 +60,6 @@ impl Frame {
                         kind,
                         locals,
                         args: vec![],
-                        stack: vec![],
                         bytecode_idx: 0,
                     }
                 } else {
@@ -71,7 +67,6 @@ impl Frame {
                         kind,
                         locals: vec![],
                         args: vec![],
-                        stack: vec![],
                         bytecode_idx: 0,
                     }
                 }

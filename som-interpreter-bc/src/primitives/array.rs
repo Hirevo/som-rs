@@ -11,9 +11,7 @@ use crate::{expect_args, reverse};
 fn at(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Array>>#at:";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         Value::Array(values) => values,
         Value::Integer(index) => index,
     ]);
@@ -23,15 +21,13 @@ fn at(interpreter: &mut Interpreter, _: &mut Universe) {
         Err(err) => panic!("'{}': {}", SIGNATURE, err),
     };
     let value = values.borrow().get(index).cloned().unwrap_or(Value::Nil);
-    frame.borrow_mut().stack.push(value)
+    interpreter.stack.push(value)
 }
 
 fn at_put(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Array>>#at:put:";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         Value::Array(values) => values,
         Value::Integer(index) => index,
         value => value,
@@ -44,21 +40,19 @@ fn at_put(interpreter: &mut Interpreter, _: &mut Universe) {
     if let Some(location) = values.borrow_mut().get_mut(index) {
         *location = value;
     }
-    frame.borrow_mut().stack.push(Value::Array(values))
+    interpreter.stack.push(Value::Array(values))
 }
 
 fn length(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Array>>#length";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         Value::Array(values) => values,
     ]);
 
     let length = values.borrow().len();
     match i64::try_from(length) {
-        Ok(length) => frame.borrow_mut().stack.push(Value::Integer(length)),
+        Ok(length) => interpreter.stack.push(Value::Integer(length)),
         Err(err) => panic!("'{}': {}", SIGNATURE, err),
     }
 }
@@ -66,16 +60,13 @@ fn length(interpreter: &mut Interpreter, _: &mut Universe) {
 fn new(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Array>>#new:";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         _,
         Value::Integer(count) => count,
     ]);
 
     match usize::try_from(count) {
-        Ok(length) => frame
-            .borrow_mut()
+        Ok(length) => interpreter
             .stack
             .push(Value::Array(Rc::new(RefCell::new(vec![
                 Value::Nil;
