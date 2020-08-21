@@ -18,6 +18,47 @@ use crate::method::{Method, MethodEnv, MethodKind};
 use crate::value::Value;
 use crate::SOMRef;
 
+fn compute_stack_size(ctxt: &BlockGenCtxt) -> Option<usize> {
+    let mut size: usize = 0;
+
+    if let Some(body) = ctxt.body.as_ref() {
+        for item in body.iter().copied() {
+            match item {
+                Bytecode::Halt => {}
+                Bytecode::Dup => size += 1,
+                Bytecode::PushLocal(_, _) => size += 1,
+                Bytecode::PushArgument(_, _) => size += 1,
+                Bytecode::PushField(_) => size += 1,
+                Bytecode::PushBlock(_) => size += 1,
+                Bytecode::PushConstant(_) => size += 1,
+                Bytecode::PushGlobal(_) => size += 1,
+                Bytecode::Pop => size -= 1,
+                Bytecode::PopLocal(_, _) => size -= 1,
+                Bytecode::PopArgument(_, _) => size -= 1,
+                Bytecode::PopField(_) => size -= 1,
+                Bytecode::Send(idx) | Bytecode::SuperSend(idx) => {
+                    let literal = ctxt.literals.get_index(idx as usize)?;
+                    if let Literal::Symbol(symbol) = literal {
+                        let signature = ctxt.outer.interner().lookup(*symbol);
+                        let nb_params = match signature.chars().nth(0) {
+                            Some(ch) if !ch.is_alphabetic() => 2,
+                            _ => signature.chars().filter(|ch| *ch == ':').count() + 1,
+                        };
+                        size -= nb_params;
+                        size += 1; // because of the return value.
+                    } else {
+                        return None;
+                    }
+                }
+                Bytecode::ReturnLocal => {}
+                Bytecode::ReturnNonLocal => {}
+            };
+        }
+    }
+
+    Some(size)
+}
+
 #[derive(Debug, Clone)]
 pub enum Literal {
     Symbol(Interned),
@@ -89,7 +130,8 @@ enum FoundVar {
 
 trait GenCtxt {
     fn find_var(&mut self, name: &str) -> Option<FoundVar>;
-    fn intern_symbol(&mut self, name: &str) -> Interned;
+    fn interner(&self) -> &Interner;
+    fn interner_mut(&mut self) -> &mut Interner;
     fn class_name(&self) -> &str;
 }
 
@@ -127,8 +169,12 @@ impl GenCtxt for BlockGenCtxt<'_> {
             })
     }
 
-    fn intern_symbol(&mut self, name: &str) -> Interned {
-        self.outer.intern_symbol(name)
+    fn interner(&self) -> &Interner {
+        self.outer.interner()
+    }
+
+    fn interner_mut(&mut self) -> &mut Interner {
+        self.outer.interner_mut()
     }
 
     fn class_name(&self) -> &str {
@@ -174,8 +220,12 @@ impl GenCtxt for MethodGenCtxt<'_> {
         self.inner.find_var(name)
     }
 
-    fn intern_symbol(&mut self, name: &str) -> Interned {
-        self.inner.intern_symbol(name)
+    fn interner(&self) -> &Interner {
+        self.inner.interner()
+    }
+
+    fn interner_mut(&mut self) -> &mut Interner {
+        self.inner.interner_mut()
     }
 
     fn class_name(&self) -> &str {
@@ -231,7 +281,7 @@ impl MethodCodegen for ast::Expression {
                     }
                     Some(FoundVar::Field(idx)) => ctxt.push_instr(Bytecode::PushField(idx)),
                     None => {
-                        let name = ctxt.intern_symbol(name);
+                        let name = ctxt.interner_mut().intern(name);
                         let idx = ctxt.push_literal(Literal::Symbol(name));
                         ctxt.push_instr(Bytecode::PushGlobal(idx as u8));
                     }
@@ -262,7 +312,7 @@ impl MethodCodegen for ast::Expression {
                     .values
                     .iter()
                     .try_for_each(|value| value.codegen(ctxt))?;
-                let sym = ctxt.intern_symbol(message.signature.as_str());
+                let sym = ctxt.interner_mut().intern(message.signature.as_str());
                 let idx = ctxt.push_literal(Literal::Symbol(sym));
                 if super_send {
                     ctxt.push_instr(Bytecode::SuperSend(idx as u8));
@@ -274,7 +324,7 @@ impl MethodCodegen for ast::Expression {
             ast::Expression::BinaryOp(message) => {
                 message.lhs.codegen(ctxt)?;
                 message.rhs.codegen(ctxt)?;
-                let sym = ctxt.intern_symbol(message.op.as_str());
+                let sym = ctxt.interner_mut().intern(message.op.as_str());
                 let idx = ctxt.push_literal(Literal::Symbol(sym));
                 ctxt.push_instr(Bytecode::Send(idx as u8));
                 Some(())
@@ -288,7 +338,7 @@ impl MethodCodegen for ast::Expression {
                 fn convert_literal(ctxt: &mut dyn InnerGenCtxt, literal: &ast::Literal) -> Literal {
                     match literal {
                         ast::Literal::Symbol(val) => {
-                            Literal::Symbol(ctxt.intern_symbol(val.as_str()))
+                            Literal::Symbol(ctxt.interner_mut().intern(val.as_str()))
                         }
                         ast::Literal::String(val) => Literal::String(Rc::new(val.clone())),
                         ast::Literal::Double(val) => Literal::Double(*val),
@@ -344,8 +394,12 @@ impl GenCtxt for ClassGenCtxt<'_> {
             .map(|idx| FoundVar::Field(idx as u8))
     }
 
-    fn intern_symbol(&mut self, name: &str) -> Interned {
-        self.interner.intern(name)
+    fn interner(&self) -> &Interner {
+        &self.interner
+    }
+
+    fn interner_mut(&mut self) -> &mut Interner {
+        &mut self.interner
     }
 
     fn class_name(&self) -> &str {
@@ -398,6 +452,8 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
         }
     }
 
+    let stack_size = compute_stack_size(&ctxt.inner)?;
+
     let method = Method {
         kind: match &defn.body {
             ast::MethodBody::Primitive => MethodKind::primitive_from_signature(
@@ -410,6 +466,7 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
                     locals: ctxt.inner.locals.iter().map(|_| Value::Nil).collect(),
                     literals: ctxt.inner.literals.into_iter().collect(),
                     body: ctxt.inner.body.unwrap_or_default(),
+                    stack_size,
                 };
                 MethodKind::Defined(env)
             }
@@ -444,12 +501,15 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
         ctxt.push_instr(Bytecode::ReturnLocal);
     }
 
+    let stack_size = compute_stack_size(&ctxt)?;
+
     let block = Block {
         frame: None,
         locals: ctxt.locals.into_iter().map(|_| Value::Nil).collect(),
         literals: ctxt.literals.into_iter().collect(),
         body: ctxt.body.unwrap_or_default(),
         nb_params: ctxt.args.len(),
+        stack_size,
     };
 
     // println!("(system) compiled block !");

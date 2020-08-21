@@ -18,6 +18,7 @@ pub struct Block {
     pub literals: Vec<Literal>,
     pub body: Vec<Bytecode>,
     pub nb_params: usize,
+    pub stack_size: usize,
 }
 
 impl Block {

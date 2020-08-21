@@ -18,6 +18,7 @@ pub struct MethodEnv {
     pub locals: Vec<Value>,
     pub literals: Vec<Literal>,
     pub body: Vec<Bytecode>,
+    pub stack_size: usize,
 }
 
 /// The kind of a class method.
