@@ -48,7 +48,7 @@ impl Interpreter {
         loop {
             let frame = match self.current_frame() {
                 Some(frame) => frame,
-                None => return Some(Value::Nil),
+                None => return Some(self.stack.pop().unwrap_or(Value::Nil)),
             };
 
             let opt_bytecode = frame.borrow().get_current_bytecode();
