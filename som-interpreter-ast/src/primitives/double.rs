@@ -1,5 +1,7 @@
 use std::rc::Rc;
 
+use num_traits::ToPrimitive;
+
 use crate::expect_args;
 use crate::invokable::Return;
 use crate::primitives::PrimitiveFn;
@@ -10,6 +12,15 @@ macro_rules! promote {
     ($signature:expr, $value:expr) => {
         match $value {
             Value::Integer(value) => value as f64,
+            Value::BigInteger(value) => match value.to_f64() {
+                Some(value) => value,
+                None => {
+                    return Return::Exception(format!(
+                        "'{}': `Integer` too big to be converted to `Double`",
+                        $signature
+                    ))
+                }
+            },
             Value::Double(value) => value,
             _ => {
                 return Return::Exception(format!(
