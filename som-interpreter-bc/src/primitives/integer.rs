@@ -15,14 +15,8 @@ macro_rules! demote {
     ($interpreter:expr, $expr:expr) => {{
         let value = $expr;
         match value.to_i64() {
-            Some(value) => {
-                $interpreter.stack.push(Value::Integer(value));
-                return;
-            }
-            None => {
-                $interpreter.stack.push(Value::BigInteger(value));
-                return;
-            }
+            Some(value) => Value::Integer(value),
+            None => Value::BigInteger(value),
         }
     }};
 }
@@ -150,28 +144,32 @@ fn plus(interpreter: &mut Interpreter, _: &mut Universe) {
         b => b,
     ]);
 
-    match (a, b) {
+    let value = match (a, b) {
         (Value::Integer(a), Value::Integer(b)) => match a.checked_add(b) {
-            Some(value) => {
-                interpreter.stack.push(Value::Integer(value));
-                return;
-            }
+            Some(value) => Value::Integer(value),
             None => demote!(interpreter, BigInt::from(a) + BigInt::from(b)),
         },
         (Value::BigInteger(a), Value::BigInteger(b)) => demote!(interpreter, a + b),
         (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
             demote!(interpreter, a + BigInt::from(b))
         }
-        (Value::Double(a), Value::Double(b)) => {
-            interpreter.stack.push(Value::Double(a + b));
-            return;
-        }
+        (Value::Double(a), Value::Double(b)) => Value::Double(a + b),
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
-            interpreter.stack.push(Value::Double((a as f64) + b));
-            return;
+            Value::Double((a as f64) + b)
+        }
+        (Value::BigInteger(a), Value::Double(b)) | (Value::Double(b), Value::BigInteger(a)) => {
+            match a.to_f64() {
+                Some(a) => Value::Double(a + b),
+                None => panic!(
+                    "'{}': `Integer` too big to be converted to `Double`",
+                    SIGNATURE
+                ),
+            }
         }
         _ => panic!("'{}': wrong types", SIGNATURE),
-    }
+    };
+
+    interpreter.stack.push(value);
 }
 
 fn minus(interpreter: &mut Interpreter, _: &mut Universe) {
@@ -182,28 +180,40 @@ fn minus(interpreter: &mut Interpreter, _: &mut Universe) {
         b => b,
     ]);
 
-    match (a, b) {
+    let value = match (a, b) {
         (Value::Integer(a), Value::Integer(b)) => match a.checked_sub(b) {
-            Some(value) => {
-                interpreter.stack.push(Value::Integer(value));
-                return;
-            }
+            Some(value) => Value::Integer(value),
             None => demote!(interpreter, BigInt::from(a) - BigInt::from(b)),
         },
         (Value::BigInteger(a), Value::BigInteger(b)) => demote!(interpreter, a - b),
-        (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
+        (Value::BigInteger(a), Value::Integer(b)) => {
             demote!(interpreter, a - BigInt::from(b))
         }
-        (Value::Double(a), Value::Double(b)) => {
-            interpreter.stack.push(Value::Double(a - b));
-            return;
+        (Value::Integer(a), Value::BigInteger(b)) => {
+            demote!(interpreter, BigInt::from(a) - b)
         }
+        (Value::Double(a), Value::Double(b)) => Value::Double(a - b),
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
-            interpreter.stack.push(Value::Double((a as f64) - b));
-            return;
+            Value::Double((a as f64) - b)
         }
+        (Value::BigInteger(a), Value::Double(b)) => match a.to_f64() {
+            Some(a) => Value::Double(a - b),
+            None => panic!(
+                "'{}': `Integer` too big to be converted to `Double`",
+                SIGNATURE
+            ),
+        },
+        (Value::Double(a), Value::BigInteger(b)) => match b.to_f64() {
+            Some(b) => Value::Double(a - b),
+            None => panic!(
+                "'{}': `Integer` too big to be converted to `Double`",
+                SIGNATURE
+            ),
+        },
         _ => panic!("'{}': wrong types", SIGNATURE),
-    }
+    };
+
+    interpreter.stack.push(value);
 }
 
 fn times(interpreter: &mut Interpreter, _: &mut Universe) {
@@ -214,28 +224,32 @@ fn times(interpreter: &mut Interpreter, _: &mut Universe) {
         b => b,
     ]);
 
-    match (a, b) {
+    let value = match (a, b) {
         (Value::Integer(a), Value::Integer(b)) => match a.checked_mul(b) {
-            Some(value) => {
-                interpreter.stack.push(Value::Integer(value));
-                return;
-            }
+            Some(value) => Value::Integer(value),
             None => demote!(interpreter, BigInt::from(a) * BigInt::from(b)),
         },
         (Value::BigInteger(a), Value::BigInteger(b)) => demote!(interpreter, a * b),
         (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
             demote!(interpreter, a * BigInt::from(b))
         }
-        (Value::Double(a), Value::Double(b)) => {
-            interpreter.stack.push(Value::Double(a * b));
-            return;
-        }
+        (Value::Double(a), Value::Double(b)) => Value::Double(a * b),
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
-            interpreter.stack.push(Value::Double((a as f64) * b));
-            return;
+            Value::Double((a as f64) * b)
+        }
+        (Value::BigInteger(a), Value::Double(b)) | (Value::Double(b), Value::BigInteger(a)) => {
+            match a.to_f64() {
+                Some(a) => Value::Double(a * b),
+                None => panic!(
+                    "'{}': `Integer` too big to be converted to `Double`",
+                    SIGNATURE
+                ),
+            }
         }
         _ => panic!("'{}': wrong types", SIGNATURE),
-    }
+    };
+
+    interpreter.stack.push(value);
 }
 
 fn divide(interpreter: &mut Interpreter, _: &mut Universe) {
@@ -246,28 +260,40 @@ fn divide(interpreter: &mut Interpreter, _: &mut Universe) {
         b => b,
     ]);
 
-    match (a, b) {
+    let value = match (a, b) {
         (Value::Integer(a), Value::Integer(b)) => match a.checked_div(b) {
-            Some(value) => {
-                interpreter.stack.push(Value::Integer(value));
-                return;
-            }
+            Some(value) => Value::Integer(value),
             None => demote!(interpreter, BigInt::from(a) / BigInt::from(b)),
         },
         (Value::BigInteger(a), Value::BigInteger(b)) => demote!(interpreter, a / b),
-        (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
+        (Value::BigInteger(a), Value::Integer(b)) => {
             demote!(interpreter, a / BigInt::from(b))
         }
-        (Value::Double(a), Value::Double(b)) => {
-            interpreter.stack.push(Value::Double(a / b));
-            return;
+        (Value::Integer(a), Value::BigInteger(b)) => {
+            demote!(interpreter, BigInt::from(a) / b)
         }
+        (Value::Double(a), Value::Double(b)) => Value::Double(a / b),
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
-            interpreter.stack.push(Value::Double((a as f64) / b));
-            return;
+            Value::Double((a as f64) / b)
         }
+        (Value::BigInteger(a), Value::Double(b)) => match a.to_f64() {
+            Some(a) => Value::Double(a / b),
+            None => panic!(
+                "'{}': `Integer` too big to be converted to `Double`",
+                SIGNATURE
+            ),
+        },
+        (Value::Double(a), Value::BigInteger(b)) => match b.to_f64() {
+            Some(b) => Value::Double(a / b),
+            None => panic!(
+                "'{}': `Integer` too big to be converted to `Double`",
+                SIGNATURE
+            ),
+        },
         _ => panic!("'{}': wrong types", SIGNATURE),
-    }
+    };
+
+    interpreter.stack.push(value);
 }
 
 fn divide_float(interpreter: &mut Interpreter, _: &mut Universe) {
@@ -278,23 +304,33 @@ fn divide_float(interpreter: &mut Interpreter, _: &mut Universe) {
         b => b,
     ]);
 
-    match (a, b) {
-        (Value::Integer(a), Value::Integer(b)) => {
-            interpreter
-                .stack
-                .push(Value::Double((a as f64) / (b as f64)));
-            return;
-        }
-        (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
-            interpreter.stack.push(Value::Double((a as f64) / b));
-            return;
-        }
-        (Value::Double(a), Value::Double(b)) => {
-            interpreter.stack.push(Value::Double(a / b));
-            return;
-        }
+    let a = match a {
+        Value::Integer(a) => a as f64,
+        Value::BigInteger(a) => match a.to_f64() {
+            Some(a) => a,
+            None => panic!(
+                "'{}': `Integer` too big to be converted to `Double`",
+                SIGNATURE
+            ),
+        },
+        Value::Double(a) => a,
         _ => panic!("'{}': wrong types", SIGNATURE),
-    }
+    };
+
+    let b = match b {
+        Value::Integer(b) => b as f64,
+        Value::BigInteger(b) => match b.to_f64() {
+            Some(b) => b,
+            None => panic!(
+                "'{}': `Integer` too big to be converted to `Double`",
+                SIGNATURE
+            ),
+        },
+        Value::Double(b) => b,
+        _ => panic!("'{}': wrong types", SIGNATURE),
+    };
+
+    interpreter.stack.push(Value::Double(a / b));
 }
 
 fn modulo(interpreter: &mut Interpreter, _: &mut Universe) {
@@ -307,15 +343,9 @@ fn modulo(interpreter: &mut Interpreter, _: &mut Universe) {
 
     let result = a % b;
     if result.signum() != b.signum() {
-        {
-            interpreter.stack.push(Value::Integer((result + b) % b));
-            return;
-        }
+        interpreter.stack.push(Value::Integer((result + b) % b));
     } else {
-        {
-            interpreter.stack.push(Value::Integer(result));
-            return;
-        }
+        interpreter.stack.push(Value::Integer(result));
     }
 }
 
@@ -329,15 +359,9 @@ fn remainder(interpreter: &mut Interpreter, _: &mut Universe) {
 
     let result = a % b;
     if result.signum() != a.signum() {
-        {
-            interpreter.stack.push(Value::Integer((result + a) % a));
-            return;
-        }
+        interpreter.stack.push(Value::Integer((result + a) % a));
     } else {
-        {
-            interpreter.stack.push(Value::Integer(result));
-            return;
-        }
+        interpreter.stack.push(Value::Integer(result));
     }
 }
 
@@ -348,29 +372,22 @@ fn sqrt(interpreter: &mut Interpreter, _: &mut Universe) {
         a => a,
     ]);
 
-    match a {
+    let value = match a {
         Value::Integer(a) => {
             let sqrt = (a as f64).sqrt();
             let trucated = sqrt.trunc();
             if sqrt == trucated {
-                {
-                    interpreter.stack.push(Value::Integer(trucated as i64));
-                    return;
-                }
+                Value::Integer(trucated as i64)
             } else {
-                {
-                    interpreter.stack.push(Value::Double(sqrt));
-                    return;
-                }
+                Value::Double(sqrt)
             }
         }
         Value::BigInteger(a) => demote!(interpreter, a.sqrt()),
-        Value::Double(a) => {
-            interpreter.stack.push(Value::Double(a.sqrt()));
-            return;
-        }
+        Value::Double(a) => Value::Double(a.sqrt()),
         _ => panic!("'{}': wrong types", SIGNATURE),
-    }
+    };
+
+    interpreter.stack.push(value);
 }
 
 fn bitand(interpreter: &mut Interpreter, _: &mut Universe) {
@@ -381,17 +398,16 @@ fn bitand(interpreter: &mut Interpreter, _: &mut Universe) {
         b => b,
     ]);
 
-    match (a, b) {
-        (Value::Integer(a), Value::Integer(b)) => {
-            interpreter.stack.push(Value::Integer(a & b));
-            return;
-        }
+    let value = match (a, b) {
+        (Value::Integer(a), Value::Integer(b)) => Value::Integer(a & b),
         (Value::BigInteger(a), Value::BigInteger(b)) => demote!(interpreter, a & b),
         (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
             demote!(interpreter, a & BigInt::from(b))
         }
         _ => panic!("'{}': wrong types", SIGNATURE),
-    }
+    };
+
+    interpreter.stack.push(value);
 }
 
 fn bitxor(interpreter: &mut Interpreter, _: &mut Universe) {
@@ -402,17 +418,16 @@ fn bitxor(interpreter: &mut Interpreter, _: &mut Universe) {
         b => b,
     ]);
 
-    match (a, b) {
-        (Value::Integer(a), Value::Integer(b)) => {
-            interpreter.stack.push(Value::Integer(a ^ b));
-            return;
-        }
+    let value = match (a, b) {
+        (Value::Integer(a), Value::Integer(b)) => Value::Integer(a ^ b),
         (Value::BigInteger(a), Value::BigInteger(b)) => demote!(interpreter, a ^ b),
         (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
             demote!(interpreter, a ^ BigInt::from(b))
         }
         _ => panic!("'{}': wrong types", SIGNATURE),
-    }
+    };
+
+    interpreter.stack.push(value);
 }
 
 fn lt(interpreter: &mut Interpreter, _: &mut Universe) {
@@ -423,33 +438,18 @@ fn lt(interpreter: &mut Interpreter, _: &mut Universe) {
         b => b,
     ]);
 
-    match (a, b) {
-        (Value::Integer(a), Value::Integer(b)) => {
-            interpreter.stack.push(Value::Boolean(a < b));
-            return;
-        }
-        (Value::BigInteger(a), Value::BigInteger(b)) => {
-            interpreter.stack.push(Value::Boolean(a < b));
-            return;
-        }
-        (Value::Double(a), Value::Double(b)) => {
-            interpreter.stack.push(Value::Boolean(a < b));
-            return;
-        }
-        (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
-            interpreter.stack.push(Value::Boolean((a as f64) < b));
-            return;
-        }
-        (Value::BigInteger(a), Value::Integer(b)) => {
-            interpreter.stack.push(Value::Boolean(a < BigInt::from(b)));
-            return;
-        }
-        (Value::Integer(a), Value::BigInteger(b)) => {
-            interpreter.stack.push(Value::Boolean(BigInt::from(a) < b));
-            return;
-        }
-        (a, b) => panic!("'{}': wrong types ({:?} | {:?})", SIGNATURE, a, b),
-    }
+    let value = match (a, b) {
+        (Value::Integer(a), Value::Integer(b)) => Value::Boolean(a < b),
+        (Value::BigInteger(a), Value::BigInteger(b)) => Value::Boolean(a < b),
+        (Value::Double(a), Value::Double(b)) => Value::Boolean(a < b),
+        (Value::Integer(a), Value::Double(b)) => Value::Boolean((a as f64) < b),
+        (Value::Double(a), Value::Integer(b)) => Value::Boolean(a < (b as f64)),
+        (Value::BigInteger(a), Value::Integer(b)) => Value::Boolean(a < BigInt::from(b)),
+        (Value::Integer(a), Value::BigInteger(b)) => Value::Boolean(BigInt::from(a) < b),
+        _ => panic!("'{}': wrong types", SIGNATURE),
+    };
+
+    interpreter.stack.push(value);
 }
 
 fn eq(interpreter: &mut Interpreter, _: &mut Universe) {
@@ -460,28 +460,16 @@ fn eq(interpreter: &mut Interpreter, _: &mut Universe) {
         b => b,
     ]);
 
-    match (a, b) {
-        (Value::Integer(a), Value::Integer(b)) => {
-            interpreter.stack.push(Value::Boolean(a == b));
-            return;
-        }
-        (Value::BigInteger(a), Value::BigInteger(b)) => {
-            interpreter.stack.push(Value::Boolean(a == b));
-            return;
-        }
-        (Value::Double(a), Value::Double(b)) => {
-            interpreter.stack.push(Value::Boolean(a == b));
-            return;
-        }
-        (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
-            interpreter.stack.push(Value::Boolean((a as f64) == b));
-            return;
-        }
-        _ => {
-            interpreter.stack.push(Value::Boolean(false));
-            return;
-        }
-    }
+    let value = match (a, b) {
+        (Value::Integer(a), Value::Integer(b)) => Value::Boolean(a == b),
+        (Value::BigInteger(a), Value::BigInteger(b)) => Value::Boolean(a == b),
+        (Value::Double(a), Value::Double(b)) => Value::Boolean(a == b),
+        (Value::Integer(a), Value::Double(b)) => Value::Boolean((a as f64) == b),
+        (Value::Double(a), Value::Integer(b)) => Value::Boolean(a == (b as f64)),
+        _ => Value::Boolean(false),
+    };
+
+    interpreter.stack.push(value);
 }
 
 fn shift_left(interpreter: &mut Interpreter, _: &mut Universe) {
@@ -492,17 +480,16 @@ fn shift_left(interpreter: &mut Interpreter, _: &mut Universe) {
         Value::Integer(b) => b,
     ]);
 
-    match a {
+    let value = match a {
         Value::Integer(a) => match a.checked_shl(b as u32) {
-            Some(value) => {
-                interpreter.stack.push(Value::Integer(value));
-                return;
-            }
+            Some(value) => Value::Integer(value),
             None => demote!(interpreter, BigInt::from(a) << (b as usize)),
         },
         Value::BigInteger(a) => demote!(interpreter, a << (b as usize)),
         _ => panic!("'{}': wrong types", SIGNATURE),
-    }
+    };
+
+    interpreter.stack.push(value);
 }
 
 fn shift_right(interpreter: &mut Interpreter, _: &mut Universe) {
@@ -513,17 +500,16 @@ fn shift_right(interpreter: &mut Interpreter, _: &mut Universe) {
         Value::Integer(b) => b,
     ]);
 
-    match a {
+    let value = match a {
         Value::Integer(a) => match a.checked_shr(b as u32) {
-            Some(value) => {
-                interpreter.stack.push(Value::Integer(value));
-                return;
-            }
+            Some(value) => Value::Integer(value),
             None => demote!(interpreter, BigInt::from(a) >> (b as usize)),
         },
         Value::BigInteger(a) => demote!(interpreter, a >> (b as usize)),
         _ => panic!("'{}': wrong types", SIGNATURE),
-    }
+    };
+
+    interpreter.stack.push(value);
 }
 
 /// Search for a primitive matching the given signature.
