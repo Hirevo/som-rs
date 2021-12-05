@@ -1,4 +1,13 @@
+# Rust's folder for its build artifacts.
 /target
-.vscode
+
+# SOM files at the project root are considered test files.
 /*.som
+
+# File indexing cache file for macOS.
 .DS_Store
+
+# Folders for workspace-specific configurations of code editors.
+/.vscode
+/.nova
+/.idea
