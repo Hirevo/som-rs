@@ -353,7 +353,7 @@ fn lt(_: &mut Universe, args: Vec<Value>) -> Return {
             Return::Local(Value::Boolean(a < BigInt::from(b)))
         }
         (Value::Integer(a), Value::BigInteger(b)) => {
-            Return::Local(Value::Boolean(b < BigInt::from(a)))
+            Return::Local(Value::Boolean(BigInt::from(a) < b))
         }
         (a, b) => {
             return Return::Exception(format!("'{}': wrong types ({:?} | {:?})", SIGNATURE, a, b))

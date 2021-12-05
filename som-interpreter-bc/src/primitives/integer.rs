@@ -445,7 +445,7 @@ fn lt(interpreter: &mut Interpreter, _: &mut Universe) {
             return;
         }
         (Value::Integer(a), Value::BigInteger(b)) => {
-            interpreter.stack.push(Value::Boolean(b < BigInt::from(a)));
+            interpreter.stack.push(Value::Boolean(BigInt::from(a) < b));
             return;
         }
         (a, b) => panic!("'{}': wrong types ({:?} | {:?})", SIGNATURE, a, b),
