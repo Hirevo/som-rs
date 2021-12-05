@@ -9,13 +9,11 @@ use crate::{expect_args, reverse};
 fn as_string(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &str = "Symbol>>#asString";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         Value::Symbol(sym) => sym,
     ]);
 
-    frame.borrow_mut().stack.push(Value::String(Rc::new(
+    interpreter.stack.push(Value::String(Rc::new(
         universe.lookup_symbol(sym).to_string(),
     )));
 }

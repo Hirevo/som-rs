@@ -27,7 +27,7 @@ impl Block {
             0 => universe.block1_class(),
             1 => universe.block2_class(),
             2 => universe.block3_class(),
-            _ => panic!("no support for blocks with more than 2 paramters"),
+            _ => panic!("no support for blocks with more than 2 parameters"),
         }
     }
 

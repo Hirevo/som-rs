@@ -12,9 +12,7 @@ use crate::{expect_args, reverse};
 fn length(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &str = "String>>#length";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         value => value,
     ]);
 
@@ -25,7 +23,7 @@ fn length(interpreter: &mut Interpreter, universe: &mut Universe) {
     };
 
     match i64::try_from(value.chars().count()) {
-        Ok(idx) => frame.borrow_mut().stack.push(Value::Integer(idx)),
+        Ok(idx) => interpreter.stack.push(Value::Integer(idx)),
         Err(err) => panic!("'{}': {}", SIGNATURE, err),
     }
 }
@@ -33,9 +31,7 @@ fn length(interpreter: &mut Interpreter, universe: &mut Universe) {
 fn hashcode(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &str = "String>>#hashcode";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         value => value,
     ]);
 
@@ -50,12 +46,11 @@ fn hashcode(interpreter: &mut Interpreter, universe: &mut Universe) {
     hasher.write(value.as_bytes());
 
     // match i64::try_from(hasher.finish()) {
-    //     Ok(hash) => frame.borrow_mut().stack.push(Value::Integer(hash)),
+    //     Ok(hash) => interpreter.stack.push(Value::Integer(hash)),
     //     Err(err) => panic!("'{}': {}", SIGNATURE, err),
     // }
 
-    frame
-        .borrow_mut()
+    interpreter
         .stack
         .push(Value::Integer((hasher.finish() as i64).abs()))
 }
@@ -63,9 +58,7 @@ fn hashcode(interpreter: &mut Interpreter, universe: &mut Universe) {
 fn is_letters(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &str = "String>>#isLetters";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         value => value,
     ]);
 
@@ -75,7 +68,7 @@ fn is_letters(interpreter: &mut Interpreter, universe: &mut Universe) {
         _ => panic!("'{}': invalid self type", SIGNATURE),
     };
 
-    frame.borrow_mut().stack.push(Value::Boolean(
+    interpreter.stack.push(Value::Boolean(
         !value.is_empty() && !value.is_empty() && value.chars().all(char::is_alphabetic),
     ))
 }
@@ -83,9 +76,7 @@ fn is_letters(interpreter: &mut Interpreter, universe: &mut Universe) {
 fn is_digits(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &str = "String>>#isDigits";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         value => value,
     ]);
 
@@ -95,7 +86,7 @@ fn is_digits(interpreter: &mut Interpreter, universe: &mut Universe) {
         _ => panic!("'{}': invalid self type", SIGNATURE),
     };
 
-    frame.borrow_mut().stack.push(Value::Boolean(
+    interpreter.stack.push(Value::Boolean(
         !value.is_empty() && value.chars().all(char::is_numeric),
     ))
 }
@@ -103,9 +94,7 @@ fn is_digits(interpreter: &mut Interpreter, universe: &mut Universe) {
 fn is_whitespace(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &str = "String>>#isWhiteSpace";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         value => value,
     ]);
 
@@ -115,7 +104,7 @@ fn is_whitespace(interpreter: &mut Interpreter, universe: &mut Universe) {
         _ => panic!("'{}': invalid self type", SIGNATURE),
     };
 
-    frame.borrow_mut().stack.push(Value::Boolean(
+    interpreter.stack.push(Value::Boolean(
         !value.is_empty() && value.chars().all(char::is_whitespace),
     ))
 }
@@ -123,9 +112,7 @@ fn is_whitespace(interpreter: &mut Interpreter, universe: &mut Universe) {
 fn concatenate(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &str = "String>>#concatenate:";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         s1 => s1,
         s2 => s2,
     ]);
@@ -141,8 +128,7 @@ fn concatenate(interpreter: &mut Interpreter, universe: &mut Universe) {
         _ => panic!("'{}': wrong types", SIGNATURE),
     };
 
-    frame
-        .borrow_mut()
+    interpreter
         .stack
         .push(Value::String(Rc::new(format!("{}{}", s1, s2))))
 }
@@ -150,18 +136,15 @@ fn concatenate(interpreter: &mut Interpreter, universe: &mut Universe) {
 fn as_symbol(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &str = "String>>#asSymbol";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         value => value,
     ]);
 
     match value {
-        Value::String(ref value) => frame
-            .borrow_mut()
+        Value::String(ref value) => interpreter
             .stack
             .push(Value::Symbol(universe.intern_symbol(value.as_str()))),
-        Value::Symbol(sym) => frame.borrow_mut().stack.push(Value::Symbol(sym)),
+        Value::Symbol(sym) => interpreter.stack.push(Value::Symbol(sym)),
         _ => panic!("'{}': invalid self type", SIGNATURE),
     }
 }
@@ -169,22 +152,18 @@ fn as_symbol(interpreter: &mut Interpreter, universe: &mut Universe) {
 fn eq(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "String>>#=";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         s1 => s1,
         s2 => s2,
     ]);
 
-    frame.borrow_mut().stack.push(Value::Boolean(s1 == s2))
+    interpreter.stack.push(Value::Boolean(s1 == s2))
 }
 
 fn prim_substring_from_to(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &str = "String>>#primSubstringFrom:to:";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         value => value,
         Value::Integer(from) => from,
         Value::Integer(to) => to,
@@ -198,7 +177,7 @@ fn prim_substring_from_to(interpreter: &mut Interpreter, universe: &mut Universe
 
     let string = Rc::new(value.chars().skip(from).take(to - from).collect());
 
-    frame.borrow_mut().stack.push(Value::String(string))
+    interpreter.stack.push(Value::String(string))
 }
 
 /// Search for a primitive matching the given signature.

@@ -22,15 +22,13 @@ macro_rules! promote {
 fn from_string(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#fromString:";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         _,
         Value::String(string) => string,
     ]);
 
     match string.parse() {
-        Ok(parsed) => frame.borrow_mut().stack.push(Value::Double(parsed)),
+        Ok(parsed) => interpreter.stack.push(Value::Double(parsed)),
         Err(err) => panic!("'{}': {}", SIGNATURE, err),
     }
 }
@@ -38,16 +36,13 @@ fn from_string(interpreter: &mut Interpreter, _: &mut Universe) {
 fn as_string(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#asString";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         value => value,
     ]);
 
     let value = promote!(SIGNATURE, value);
 
-    frame
-        .borrow_mut()
+    interpreter
         .stack
         .push(Value::String(Rc::new(value.to_string())));
 }
@@ -55,95 +50,78 @@ fn as_string(interpreter: &mut Interpreter, _: &mut Universe) {
 fn as_integer(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#asInteger";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         Value::Double(value) => value,
     ]);
 
-    frame
-        .borrow_mut()
-        .stack
-        .push(Value::Integer(value.trunc() as i64));
+    interpreter.stack.push(Value::Integer(value.trunc() as i64));
 }
 
 fn sqrt(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#sqrt";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         value => value,
     ]);
 
     let value = promote!(SIGNATURE, value);
 
-    frame.borrow_mut().stack.push(Value::Double(value.sqrt()));
+    interpreter.stack.push(Value::Double(value.sqrt()));
 }
 
 fn round(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#round";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         value => value,
     ]);
 
     let value = promote!(SIGNATURE, value);
 
-    frame.borrow_mut().stack.push(Value::Double(value.round()));
+    interpreter.stack.push(Value::Double(value.round()));
 }
 
 fn cos(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#cos";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         value => value,
     ]);
 
     let value = promote!(SIGNATURE, value);
 
-    frame.borrow_mut().stack.push(Value::Double(value.cos()));
+    interpreter.stack.push(Value::Double(value.cos()));
 }
 
 fn sin(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#sin";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         value => value,
     ]);
 
     let value = promote!(SIGNATURE, value);
 
-    frame.borrow_mut().stack.push(Value::Double(value.sin()));
+    interpreter.stack.push(Value::Double(value.sin()));
 }
 
 fn eq(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#=";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         // Value::Double(a) => a,
         // Value::Double(b) => b,
         a => a,
         b => b,
     ]);
 
-    frame.borrow_mut().stack.push(Value::Boolean(a == b));
+    interpreter.stack.push(Value::Boolean(a == b));
 }
 
 fn lt(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#<";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
         b => b,
     ]);
@@ -151,15 +129,13 @@ fn lt(interpreter: &mut Interpreter, _: &mut Universe) {
     let a = promote!(SIGNATURE, a);
     let b = promote!(SIGNATURE, b);
 
-    frame.borrow_mut().stack.push(Value::Boolean(a < b));
+    interpreter.stack.push(Value::Boolean(a < b));
 }
 
 fn plus(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#+";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
         b => b,
     ]);
@@ -167,15 +143,13 @@ fn plus(interpreter: &mut Interpreter, _: &mut Universe) {
     let a = promote!(SIGNATURE, a);
     let b = promote!(SIGNATURE, b);
 
-    frame.borrow_mut().stack.push(Value::Double(a + b));
+    interpreter.stack.push(Value::Double(a + b));
 }
 
 fn minus(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#-";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
         b => b,
     ]);
@@ -183,15 +157,13 @@ fn minus(interpreter: &mut Interpreter, _: &mut Universe) {
     let a = promote!(SIGNATURE, a);
     let b = promote!(SIGNATURE, b);
 
-    frame.borrow_mut().stack.push(Value::Double(a - b));
+    interpreter.stack.push(Value::Double(a - b));
 }
 
 fn times(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#*";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
         b => b,
     ]);
@@ -199,15 +171,13 @@ fn times(interpreter: &mut Interpreter, _: &mut Universe) {
     let a = promote!(SIGNATURE, a);
     let b = promote!(SIGNATURE, b);
 
-    frame.borrow_mut().stack.push(Value::Double(a * b));
+    interpreter.stack.push(Value::Double(a * b));
 }
 
 fn divide(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#//";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
         b => b,
     ]);
@@ -215,15 +185,13 @@ fn divide(interpreter: &mut Interpreter, _: &mut Universe) {
     let a = promote!(SIGNATURE, a);
     let b = promote!(SIGNATURE, b);
 
-    frame.borrow_mut().stack.push(Value::Double(a / b));
+    interpreter.stack.push(Value::Double(a / b));
 }
 
 fn modulo(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#%";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
         b => b,
     ]);
@@ -231,19 +199,15 @@ fn modulo(interpreter: &mut Interpreter, _: &mut Universe) {
     let a = promote!(SIGNATURE, a);
     let b = promote!(SIGNATURE, b);
 
-    frame.borrow_mut().stack.push(Value::Double(a % b));
+    interpreter.stack.push(Value::Double(a % b));
 }
 
 fn positive_infinity(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#positiveInfinity";
 
-    let frame = interpreter.current_frame().expect("no current frame");
+    expect_args!(SIGNATURE, interpreter, [_]);
 
-    expect_args!(SIGNATURE, frame, [_]);
-
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    frame.borrow_mut().stack.push(Value::Double(f64::INFINITY));
+    interpreter.stack.push(Value::Double(f64::INFINITY));
 }
 
 /// Search for a primitive matching the given signature.

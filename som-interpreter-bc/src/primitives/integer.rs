@@ -12,15 +12,15 @@ use crate::value::Value;
 use crate::{expect_args, reverse};
 
 macro_rules! demote {
-    ($frame:expr, $expr:expr) => {{
+    ($interpreter:expr, $expr:expr) => {{
         let value = $expr;
         match value.to_i64() {
             Some(value) => {
-                $frame.borrow_mut().stack.push(Value::Integer(value));
+                $interpreter.stack.push(Value::Integer(value));
                 return;
             }
             None => {
-                $frame.borrow_mut().stack.push(Value::BigInteger(value));
+                $interpreter.stack.push(Value::BigInteger(value));
                 return;
             }
         }
@@ -30,9 +30,7 @@ macro_rules! demote {
 fn from_string(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#fromString:";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         _,
         value => value,
     ]);
@@ -48,7 +46,7 @@ fn from_string(interpreter: &mut Interpreter, universe: &mut Universe) {
 
     match parsed {
         Ok(parsed) => {
-            frame.borrow_mut().stack.push(parsed);
+            interpreter.stack.push(parsed);
             return;
         }
         Err(err) => panic!("{}", err),
@@ -58,9 +56,7 @@ fn from_string(interpreter: &mut Interpreter, universe: &mut Universe) {
 fn as_string(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#asString";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         value => value,
     ]);
 
@@ -71,7 +67,7 @@ fn as_string(interpreter: &mut Interpreter, _: &mut Universe) {
     };
 
     {
-        frame.borrow_mut().stack.push(Value::String(Rc::new(value)));
+        interpreter.stack.push(Value::String(Rc::new(value)));
         return;
     }
 }
@@ -79,9 +75,7 @@ fn as_string(interpreter: &mut Interpreter, _: &mut Universe) {
 fn at_random(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#atRandom";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         value => value,
     ]);
 
@@ -99,7 +93,7 @@ fn at_random(interpreter: &mut Interpreter, _: &mut Universe) {
     };
 
     {
-        frame.borrow_mut().stack.push(Value::Integer(chosen));
+        interpreter.stack.push(Value::Integer(chosen));
         return;
     }
 }
@@ -107,9 +101,7 @@ fn at_random(interpreter: &mut Interpreter, _: &mut Universe) {
 fn as_32bit_signed_value(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#as32BitSignedValue";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         value => value,
     ]);
 
@@ -123,7 +115,7 @@ fn as_32bit_signed_value(interpreter: &mut Interpreter, _: &mut Universe) {
     };
 
     {
-        frame.borrow_mut().stack.push(Value::Integer(value));
+        interpreter.stack.push(Value::Integer(value));
         return;
     }
 }
@@ -131,9 +123,7 @@ fn as_32bit_signed_value(interpreter: &mut Interpreter, _: &mut Universe) {
 fn as_32bit_unsigned_value(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#as32BitUnsignedValue";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         value => value,
     ]);
 
@@ -147,7 +137,7 @@ fn as_32bit_unsigned_value(interpreter: &mut Interpreter, _: &mut Universe) {
     };
 
     {
-        frame.borrow_mut().stack.push(Value::Integer(value));
+        interpreter.stack.push(Value::Integer(value));
         return;
     }
 }
@@ -155,9 +145,7 @@ fn as_32bit_unsigned_value(interpreter: &mut Interpreter, _: &mut Universe) {
 fn plus(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#+";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
         b => b,
     ]);
@@ -165,21 +153,21 @@ fn plus(interpreter: &mut Interpreter, _: &mut Universe) {
     match (a, b) {
         (Value::Integer(a), Value::Integer(b)) => match a.checked_add(b) {
             Some(value) => {
-                frame.borrow_mut().stack.push(Value::Integer(value));
+                interpreter.stack.push(Value::Integer(value));
                 return;
             }
-            None => demote!(frame, BigInt::from(a) + BigInt::from(b)),
+            None => demote!(interpreter, BigInt::from(a) + BigInt::from(b)),
         },
-        (Value::BigInteger(a), Value::BigInteger(b)) => demote!(frame, a + b),
+        (Value::BigInteger(a), Value::BigInteger(b)) => demote!(interpreter, a + b),
         (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
-            demote!(frame, a + BigInt::from(b))
+            demote!(interpreter, a + BigInt::from(b))
         }
         (Value::Double(a), Value::Double(b)) => {
-            frame.borrow_mut().stack.push(Value::Double(a + b));
+            interpreter.stack.push(Value::Double(a + b));
             return;
         }
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
-            frame.borrow_mut().stack.push(Value::Double((a as f64) + b));
+            interpreter.stack.push(Value::Double((a as f64) + b));
             return;
         }
         _ => panic!("'{}': wrong types", SIGNATURE),
@@ -189,9 +177,7 @@ fn plus(interpreter: &mut Interpreter, _: &mut Universe) {
 fn minus(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#-";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
         b => b,
     ]);
@@ -199,21 +185,21 @@ fn minus(interpreter: &mut Interpreter, _: &mut Universe) {
     match (a, b) {
         (Value::Integer(a), Value::Integer(b)) => match a.checked_sub(b) {
             Some(value) => {
-                frame.borrow_mut().stack.push(Value::Integer(value));
+                interpreter.stack.push(Value::Integer(value));
                 return;
             }
-            None => demote!(frame, BigInt::from(a) - BigInt::from(b)),
+            None => demote!(interpreter, BigInt::from(a) - BigInt::from(b)),
         },
-        (Value::BigInteger(a), Value::BigInteger(b)) => demote!(frame, a - b),
+        (Value::BigInteger(a), Value::BigInteger(b)) => demote!(interpreter, a - b),
         (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
-            demote!(frame, a - BigInt::from(b))
+            demote!(interpreter, a - BigInt::from(b))
         }
         (Value::Double(a), Value::Double(b)) => {
-            frame.borrow_mut().stack.push(Value::Double(a - b));
+            interpreter.stack.push(Value::Double(a - b));
             return;
         }
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
-            frame.borrow_mut().stack.push(Value::Double((a as f64) - b));
+            interpreter.stack.push(Value::Double((a as f64) - b));
             return;
         }
         _ => panic!("'{}': wrong types", SIGNATURE),
@@ -223,9 +209,7 @@ fn minus(interpreter: &mut Interpreter, _: &mut Universe) {
 fn times(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#*";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
         b => b,
     ]);
@@ -233,21 +217,21 @@ fn times(interpreter: &mut Interpreter, _: &mut Universe) {
     match (a, b) {
         (Value::Integer(a), Value::Integer(b)) => match a.checked_mul(b) {
             Some(value) => {
-                frame.borrow_mut().stack.push(Value::Integer(value));
+                interpreter.stack.push(Value::Integer(value));
                 return;
             }
-            None => demote!(frame, BigInt::from(a) * BigInt::from(b)),
+            None => demote!(interpreter, BigInt::from(a) * BigInt::from(b)),
         },
-        (Value::BigInteger(a), Value::BigInteger(b)) => demote!(frame, a * b),
+        (Value::BigInteger(a), Value::BigInteger(b)) => demote!(interpreter, a * b),
         (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
-            demote!(frame, a * BigInt::from(b))
+            demote!(interpreter, a * BigInt::from(b))
         }
         (Value::Double(a), Value::Double(b)) => {
-            frame.borrow_mut().stack.push(Value::Double(a * b));
+            interpreter.stack.push(Value::Double(a * b));
             return;
         }
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
-            frame.borrow_mut().stack.push(Value::Double((a as f64) * b));
+            interpreter.stack.push(Value::Double((a as f64) * b));
             return;
         }
         _ => panic!("'{}': wrong types", SIGNATURE),
@@ -257,9 +241,7 @@ fn times(interpreter: &mut Interpreter, _: &mut Universe) {
 fn divide(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#/";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
         b => b,
     ]);
@@ -267,21 +249,21 @@ fn divide(interpreter: &mut Interpreter, _: &mut Universe) {
     match (a, b) {
         (Value::Integer(a), Value::Integer(b)) => match a.checked_div(b) {
             Some(value) => {
-                frame.borrow_mut().stack.push(Value::Integer(value));
+                interpreter.stack.push(Value::Integer(value));
                 return;
             }
-            None => demote!(frame, BigInt::from(a) / BigInt::from(b)),
+            None => demote!(interpreter, BigInt::from(a) / BigInt::from(b)),
         },
-        (Value::BigInteger(a), Value::BigInteger(b)) => demote!(frame, a / b),
+        (Value::BigInteger(a), Value::BigInteger(b)) => demote!(interpreter, a / b),
         (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
-            demote!(frame, a / BigInt::from(b))
+            demote!(interpreter, a / BigInt::from(b))
         }
         (Value::Double(a), Value::Double(b)) => {
-            frame.borrow_mut().stack.push(Value::Double(a / b));
+            interpreter.stack.push(Value::Double(a / b));
             return;
         }
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
-            frame.borrow_mut().stack.push(Value::Double((a as f64) / b));
+            interpreter.stack.push(Value::Double((a as f64) / b));
             return;
         }
         _ => panic!("'{}': wrong types", SIGNATURE),
@@ -291,27 +273,24 @@ fn divide(interpreter: &mut Interpreter, _: &mut Universe) {
 fn divide_float(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#//";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
         b => b,
     ]);
 
     match (a, b) {
         (Value::Integer(a), Value::Integer(b)) => {
-            frame
-                .borrow_mut()
+            interpreter
                 .stack
                 .push(Value::Double((a as f64) / (b as f64)));
             return;
         }
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
-            frame.borrow_mut().stack.push(Value::Double((a as f64) / b));
+            interpreter.stack.push(Value::Double((a as f64) / b));
             return;
         }
         (Value::Double(a), Value::Double(b)) => {
-            frame.borrow_mut().stack.push(Value::Double(a / b));
+            interpreter.stack.push(Value::Double(a / b));
             return;
         }
         _ => panic!("'{}': wrong types", SIGNATURE),
@@ -321,9 +300,7 @@ fn divide_float(interpreter: &mut Interpreter, _: &mut Universe) {
 fn modulo(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#%";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         Value::Integer(a) => a,
         Value::Integer(b) => b,
     ]);
@@ -331,15 +308,12 @@ fn modulo(interpreter: &mut Interpreter, _: &mut Universe) {
     let result = a % b;
     if result.signum() != b.signum() {
         {
-            frame
-                .borrow_mut()
-                .stack
-                .push(Value::Integer((result + b) % b));
+            interpreter.stack.push(Value::Integer((result + b) % b));
             return;
         }
     } else {
         {
-            frame.borrow_mut().stack.push(Value::Integer(result));
+            interpreter.stack.push(Value::Integer(result));
             return;
         }
     }
@@ -348,9 +322,7 @@ fn modulo(interpreter: &mut Interpreter, _: &mut Universe) {
 fn remainder(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#rem:";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         Value::Integer(a) => a,
         Value::Integer(b) => b,
     ]);
@@ -358,15 +330,12 @@ fn remainder(interpreter: &mut Interpreter, _: &mut Universe) {
     let result = a % b;
     if result.signum() != a.signum() {
         {
-            frame
-                .borrow_mut()
-                .stack
-                .push(Value::Integer((result + a) % a));
+            interpreter.stack.push(Value::Integer((result + a) % a));
             return;
         }
     } else {
         {
-            frame.borrow_mut().stack.push(Value::Integer(result));
+            interpreter.stack.push(Value::Integer(result));
             return;
         }
     }
@@ -375,9 +344,7 @@ fn remainder(interpreter: &mut Interpreter, _: &mut Universe) {
 fn sqrt(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#sqrt";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
     ]);
 
@@ -387,22 +354,19 @@ fn sqrt(interpreter: &mut Interpreter, _: &mut Universe) {
             let trucated = sqrt.trunc();
             if sqrt == trucated {
                 {
-                    frame
-                        .borrow_mut()
-                        .stack
-                        .push(Value::Integer(trucated as i64));
+                    interpreter.stack.push(Value::Integer(trucated as i64));
                     return;
                 }
             } else {
                 {
-                    frame.borrow_mut().stack.push(Value::Double(sqrt));
+                    interpreter.stack.push(Value::Double(sqrt));
                     return;
                 }
             }
         }
-        Value::BigInteger(a) => demote!(frame, a.sqrt()),
+        Value::BigInteger(a) => demote!(interpreter, a.sqrt()),
         Value::Double(a) => {
-            frame.borrow_mut().stack.push(Value::Double(a.sqrt()));
+            interpreter.stack.push(Value::Double(a.sqrt()));
             return;
         }
         _ => panic!("'{}': wrong types", SIGNATURE),
@@ -412,21 +376,19 @@ fn sqrt(interpreter: &mut Interpreter, _: &mut Universe) {
 fn bitand(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#&";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
         b => b,
     ]);
 
     match (a, b) {
         (Value::Integer(a), Value::Integer(b)) => {
-            frame.borrow_mut().stack.push(Value::Integer(a & b));
+            interpreter.stack.push(Value::Integer(a & b));
             return;
         }
-        (Value::BigInteger(a), Value::BigInteger(b)) => demote!(frame, a & b),
+        (Value::BigInteger(a), Value::BigInteger(b)) => demote!(interpreter, a & b),
         (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
-            demote!(frame, a & BigInt::from(b))
+            demote!(interpreter, a & BigInt::from(b))
         }
         _ => panic!("'{}': wrong types", SIGNATURE),
     }
@@ -435,21 +397,19 @@ fn bitand(interpreter: &mut Interpreter, _: &mut Universe) {
 fn bitxor(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#bitXor:";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
         b => b,
     ]);
 
     match (a, b) {
         (Value::Integer(a), Value::Integer(b)) => {
-            frame.borrow_mut().stack.push(Value::Integer(a ^ b));
+            interpreter.stack.push(Value::Integer(a ^ b));
             return;
         }
-        (Value::BigInteger(a), Value::BigInteger(b)) => demote!(frame, a ^ b),
+        (Value::BigInteger(a), Value::BigInteger(b)) => demote!(interpreter, a ^ b),
         (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
-            demote!(frame, a ^ BigInt::from(b))
+            demote!(interpreter, a ^ BigInt::from(b))
         }
         _ => panic!("'{}': wrong types", SIGNATURE),
     }
@@ -458,45 +418,34 @@ fn bitxor(interpreter: &mut Interpreter, _: &mut Universe) {
 fn lt(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#<";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
         b => b,
     ]);
 
     match (a, b) {
         (Value::Integer(a), Value::Integer(b)) => {
-            frame.borrow_mut().stack.push(Value::Boolean(a < b));
+            interpreter.stack.push(Value::Boolean(a < b));
             return;
         }
         (Value::BigInteger(a), Value::BigInteger(b)) => {
-            frame.borrow_mut().stack.push(Value::Boolean(a < b));
+            interpreter.stack.push(Value::Boolean(a < b));
             return;
         }
         (Value::Double(a), Value::Double(b)) => {
-            frame.borrow_mut().stack.push(Value::Boolean(a < b));
+            interpreter.stack.push(Value::Boolean(a < b));
             return;
         }
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
-            frame
-                .borrow_mut()
-                .stack
-                .push(Value::Boolean((a as f64) < b));
+            interpreter.stack.push(Value::Boolean((a as f64) < b));
             return;
         }
         (Value::BigInteger(a), Value::Integer(b)) => {
-            frame
-                .borrow_mut()
-                .stack
-                .push(Value::Boolean(a < BigInt::from(b)));
+            interpreter.stack.push(Value::Boolean(a < BigInt::from(b)));
             return;
         }
         (Value::Integer(a), Value::BigInteger(b)) => {
-            frame
-                .borrow_mut()
-                .stack
-                .push(Value::Boolean(b < BigInt::from(a)));
+            interpreter.stack.push(Value::Boolean(b < BigInt::from(a)));
             return;
         }
         (a, b) => panic!("'{}': wrong types ({:?} | {:?})", SIGNATURE, a, b),
@@ -506,35 +455,30 @@ fn lt(interpreter: &mut Interpreter, _: &mut Universe) {
 fn eq(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#=";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
         b => b,
     ]);
 
     match (a, b) {
         (Value::Integer(a), Value::Integer(b)) => {
-            frame.borrow_mut().stack.push(Value::Boolean(a == b));
+            interpreter.stack.push(Value::Boolean(a == b));
             return;
         }
         (Value::BigInteger(a), Value::BigInteger(b)) => {
-            frame.borrow_mut().stack.push(Value::Boolean(a == b));
+            interpreter.stack.push(Value::Boolean(a == b));
             return;
         }
         (Value::Double(a), Value::Double(b)) => {
-            frame.borrow_mut().stack.push(Value::Boolean(a == b));
+            interpreter.stack.push(Value::Boolean(a == b));
             return;
         }
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
-            frame
-                .borrow_mut()
-                .stack
-                .push(Value::Boolean((a as f64) == b));
+            interpreter.stack.push(Value::Boolean((a as f64) == b));
             return;
         }
         _ => {
-            frame.borrow_mut().stack.push(Value::Boolean(false));
+            interpreter.stack.push(Value::Boolean(false));
             return;
         }
     }
@@ -543,9 +487,7 @@ fn eq(interpreter: &mut Interpreter, _: &mut Universe) {
 fn shift_left(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#<<";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
         Value::Integer(b) => b,
     ]);
@@ -553,12 +495,12 @@ fn shift_left(interpreter: &mut Interpreter, _: &mut Universe) {
     match a {
         Value::Integer(a) => match a.checked_shl(b as u32) {
             Some(value) => {
-                frame.borrow_mut().stack.push(Value::Integer(value));
+                interpreter.stack.push(Value::Integer(value));
                 return;
             }
-            None => demote!(frame, BigInt::from(a) << (b as usize)),
+            None => demote!(interpreter, BigInt::from(a) << (b as usize)),
         },
-        Value::BigInteger(a) => demote!(frame, a << (b as usize)),
+        Value::BigInteger(a) => demote!(interpreter, a << (b as usize)),
         _ => panic!("'{}': wrong types", SIGNATURE),
     }
 }
@@ -566,9 +508,7 @@ fn shift_left(interpreter: &mut Interpreter, _: &mut Universe) {
 fn shift_right(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#>>";
 
-    let frame = interpreter.current_frame().expect("no current frame");
-
-    expect_args!(SIGNATURE, frame, [
+    expect_args!(SIGNATURE, interpreter, [
         a => a,
         Value::Integer(b) => b,
     ]);
@@ -576,12 +516,12 @@ fn shift_right(interpreter: &mut Interpreter, _: &mut Universe) {
     match a {
         Value::Integer(a) => match a.checked_shr(b as u32) {
             Some(value) => {
-                frame.borrow_mut().stack.push(Value::Integer(value));
+                interpreter.stack.push(Value::Integer(value));
                 return;
             }
-            None => demote!(frame, BigInt::from(a) >> (b as usize)),
+            None => demote!(interpreter, BigInt::from(a) >> (b as usize)),
         },
-        Value::BigInteger(a) => demote!(frame, a >> (b as usize)),
+        Value::BigInteger(a) => demote!(interpreter, a >> (b as usize)),
         _ => panic!("'{}': wrong types", SIGNATURE),
     }
 }
