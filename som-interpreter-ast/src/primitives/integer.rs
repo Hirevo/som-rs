@@ -144,7 +144,16 @@ fn plus(_: &mut Universe, args: Vec<Value>) -> Return {
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
             Return::Local(Value::Double((a as f64) + b))
         }
-        _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
+        (Value::BigInteger(a), Value::Double(b)) | (Value::Double(b), Value::BigInteger(a)) => {
+            match a.to_f64() {
+                Some(a) => Return::Local(Value::Double(a + b)),
+                None => Return::Exception(format!(
+                    "'{}': `Integer` too big to be converted to `Double`",
+                    SIGNATURE
+                )),
+            }
+        }
+        _ => Return::Exception(format!("'{}': wrong types", SIGNATURE)),
     }
 }
 
@@ -162,14 +171,26 @@ fn minus(_: &mut Universe, args: Vec<Value>) -> Return {
             None => demote!(BigInt::from(a) - BigInt::from(b)),
         },
         (Value::BigInteger(a), Value::BigInteger(b)) => demote!(a - b),
-        (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
+        (Value::BigInteger(a), Value::Integer(b)) => {
             demote!(a - BigInt::from(b))
+        }
+        (Value::Integer(a), Value::BigInteger(b)) => {
+            demote!(BigInt::from(a) - b)
         }
         (Value::Double(a), Value::Double(b)) => Return::Local(Value::Double(a - b)),
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
             Return::Local(Value::Double((a as f64) - b))
         }
-        _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
+        (Value::BigInteger(a), Value::Double(b)) | (Value::Double(b), Value::BigInteger(a)) => {
+            match a.to_f64() {
+                Some(a) => Return::Local(Value::Double(a - b)),
+                None => Return::Exception(format!(
+                    "'{}': `Integer` too big to be converted to `Double`",
+                    SIGNATURE
+                )),
+            }
+        }
+        _ => Return::Exception(format!("'{}': wrong types", SIGNATURE)),
     }
 }
 
@@ -194,7 +215,7 @@ fn times(_: &mut Universe, args: Vec<Value>) -> Return {
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
             Return::Local(Value::Double((a as f64) * b))
         }
-        _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
+        _ => Return::Exception(format!("'{}': wrong types", SIGNATURE)),
     }
 }
 
@@ -219,7 +240,7 @@ fn divide(_: &mut Universe, args: Vec<Value>) -> Return {
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
             Return::Local(Value::Double((a as f64) / b))
         }
-        _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
+        _ => Return::Exception(format!("'{}': wrong types", SIGNATURE)),
     }
 }
 
@@ -239,7 +260,7 @@ fn divide_float(_: &mut Universe, args: Vec<Value>) -> Return {
             Return::Local(Value::Double((a as f64) / b))
         }
         (Value::Double(a), Value::Double(b)) => Return::Local(Value::Double(a / b)),
-        _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
+        _ => Return::Exception(format!("'{}': wrong types", SIGNATURE)),
     }
 }
 
@@ -294,7 +315,7 @@ fn sqrt(_: &mut Universe, args: Vec<Value>) -> Return {
         }
         Value::BigInteger(a) => demote!(a.sqrt()),
         Value::Double(a) => Return::Local(Value::Double(a.sqrt())),
-        _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
+        _ => Return::Exception(format!("'{}': wrong types", SIGNATURE)),
     }
 }
 
@@ -312,7 +333,7 @@ fn bitand(_: &mut Universe, args: Vec<Value>) -> Return {
         (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
             demote!(a & BigInt::from(b))
         }
-        _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
+        _ => Return::Exception(format!("'{}': wrong types", SIGNATURE)),
     }
 }
 
@@ -330,7 +351,7 @@ fn bitxor(_: &mut Universe, args: Vec<Value>) -> Return {
         (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
             demote!(a ^ BigInt::from(b))
         }
-        _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
+        _ => Return::Exception(format!("'{}': wrong types", SIGNATURE)),
     }
 }
 
@@ -355,9 +376,7 @@ fn lt(_: &mut Universe, args: Vec<Value>) -> Return {
         (Value::Integer(a), Value::BigInteger(b)) => {
             Return::Local(Value::Boolean(BigInt::from(a) < b))
         }
-        (a, b) => {
-            return Return::Exception(format!("'{}': wrong types ({:?} | {:?})", SIGNATURE, a, b))
-        }
+        _ => Return::Exception(format!("'{}': wrong types", SIGNATURE)),
     }
 }
 
@@ -372,6 +391,9 @@ fn eq(_: &mut Universe, args: Vec<Value>) -> Return {
     match (a, b) {
         (Value::Integer(a), Value::Integer(b)) => Return::Local(Value::Boolean(a == b)),
         (Value::BigInteger(a), Value::BigInteger(b)) => Return::Local(Value::Boolean(a == b)),
+        (Value::Integer(a), Value::BigInteger(b)) | (Value::BigInteger(b), Value::Integer(a)) => {
+            Return::Local(Value::Boolean(BigInt::from(a) == b))
+        }
         (Value::Double(a), Value::Double(b)) => Return::Local(Value::Boolean(a == b)),
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
             Return::Local(Value::Boolean((a as f64) == b))
@@ -394,7 +416,7 @@ fn shift_left(_: &mut Universe, args: Vec<Value>) -> Return {
             None => demote!(BigInt::from(a) << (b as usize)),
         },
         Value::BigInteger(a) => demote!(a << (b as usize)),
-        _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
+        _ => Return::Exception(format!("'{}': wrong types", SIGNATURE)),
     }
 }
 
@@ -412,7 +434,7 @@ fn shift_right(_: &mut Universe, args: Vec<Value>) -> Return {
             None => demote!(BigInt::from(a) >> (b as usize)),
         },
         Value::BigInteger(a) => demote!(a >> (b as usize)),
-        _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
+        _ => Return::Exception(format!("'{}': wrong types", SIGNATURE)),
     }
 }
 
