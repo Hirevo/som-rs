@@ -5,16 +5,23 @@ This is an implementation of the [**Simple Object Machine**], written in Rust.
 
 [**Simple Object Machine**]: https://som-st.github.io
 
+This project includes two SOM interpreters:
+
+- **`som-interpreter-ast`**: An abstract-syntax-tree-based interpreter.
+- **`som-interpreter-bc`**: A bytecode-based interpreter.
+
 This repository is organized as a [**Cargo workspace**], containing multiple crates (libraries).  
 Here is a rundown of these different crates (as of now, layout may change in the future):
 
-| Name                     | Description                                                   |
-| ------------------------ | ------------------------------------------------------------- |
-| **`som-core`**           | Core SOM types and abstractions, shared across the workspace. |
-| **`som-interpreter`**    | The SOM interpreter library and binary.                       |
-| **`som-lexer`**          | The SOM lexical analyzer.                                     |
-| **`som-parser-text`**    | A SOM parser that works directly with text (without a lexer). |
-| **`som-parser-symbols`** | A SOM parser that works with **`som-lexer`**'s output.        |
+| Name                      | Description                                                   |
+| ------------------------- | ------------------------------------------------------------- |
+| **`som-core`**            | Core SOM types and abstractions, shared across the workspace. |
+| **`som-interpreter-ast`** | The AST-based SOM interpreter library and binary.             |
+| **`som-interpreter-bc`**  | The bytecode-based SOM interpreter library and binary.        |
+| **`som-lexer`**           | The SOM lexical analyzer.                                     |
+| **`som-parser-core`**     | The common foundational types for building parsers            |
+| **`som-parser-text`**     | A SOM parser that works directly with text (without a lexer). |
+| **`som-parser-symbols`**  | A SOM parser that works with **`som-lexer`**'s output.        |
 
 [**Cargo workspace**]: https://doc.rust-lang.org/cargo/reference/workspaces.html
 
@@ -39,16 +46,16 @@ cargo build --release
 
 This will compile the project and take care of fetching and building dependencies for you.  
 Once the build is finished, you should have a `target/` folder created in the current directory.  
-You'll find the interpreter's binary at `./target/release/som-interpreter`.  
+You'll find the interpreter's binaries at `./target/release/som-interpreter-{ast,bc}`.
 
 To start the REPL, you can run:
 
 ```bash
 # the '-c' flag instructs the interpreter where to find the SOM standard library.
-./target/release/som-interpreter -c core-lib/Smalltalk
+./target/release/som-interpreter-bc -c core-lib/Smalltalk
 
 # you can pass multiple paths to '-c' by just keeping on adding arguments.
-./target/release/som-interpreter -c core-lib/Smalltalk core-lib/Examples
+./target/release/som-interpreter-bc -c core-lib/Smalltalk core-lib/Examples
 ```
 
 You'll get a prompt in which you can type SOM expressions and see what they get evaluated to.  
@@ -72,13 +79,13 @@ To evaluate from a file, simply pass the file as another argument to the interpr
 But, since the '-c' accepts multiple files, you might need to add the '--' argument before that file, like so:
 
 ```bash
-./target/release/som-interpreter -c core-lib/Smalltalk -- core-lib/Examples/Hello.som
+./target/release/som-interpreter-bc -c core-lib/Smalltalk -- core-lib/Examples/Hello.som
 ```
 
 For other purposes, you can use '-h' (or '--help') to print the complete help message:
 
 ```bash
-./target/release/som-interpreter -h
+./target/release/som-interpreter-bc -h
 ```
 
 License
