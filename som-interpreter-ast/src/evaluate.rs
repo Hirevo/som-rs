@@ -89,7 +89,29 @@ impl Evaluate for ast::Expression {
 
 impl Evaluate for ast::BinaryOp {
     fn evaluate(&self, universe: &mut Universe) -> Return {
-        let lhs = propagate!(self.lhs.evaluate(universe));
+        let (lhs, invokable) = match self.lhs.as_ref() {
+            ast::Expression::Reference(ident) if ident == "super" => {
+                let frame = universe.current_frame();
+                let lhs = frame.borrow().get_self();
+                let holder = frame.borrow().get_method_holder();
+                let super_class = match holder.borrow().super_class() {
+                    Some(class) => class,
+                    None => {
+                        return Return::Exception(
+                            "`super` used without any superclass available".to_string(),
+                        )
+                    }
+                };
+                let invokable = super_class.borrow().lookup_method(&self.op);
+                (lhs, invokable)
+            }
+            lhs => {
+                let lhs = propagate!(lhs.evaluate(universe));
+                let invokable = lhs.lookup_method(universe, &self.op);
+                (lhs, invokable)
+            }
+        };
+
         let rhs = propagate!(self.rhs.evaluate(universe));
 
         // println!(
@@ -98,7 +120,7 @@ impl Evaluate for ast::BinaryOp {
         //     self.signature
         // );
 
-        if let Some(invokable) = lhs.lookup_method(universe, &self.op) {
+        if let Some(invokable) = invokable {
             invokable.invoke(universe, vec![lhs, rhs])
         } else {
             universe
