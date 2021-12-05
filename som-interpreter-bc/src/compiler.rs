@@ -272,11 +272,19 @@ impl MethodCodegen for ast::Expression {
                 Some(())
             }
             ast::Expression::BinaryOp(message) => {
+                let super_send = match message.lhs.as_ref() {
+                    ast::Expression::Reference(value) if value == "super" => true,
+                    _ => false,
+                };
                 message.lhs.codegen(ctxt)?;
                 message.rhs.codegen(ctxt)?;
                 let sym = ctxt.intern_symbol(message.op.as_str());
                 let idx = ctxt.push_literal(Literal::Symbol(sym));
-                ctxt.push_instr(Bytecode::Send(idx as u8));
+                if super_send {
+                    ctxt.push_instr(Bytecode::SuperSend(idx as u8));
+                } else {
+                    ctxt.push_instr(Bytecode::Send(idx as u8));
+                }
                 Some(())
             }
             ast::Expression::Exit(expr) => {
