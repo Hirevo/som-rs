@@ -480,6 +480,10 @@ impl Universe {
         self.interner.intern(symbol)
     }
 
+    pub fn has_global(&self, idx: Interned) -> bool {
+        self.globals.contains_key(&idx)
+    }
+
     /// Lookup a symbol.
     pub fn lookup_symbol(&self, symbol: Interned) -> &str {
         self.interner.lookup(symbol)

@@ -97,6 +97,14 @@ impl Frame {
         }
     }
 
+    /// Get the current method itself.
+    pub fn get_method(&self) -> Rc<Method> {
+        match &self.kind {
+            FrameKind::Method { method, .. } => method.clone(),
+            FrameKind::Block { block, .. } => block.frame.as_ref().unwrap().borrow().get_method(),
+        }
+    }
+
     /// Get the bytecode at the specified index for the current method.
     pub fn get_bytecode(&self, idx: usize) -> Option<Bytecode> {
         match &self.kind {

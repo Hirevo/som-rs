@@ -3,6 +3,7 @@ use std::rc::Rc;
 
 use crate::block::Block;
 use crate::class::Class;
+use crate::interner::Interned;
 use crate::value::Value;
 use crate::SOMRef;
 
@@ -18,6 +19,8 @@ pub enum FrameKind {
     Method {
         /// The holder of the current method (used for lexical self/super).
         holder: SOMRef<Class>,
+        /// The current method.
+        signature: Interned,
         /// The self value.
         self_value: Value,
     },
@@ -62,6 +65,14 @@ impl Frame {
         }
     }
 
+    /// Get the signature of the current method.
+    pub fn get_method_signature(&self) -> Interned {
+        match &self.kind {
+            FrameKind::Method { signature, .. } => *signature,
+            FrameKind::Block { block, .. } => block.frame.borrow().get_method_signature(),
+        }
+    }
+
     /// Search for a local binding.
     pub fn lookup_local(&self, name: impl AsRef<str>) -> Option<Value> {
         let name = name.as_ref();
@@ -69,7 +80,9 @@ impl Frame {
             return Some(value);
         }
         match &self.kind {
-            FrameKind::Method { self_value, holder } => {
+            FrameKind::Method {
+                self_value, holder, ..
+            } => {
                 if holder.borrow().is_static {
                     holder.borrow().lookup_local(name)
                 } else {
@@ -88,7 +101,9 @@ impl Frame {
             return Some(());
         }
         match &mut self.kind {
-            FrameKind::Method { self_value, holder } => {
+            FrameKind::Method {
+                self_value, holder, ..
+            } => {
                 if holder.borrow().is_static {
                     holder.borrow_mut().assign_local(name, value)
                 } else {

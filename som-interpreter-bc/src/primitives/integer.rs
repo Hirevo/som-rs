@@ -27,6 +27,7 @@ pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
     ("bitXor:", self::bitxor, true),
     ("sqrt", self::sqrt, true),
     ("asString", self::as_string, true),
+    ("asDouble", self::as_double, true),
     ("atRandom", self::at_random, true),
     ("as32BitSignedValue", self::as_32bit_signed_value, true),
     ("as32BitUnsignedValue", self::as_32bit_unsigned_value, true),
@@ -87,6 +88,28 @@ fn as_string(interpreter: &mut Interpreter, _: &mut Universe) {
         interpreter.stack.push(Value::String(Rc::new(value)));
         return;
     }
+}
+
+fn as_double(interpreter: &mut Interpreter, _: &mut Universe) {
+    const SIGNATURE: &str = "Integer>>#asDouble";
+
+    expect_args!(SIGNATURE, interpreter, [
+        value => value,
+    ]);
+
+    let value = match value {
+        Value::Integer(value) => Value::Double(value as f64),
+        Value::BigInteger(value) => match value.to_i64() {
+            Some(value) => Value::Double(value as f64),
+            None => panic!(
+                "'{}': `Integer` too big to be converted to `Double`",
+                SIGNATURE
+            ),
+        },
+        _ => panic!("'{}': wrong types", SIGNATURE),
+    };
+
+    interpreter.stack.push(value);
 }
 
 fn at_random(interpreter: &mut Interpreter, _: &mut Universe) {
