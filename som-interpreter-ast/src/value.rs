@@ -146,9 +146,9 @@ impl PartialEq for Value {
             (Self::BigInteger(a), Self::Integer(b)) | (Self::Integer(b), Self::BigInteger(a)) => {
                 a.eq(&BigInt::from(*b))
             }
-            (Self::String(a), Self::String(b)) => a.eq(b),
             (Self::Symbol(a), Self::Symbol(b)) => a.eq(b),
-            (Self::Array(a), Self::Array(b)) => a.eq(b),
+            (Self::String(a), Self::String(b)) => Rc::ptr_eq(a, b),
+            (Self::Array(a), Self::Array(b)) => Rc::ptr_eq(a, b),
             (Self::Instance(a), Self::Instance(b)) => Rc::ptr_eq(a, b),
             (Self::Class(a), Self::Class(b)) => Rc::ptr_eq(a, b),
             (Self::Block(a), Self::Block(b)) => Rc::ptr_eq(a, b),
