@@ -165,7 +165,7 @@ fn eq(universe: &mut Universe, args: Vec<Value>) -> Return {
         s1 => s1,
         s2 => s2,
     ]);
-    
+
     let s1 = match s1 {
         Value::String(ref s1) => s1.as_str(),
         Value::Symbol(s1) => universe.lookup_symbol(s1),
@@ -179,7 +179,7 @@ fn eq(universe: &mut Universe, args: Vec<Value>) -> Return {
         Value::Symbol(s2) => universe.lookup_symbol(s2),
         _ => {
             return Return::Local(Value::Boolean(false));
-        },
+        }
     };
 
     Return::Local(Value::Boolean(s1 == s2))

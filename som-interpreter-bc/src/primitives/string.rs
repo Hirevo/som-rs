@@ -176,7 +176,7 @@ fn eq(interpreter: &mut Interpreter, universe: &mut Universe) {
         _ => {
             interpreter.stack.push(Value::Boolean(false));
             return;
-        },
+        }
     };
 
     let s2 = match s2 {
@@ -185,7 +185,7 @@ fn eq(interpreter: &mut Interpreter, universe: &mut Universe) {
         _ => {
             interpreter.stack.push(Value::Boolean(false));
             return;
-        },
+        }
     };
 
     interpreter.stack.push(Value::Boolean(s1 == s2))
