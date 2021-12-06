@@ -8,6 +8,26 @@ use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
 
+pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
+    ("+", self::plus, true),
+    ("-", self::minus, true),
+    ("*", self::times, true),
+    ("//", self::divide, true),
+    ("%", self::modulo, true),
+    ("=", self::eq, true),
+    ("<", self::lt, true),
+    ("sqrt", self::sqrt, true),
+    ("round", self::round, true),
+    ("cos", self::cos, true),
+    ("sin", self::sin, true),
+    ("asString", self::as_string, true),
+    ("asInteger", self::as_integer, true),
+];
+pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
+    ("fromString:", self::from_string, true),
+    ("PositiveInfinity", self::positive_infinity, true),
+];
+
 macro_rules! promote {
     ($signature:expr, $value:expr) => {
         match $value {
@@ -219,24 +239,18 @@ fn positive_infinity(_: &mut Universe, _: Vec<Value>) -> Return {
     Return::Local(Value::Double(f64::INFINITY))
 }
 
-/// Search for a primitive matching the given signature.
-pub fn get_primitive(signature: impl AsRef<str>) -> Option<PrimitiveFn> {
-    match signature.as_ref() {
-        "+" => Some(self::plus),
-        "-" => Some(self::minus),
-        "*" => Some(self::times),
-        "//" => Some(self::divide),
-        "%" => Some(self::modulo),
-        "=" => Some(self::eq),
-        "<" => Some(self::lt),
-        "sqrt" => Some(self::sqrt),
-        "round" => Some(self::round),
-        "cos" => Some(self::cos),
-        "sin" => Some(self::sin),
-        "fromString:" => Some(self::from_string),
-        "asString" => Some(self::as_string),
-        "asInteger" => Some(self::as_integer),
-        "PositiveInfinity" => Some(self::positive_infinity),
-        _ => None,
-    }
+/// Search for an instance primitive matching the given signature.
+pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
+    INSTANCE_PRIMITIVES
+        .iter()
+        .find(|it| it.0 == signature)
+        .map(|it| it.1)
+}
+
+/// Search for a class primitive matching the given signature.
+pub fn get_class_primitive(signature: &str) -> Option<PrimitiveFn> {
+    CLASS_PRIMITIVES
+        .iter()
+        .find(|it| it.0 == signature)
+        .map(|it| it.1)
 }

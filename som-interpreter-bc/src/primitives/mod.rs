@@ -56,3 +56,45 @@ macro_rules! expect_args {
         reverse!($signature, $frame, [ $( $ptrn $( => $name )? ,)* ], [])
     };
 }
+
+pub fn get_class_primitives(
+    class_name: &str,
+) -> Option<&'static [(&'static str, PrimitiveFn, bool)]> {
+    match class_name {
+        "Array" => Some(self::array::CLASS_PRIMITIVES),
+        "Block1" => Some(self::block1::CLASS_PRIMITIVES),
+        "Block2" => Some(self::block2::CLASS_PRIMITIVES),
+        "Block3" => Some(self::block3::CLASS_PRIMITIVES),
+        "Class" => Some(self::class::CLASS_PRIMITIVES),
+        "Double" => Some(self::double::CLASS_PRIMITIVES),
+        "Integer" => Some(self::integer::CLASS_PRIMITIVES),
+        "Method" => Some(self::method::CLASS_PRIMITIVES),
+        "Primitive" => Some(self::method::CLASS_PRIMITIVES),
+        "Object" => Some(self::object::CLASS_PRIMITIVES),
+        "String" => Some(self::string::CLASS_PRIMITIVES),
+        "Symbol" => Some(self::symbol::CLASS_PRIMITIVES),
+        "System" => Some(self::system::CLASS_PRIMITIVES),
+        _ => None,
+    }
+}
+
+pub fn get_instance_primitives(
+    class_name: &str,
+) -> Option<&'static [(&'static str, PrimitiveFn, bool)]> {
+    match class_name {
+        "Array" => Some(self::array::INSTANCE_PRIMITIVES),
+        "Block1" => Some(self::block1::INSTANCE_PRIMITIVES),
+        "Block2" => Some(self::block2::INSTANCE_PRIMITIVES),
+        "Block3" => Some(self::block3::INSTANCE_PRIMITIVES),
+        "Class" => Some(self::class::INSTANCE_PRIMITIVES),
+        "Double" => Some(self::double::INSTANCE_PRIMITIVES),
+        "Integer" => Some(self::integer::INSTANCE_PRIMITIVES),
+        "Method" => Some(self::method::INSTANCE_PRIMITIVES),
+        "Primitive" => Some(self::method::INSTANCE_PRIMITIVES),
+        "Object" => Some(self::object::INSTANCE_PRIMITIVES),
+        "String" => Some(self::string::INSTANCE_PRIMITIVES),
+        "Symbol" => Some(self::symbol::INSTANCE_PRIMITIVES),
+        "System" => Some(self::system::INSTANCE_PRIMITIVES),
+        _ => None,
+    }
+}

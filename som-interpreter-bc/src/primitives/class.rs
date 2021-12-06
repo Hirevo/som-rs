@@ -8,6 +8,15 @@ use crate::universe::Universe;
 use crate::value::Value;
 use crate::{expect_args, reverse};
 
+pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
+    ("new", self::new, true),
+    ("name", self::name, true),
+    ("fields", self::fields, true),
+    ("methods", self::methods, true),
+    ("superclass", self::superclass, true),
+];
+pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
+
 fn superclass(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Class>>#superclass";
 
@@ -81,14 +90,18 @@ fn fields(interpreter: &mut Interpreter, _: &mut Universe) {
     ))));
 }
 
-/// Search for a primitive matching the given signature.
-pub fn get_primitive(signature: impl AsRef<str>) -> Option<PrimitiveFn> {
-    match signature.as_ref() {
-        "new" => Some(self::new),
-        "name" => Some(self::name),
-        "fields" => Some(self::fields),
-        "methods" => Some(self::methods),
-        "superclass" => Some(self::superclass),
-        _ => None,
-    }
+/// Search for an instance primitive matching the given signature.
+pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
+    INSTANCE_PRIMITIVES
+        .iter()
+        .find(|it| it.0 == signature)
+        .map(|it| it.1)
+}
+
+/// Search for a class primitive matching the given signature.
+pub fn get_class_primitive(signature: &str) -> Option<PrimitiveFn> {
+    CLASS_PRIMITIVES
+        .iter()
+        .find(|it| it.0 == signature)
+        .map(|it| it.1)
 }

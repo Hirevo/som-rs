@@ -9,6 +9,12 @@ use crate::{expect_args, reverse};
 pub mod block1 {
     use super::*;
 
+    pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
+        ("value", self::value, true),
+        ("restart", self::restart, false),
+    ];
+    pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
+
     fn value(interpreter: &mut Interpreter, _: &mut Universe) {
         const SIGNATURE: &str = "Block1>>#value";
 
@@ -32,19 +38,29 @@ pub mod block1 {
         frame.borrow_mut().bytecode_idx = 0;
     }
 
-    /// Search for a primitive matching the given signature.
-    pub fn get_primitive(signature: impl AsRef<str>) -> Option<PrimitiveFn> {
-        match signature.as_ref() {
-            "value" => Some(self::value),
-            "restart" => Some(self::restart),
-            _ => None,
-        }
+    /// Search for an instance primitive matching the given signature.
+    pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
+        INSTANCE_PRIMITIVES
+            .iter()
+            .find(|it| it.0 == signature)
+            .map(|it| it.1)
+    }
+
+    /// Search for a class primitive matching the given signature.
+    pub fn get_class_primitive(signature: &str) -> Option<PrimitiveFn> {
+        CLASS_PRIMITIVES
+            .iter()
+            .find(|it| it.0 == signature)
+            .map(|it| it.1)
     }
 }
 
 /// Primitives for the **Block2** class.
 pub mod block2 {
     use super::*;
+
+    pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[("value:", self::value, true)];
+    pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
 
     fn value(interpreter: &mut Interpreter, _: &mut Universe) {
         const SIGNATURE: &str = "Block2>>#value:";
@@ -62,18 +78,30 @@ pub mod block2 {
         frame.borrow_mut().args.push(argument);
     }
 
-    /// Search for a primitive matching the given signature.
-    pub fn get_primitive(signature: impl AsRef<str>) -> Option<PrimitiveFn> {
-        match signature.as_ref() {
-            "value:" => Some(self::value),
-            _ => None,
-        }
+    /// Search for an instance primitive matching the given signature.
+    pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
+        INSTANCE_PRIMITIVES
+            .iter()
+            .find(|it| it.0 == signature)
+            .map(|it| it.1)
+    }
+
+    /// Search for a class primitive matching the given signature.
+    pub fn get_class_primitive(signature: &str) -> Option<PrimitiveFn> {
+        CLASS_PRIMITIVES
+            .iter()
+            .find(|it| it.0 == signature)
+            .map(|it| it.1)
     }
 }
 
 /// Primitives for the **Block3** class.
 pub mod block3 {
     use super::*;
+
+    pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] =
+        &[("value:with:", self::value_with, true)];
+    pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
 
     fn value_with(interpreter: &mut Interpreter, _: &mut Universe) {
         const SIGNATURE: &str = "Block3>>#value:with:";
@@ -93,11 +121,19 @@ pub mod block3 {
         frame.borrow_mut().args.push(argument2);
     }
 
-    /// Search for a primitive matching the given signature.
-    pub fn get_primitive(signature: impl AsRef<str>) -> Option<PrimitiveFn> {
-        match signature.as_ref() {
-            "value:with:" => Some(self::value_with),
-            _ => None,
-        }
+    /// Search for an instance primitive matching the given signature.
+    pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
+        INSTANCE_PRIMITIVES
+            .iter()
+            .find(|it| it.0 == signature)
+            .map(|it| it.1)
+    }
+
+    /// Search for a class primitive matching the given signature.
+    pub fn get_class_primitive(signature: &str) -> Option<PrimitiveFn> {
+        CLASS_PRIMITIVES
+            .iter()
+            .find(|it| it.0 == signature)
+            .map(|it| it.1)
     }
 }
