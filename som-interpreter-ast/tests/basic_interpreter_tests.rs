@@ -21,8 +21,9 @@ fn setup_universe() -> Universe {
 fn basic_interpreter_tests() {
     let mut universe = setup_universe();
 
-    universe.load_class("Return").unwrap();
-    universe.load_class("CompilerSimplification").unwrap();
+    let return_class = Value::Class(universe.load_class("Return").unwrap());
+    let compiler_simplification_class =
+        Value::Class(universe.load_class("CompilerSimplification").unwrap());
 
     let tests: &[(&str, Value)] = &[
         // {"Self", "assignSuper", 42, ProgramDefinitionError.class},
@@ -37,18 +38,12 @@ fn basic_interpreter_tests() {
         ("Blocks testArg2", Value::Integer(77)),
         ("Blocks testArgAndLocal", Value::Integer(8)),
         ("Blocks testArgAndContext", Value::Integer(8)),
-        (
-            "Return testReturnSelf",
-            universe.lookup_global("Return").unwrap(),
-        ),
-        (
-            "Return testReturnSelfImplicitly",
-            universe.lookup_global("Return").unwrap(),
-        ),
-        (
-            "Return testNoReturnReturnsSelf",
-            universe.lookup_global("Return").unwrap(),
-        ),
+        ("Blocks testEmptyZeroArg", Value::Integer(1)),
+        ("Blocks testEmptyOneArg", Value::Integer(1)),
+        ("Blocks testEmptyTwoArg", Value::Integer(1)),
+        ("Return testReturnSelf", return_class.clone()),
+        ("Return testReturnSelfImplicitly", return_class.clone()),
+        ("Return testNoReturnReturnsSelf", return_class.clone()),
         (
             "Return testBlockReturnsImplicitlyLastValue",
             Value::Integer(4),
@@ -61,16 +56,32 @@ fn basic_interpreter_tests() {
             Value::Symbol(universe.intern_symbol("constant")),
         ),
         (
+            "IfTrueIfFalse testIfTrueTrueResult",
+            Value::Class(universe.integer_class()),
+        ),
+        (
+            "IfTrueIfFalse testIfTrueFalseResult",
+            Value::Class(universe.nil_class()),
+        ),
+        (
+            "IfTrueIfFalse testIfFalseTrueResult",
+            Value::Class(universe.nil_class()),
+        ),
+        (
+            "IfTrueIfFalse testIfFalseFalseResult",
+            Value::Class(universe.integer_class()),
+        ),
+        (
             "CompilerSimplification testReturnConstantInt",
             Value::Integer(42),
         ),
         (
             "CompilerSimplification testReturnSelf",
-            universe.lookup_global("CompilerSimplification").unwrap(),
+            compiler_simplification_class.clone(),
         ),
         (
             "CompilerSimplification testReturnSelfImplicitly",
-            universe.lookup_global("CompilerSimplification").unwrap(),
+            compiler_simplification_class.clone(),
         ),
         (
             "CompilerSimplification testReturnArgumentN",
@@ -101,8 +112,18 @@ fn basic_interpreter_tests() {
             "BlockInlining testOneLevelInliningWithLocalShadowFalse",
             Value::Integer(1),
         ),
+        (
+            "BlockInlining testShadowDoesntStoreWrongLocal",
+            Value::Integer(33),
+        ),
+        (
+            "BlockInlining testShadowDoesntReadUnrelated",
+            Value::Class(universe.nil_class()),
+        ),
         ("BlockInlining testBlockNestedInIfTrue", Value::Integer(2)),
         ("BlockInlining testBlockNestedInIfFalse", Value::Integer(42)),
+        ("BlockInlining testStackDisciplineTrue", Value::Integer(1)),
+        ("BlockInlining testStackDisciplineFalse", Value::Integer(2)),
         (
             "BlockInlining testDeepNestedInlinedIfTrue",
             Value::Integer(3),
@@ -126,8 +147,13 @@ fn basic_interpreter_tests() {
         ("ObjectCreation test", Value::Integer(1000000)),
         ("Regressions testSymbolEquality", Value::Integer(1)),
         ("Regressions testSymbolReferenceEquality", Value::Integer(1)),
+        ("Regressions testUninitializedLocal", Value::Integer(1)),
+        (
+            "Regressions testUninitializedLocalInBlock",
+            Value::Integer(1),
+        ),
         ("BinaryOperation test", Value::Integer(3 + 8)),
-        ("NumberOfTests numberOfTests", Value::Integer(52)),
+        ("NumberOfTests numberOfTests", Value::Integer(65)),
     ];
 
     for (expr, expected) in tests {
@@ -142,7 +168,10 @@ fn basic_interpreter_tests() {
 
         let ast = som_parser::apply(lang::expression(), tokens.as_slice()).unwrap();
 
+        let signature = universe.intern_symbol(expr.split(' ').skip(1).next().unwrap_or("unknown"));
+
         let kind = FrameKind::Method {
+            signature,
             holder: universe.system_class(),
             self_value: Value::System,
         };

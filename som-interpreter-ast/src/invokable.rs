@@ -53,9 +53,15 @@ impl Invoke for Method {
                         )
                     }
                 };
-                universe.with_frame(FrameKind::Method { holder, self_value }, |universe| {
-                    method.invoke(universe, params)
-                })
+                let signature = universe.intern_symbol(&self.signature);
+                universe.with_frame(
+                    FrameKind::Method {
+                        holder,
+                        signature,
+                        self_value,
+                    },
+                    |universe| method.invoke(universe, params),
+                )
             }
             MethodKind::Primitive(func) => func(universe, args),
             MethodKind::NotImplemented(name) => {

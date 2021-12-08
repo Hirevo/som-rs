@@ -7,7 +7,7 @@ use crate::value::Value;
 use crate::{expect_args, reverse};
 
 pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] =
-    &[("asString", self::as_string, true)];
+    &[("asString", self::as_string, true), ("=", self::eq, false)];
 pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
 
 fn as_string(interpreter: &mut Interpreter, universe: &mut Universe) {
@@ -20,6 +20,17 @@ fn as_string(interpreter: &mut Interpreter, universe: &mut Universe) {
     interpreter.stack.push(Value::String(Rc::new(
         universe.lookup_symbol(sym).to_string(),
     )));
+}
+
+fn eq(interpreter: &mut Interpreter, _: &mut Universe) {
+    const SIGNATURE: &str = "Symbol>>#=";
+
+    expect_args!(SIGNATURE, interpreter, [
+        sym @ Value::Symbol(_) => sym,
+        other => other,
+    ]);
+
+    interpreter.stack.push(Value::Boolean(sym == other));
 }
 
 /// Search for an instance primitive matching the given signature.

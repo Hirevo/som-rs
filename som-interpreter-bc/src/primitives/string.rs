@@ -162,13 +162,31 @@ fn as_symbol(interpreter: &mut Interpreter, universe: &mut Universe) {
     }
 }
 
-fn eq(interpreter: &mut Interpreter, _: &mut Universe) {
+fn eq(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &str = "String>>#=";
 
     expect_args!(SIGNATURE, interpreter, [
         s1 => s1,
         s2 => s2,
     ]);
+
+    let s1 = match s1 {
+        Value::String(ref s1) => s1.as_str(),
+        Value::Symbol(s1) => universe.lookup_symbol(s1),
+        _ => {
+            interpreter.stack.push(Value::Boolean(false));
+            return;
+        }
+    };
+
+    let s2 = match s2 {
+        Value::String(ref s2) => s2.as_str(),
+        Value::Symbol(s2) => universe.lookup_symbol(s2),
+        _ => {
+            interpreter.stack.push(Value::Boolean(false));
+            return;
+        }
+    };
 
     interpreter.stack.push(Value::Boolean(s1 == s2))
 }

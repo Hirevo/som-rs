@@ -23,6 +23,7 @@ pub fn interactive(universe: &mut Universe, verbose: bool) -> Result<(), Error> 
     let mut counter = 0;
     let mut line = String::new();
     let mut last_value = Value::Nil;
+    let signature = universe.intern_symbol("run:");
     loop {
         write!(&mut stdout, "({}) SOM Shell | ", counter)?;
         stdout.flush()?;
@@ -75,6 +76,7 @@ pub fn interactive(universe: &mut Universe, verbose: bool) -> Result<(), Error> 
 
         let start = Instant::now();
         let kind = FrameKind::Method {
+            signature,
             holder: universe.system_class(),
             self_value: Value::System,
         };

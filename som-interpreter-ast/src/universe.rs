@@ -508,6 +508,12 @@ impl Universe {
         }
     }
 
+    /// Returns whether a global binding of the specified name exists.
+    pub fn has_global(&self, name: impl AsRef<str>) -> bool {
+        let name = name.as_ref();
+        self.globals.contains_key(name)
+    }
+
     /// Search for a global binding.
     pub fn lookup_global(&self, name: impl AsRef<str>) -> Option<Value> {
         let name = name.as_ref();
