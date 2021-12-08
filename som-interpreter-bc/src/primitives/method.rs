@@ -1,4 +1,5 @@
 use crate::interpreter::Interpreter;
+use crate::method::Method;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
@@ -18,7 +19,7 @@ fn holder(interpreter: &mut Interpreter, _: &mut Universe) {
         Value::Invokable(invokable) => invokable,
     ]);
 
-    match invokable.holder().upgrade() {
+    match invokable.holder().clone() {
         Some(holder) => interpreter.stack.push(Value::Class(holder)),
         None => panic!("'{}': method sholder has been collected", SIGNATURE),
     }
@@ -45,7 +46,7 @@ fn invoke_on_with(interpreter: &mut Interpreter, universe: &mut Universe) {
     ]);
 
     let args = args.borrow().iter().cloned().collect();
-    invokable.invoke(interpreter, universe, receiver, args);
+    Method::invoke(invokable, interpreter, universe, receiver, args);
 }
 
 /// Search for an instance primitive matching the given signature.

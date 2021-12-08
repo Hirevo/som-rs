@@ -1,7 +1,8 @@
 use std::collections::hash_map::DefaultHasher;
 use std::convert::TryFrom;
 use std::hash::Hasher;
-use std::rc::Rc;
+
+use gc::Gc;
 
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
@@ -143,7 +144,7 @@ fn concatenate(interpreter: &mut Interpreter, universe: &mut Universe) {
 
     interpreter
         .stack
-        .push(Value::String(Rc::new(format!("{}{}", s1, s2))))
+        .push(Value::String(Gc::new(format!("{}{}", s1, s2))))
 }
 
 fn as_symbol(interpreter: &mut Interpreter, universe: &mut Universe) {
@@ -206,7 +207,7 @@ fn prim_substring_from_to(interpreter: &mut Interpreter, universe: &mut Universe
         (_, _, _) => panic!("'{}': wrong types", SIGNATURE),
     };
 
-    let string = Rc::new(value.chars().skip(from).take(to - from).collect());
+    let string = Gc::new(value.chars().skip(from).take(to - from).collect());
 
     interpreter.stack.push(Value::String(string))
 }

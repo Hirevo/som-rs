@@ -1,5 +1,4 @@
-use std::rc::Rc;
-
+use gc::Gc;
 use num_traits::ToPrimitive;
 
 use crate::interpreter::Interpreter;
@@ -30,8 +29,8 @@ pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
 
 macro_rules! promote {
     ($signature:expr, $value:expr) => {
-        match $value {
-            Value::Integer(value) => value as f64,
+        match &$value {
+            Value::Integer(value) => *value as f64,
             Value::BigInteger(value) => match value.to_f64() {
                 Some(value) => value,
                 None => {
@@ -41,7 +40,7 @@ macro_rules! promote {
                     )
                 }
             },
-            Value::Double(value) => value,
+            Value::Double(value) => *value,
             _ => panic!(
                 "'{}': wrong type (expected `integer` or `double`)",
                 $signature
@@ -75,7 +74,7 @@ fn as_string(interpreter: &mut Interpreter, _: &mut Universe) {
 
     interpreter
         .stack
-        .push(Value::String(Rc::new(value.to_string())));
+        .push(Value::String(Gc::new(value.to_string())));
 }
 
 fn as_integer(interpreter: &mut Interpreter, _: &mut Universe) {

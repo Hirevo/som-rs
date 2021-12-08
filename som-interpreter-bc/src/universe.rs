@@ -1,11 +1,11 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 
 use anyhow::{anyhow, Error};
+use gc::Gc;
+use gc::GcCell;
 
 use crate::block::Block;
 use crate::class::Class;
@@ -291,8 +291,8 @@ impl Universe {
 
             let super_class = if let Some(ref super_class) = defn.super_class {
                 let symbol = self.intern_symbol(super_class.as_str());
-                match self.lookup_global(symbol) {
-                    Some(Value::Class(super_class)) => super_class,
+                match &self.lookup_global(symbol) {
+                    Some(Value::Class(super_class)) => super_class.clone(),
                     _ => self.load_class(super_class)?,
                 }
             } else {
@@ -382,8 +382,8 @@ impl Universe {
 
         let super_class = if let Some(ref super_class) = defn.super_class {
             let symbol = self.intern_symbol(super_class);
-            match self.lookup_global(symbol) {
-                Some(Value::Class(class)) => class,
+            match &self.lookup_global(symbol) {
+                Some(Value::Class(class)) => class.clone(),
                 _ => self.load_class(super_class)?,
             }
         } else {
@@ -507,12 +507,12 @@ impl Universe {
         &mut self,
         interpreter: &mut Interpreter,
         value: Value,
-        block: Rc<Block>,
+        block: Gc<Block>,
     ) -> Option<()> {
         let method_name = self.intern_symbol("escapedBlock:");
         let method = value.lookup_method(self, method_name)?;
 
-        let holder = method.holder().upgrade().unwrap();
+        let holder = method.holder().clone().unwrap();
         let kind = FrameKind::Method {
             method,
             holder,
@@ -537,7 +537,7 @@ impl Universe {
         let method_name = self.intern_symbol("doesNotUnderstand:arguments:");
         let method = value.lookup_method(self, method_name)?;
 
-        let holder = method.holder().upgrade().unwrap();
+        let holder = method.holder().clone().unwrap();
         let kind = FrameKind::Method {
             method,
             holder,
@@ -547,7 +547,7 @@ impl Universe {
         let frame = interpreter.push_frame(kind);
         frame.borrow_mut().args.push(value);
         frame.borrow_mut().args.push(Value::Symbol(symbol));
-        let args = Value::Array(Rc::new(RefCell::new(args)));
+        let args = Value::Array(Gc::new(GcCell::new(args)));
         frame.borrow_mut().args.push(args);
 
         Some(())
@@ -563,7 +563,7 @@ impl Universe {
         let method_name = self.intern_symbol("unknownGlobal:");
         let method = value.lookup_method(self, method_name)?;
 
-        let holder = method.holder().upgrade().unwrap();
+        let holder = method.holder().clone().unwrap();
         let kind = FrameKind::Method {
             method,
             holder,
@@ -590,7 +590,7 @@ impl Universe {
 
         let frame = interpreter.push_frame(kind);
         frame.borrow_mut().args.push(Value::System);
-        let args = Value::Array(Rc::new(RefCell::new(args)));
+        let args = Value::Array(Gc::new(GcCell::new(args)));
         frame.borrow_mut().args.push(args);
 
         Some(())

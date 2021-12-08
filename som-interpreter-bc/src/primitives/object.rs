@@ -1,8 +1,10 @@
 use std::collections::hash_map::DefaultHasher;
 use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
+use std::ops::DerefMut;
 
 use crate::interpreter::Interpreter;
+use crate::method::Method;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
@@ -83,7 +85,7 @@ fn perform(interpreter: &mut Interpreter, universe: &mut Universe) {
     let method = object.lookup_method(universe, sym);
 
     match method {
-        Some(invokable) => invokable.invoke(interpreter, universe, object, vec![]),
+        Some(invokable) => Method::invoke(invokable, interpreter, universe, object, vec![]),
         None => {
             let signature = signature.to_string();
             universe
@@ -116,7 +118,7 @@ fn perform_with_arguments(interpreter: &mut Interpreter, universe: &mut Universe
     match method {
         Some(invokable) => {
             let args = arr.borrow().iter().cloned().collect();
-            invokable.invoke(interpreter, universe, object, args)
+            Method::invoke(invokable, interpreter, universe, object, args)
         }
         None => {
             let signature = signature.to_string();
@@ -151,7 +153,7 @@ fn perform_in_super_class(interpreter: &mut Interpreter, universe: &mut Universe
     let method = class.borrow().lookup_method(sym);
 
     match method {
-        Some(invokable) => invokable.invoke(interpreter, universe, object, vec![]),
+        Some(invokable) => Method::invoke(invokable, interpreter, universe, object, vec![]),
         None => {
             let signature = signature.to_string();
             let args = vec![object.clone()];
@@ -186,11 +188,11 @@ fn perform_with_arguments_in_super_class(interpreter: &mut Interpreter, universe
     match method {
         Some(invokable) => {
             let args = arr.borrow().iter().cloned().collect();
-            invokable.invoke(interpreter, universe, object, args)
+            Method::invoke(invokable, interpreter, universe, object, args)
         }
         None => {
             let args = std::iter::once(object.clone())
-                .chain(arr.replace(Vec::default()).into_iter())
+                .chain(std::mem::take(arr.borrow_mut().deref_mut()).into_iter())
                 .collect();
             let signature = signature.to_string();
             universe

@@ -1,11 +1,13 @@
 use std::fmt;
 
+use gc::{Finalize, Trace};
+
 use crate::class::Class;
 use crate::value::Value;
 use crate::SOMRef;
 
 /// Represents a generic (non-primitive) class instance.
-#[derive(Clone)]
+#[derive(Clone, Trace, Finalize)]
 pub struct Instance {
     /// The class of which this is an instance from.
     pub class: SOMRef<Class>,

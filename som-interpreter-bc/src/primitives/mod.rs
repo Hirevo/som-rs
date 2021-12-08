@@ -33,8 +33,8 @@ macro_rules! reverse {
         #[allow(unused_mut)]
         let ($($(mut $name,)?)*) = {
             $(#[allow(unreachable_patterns)]
-            $(let $name =)? match $interpreter.stack.pop() {
-                Some($ptrn) => {$($name)?},
+            $(let $name =)? match &$interpreter.stack.pop() {
+                Some($ptrn) => {$($name.clone())?},
                 Some(_) => panic!("'{}': wrong type", $signature),
                 None => panic!("'{}': missing argument", $signature),
             };)*

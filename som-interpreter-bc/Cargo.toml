@@ -20,6 +20,9 @@ structopt = "0.3.14"
 # error handling
 anyhow = "1.0.31"
 
+# garbage collection
+gc = { git = "https://github.com/Manishearth/rust-gc", branch = "master", features = ["derive", "unstable-config", "unstable-stats"] }
+
 # consistently-ordered hashmaps
 indexmap = "1.4.0"
 

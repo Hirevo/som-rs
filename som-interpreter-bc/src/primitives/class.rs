@@ -1,5 +1,4 @@
-use std::cell::RefCell;
-use std::rc::Rc;
+use gc::{Gc, GcCell};
 
 use crate::instance::Instance;
 use crate::interpreter::Interpreter;
@@ -38,7 +37,7 @@ fn new(interpreter: &mut Interpreter, _: &mut Universe) {
     ]);
 
     let instance = Instance::from_class(class);
-    let instance = Rc::new(RefCell::new(instance));
+    let instance = Gc::new(GcCell::new(instance));
     interpreter.stack.push(Value::Instance(instance));
 }
 
@@ -69,7 +68,7 @@ fn methods(interpreter: &mut Interpreter, _: &mut Universe) {
 
     interpreter
         .stack
-        .push(Value::Array(Rc::new(RefCell::new(methods))));
+        .push(Value::Array(Gc::new(GcCell::new(methods))));
 }
 
 fn fields(interpreter: &mut Interpreter, _: &mut Universe) {
@@ -79,7 +78,7 @@ fn fields(interpreter: &mut Interpreter, _: &mut Universe) {
         Value::Class(class) => class,
     ]);
 
-    interpreter.stack.push(Value::Array(Rc::new(RefCell::new(
+    interpreter.stack.push(Value::Array(Gc::new(GcCell::new(
         class
             .borrow()
             .locals

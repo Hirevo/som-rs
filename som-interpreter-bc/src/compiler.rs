@@ -1,10 +1,9 @@
 //!
 //! This is the bytecode compiler for the Simple Object Machine.
 //!
-use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
-use std::rc::{Rc, Weak};
 
+use gc::{Finalize, Gc, GcCell, Trace};
 use indexmap::{IndexMap, IndexSet};
 use num_bigint::BigInt;
 
@@ -19,15 +18,15 @@ use crate::primitives;
 use crate::value::Value;
 use crate::SOMRef;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Trace, Finalize)]
 pub enum Literal {
-    Symbol(Interned),
-    String(Rc<String>),
+    Symbol(#[unsafe_ignore_trace] Interned),
+    String(Gc<String>),
     Double(f64),
     Integer(i64),
-    BigInteger(BigInt),
+    BigInteger(#[unsafe_ignore_trace] BigInt),
     Array(Vec<u8>),
-    Block(Rc<Block>),
+    Block(Gc<Block>),
 }
 
 impl PartialEq for Literal {
@@ -39,7 +38,7 @@ impl PartialEq for Literal {
             (Literal::Integer(val1), Literal::Integer(val2)) => val1.eq(val2),
             (Literal::BigInteger(val1), Literal::BigInteger(val2)) => val1.eq(val2),
             (Literal::Array(val1), Literal::Array(val2)) => val1.eq(val2),
-            (Literal::Block(val1), Literal::Block(val2)) => Rc::ptr_eq(val1, val2),
+            (Literal::Block(val1), Literal::Block(val2)) => Gc::ptr_eq(val1, val2),
             _ => false,
         }
     }
@@ -299,7 +298,7 @@ impl MethodCodegen for ast::Expression {
                         ast::Literal::Symbol(val) => {
                             Literal::Symbol(ctxt.intern_symbol(val.as_str()))
                         }
-                        ast::Literal::String(val) => Literal::String(Rc::new(val.clone())),
+                        ast::Literal::String(val) => Literal::String(Gc::new(val.clone())),
                         ast::Literal::Double(val) => Literal::Double(*val),
                         ast::Literal::Integer(val) => Literal::Integer(*val),
                         ast::Literal::BigInteger(val) => Literal::BigInteger(val.parse().unwrap()),
@@ -323,7 +322,7 @@ impl MethodCodegen for ast::Expression {
             }
             ast::Expression::Block(val) => {
                 let block = compile_block(ctxt.as_gen_ctxt(), val)?;
-                let block = Rc::new(block);
+                let block = Gc::new(block);
                 let block = Literal::Block(block);
                 let idx = ctxt.push_literal(block);
                 ctxt.push_instr(Bytecode::PushBlock(idx as u8));
@@ -341,7 +340,7 @@ impl MethodCodegen for ast::Expression {
 struct ClassGenCtxt<'a> {
     pub name: String,
     pub fields: IndexSet<Interned>,
-    pub methods: IndexMap<Interned, Rc<Method>>,
+    pub methods: IndexMap<Interned, Gc<Method>>,
     pub interner: &'a mut Interner,
 }
 
@@ -419,7 +418,7 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
                 MethodKind::Defined(env)
             }
         },
-        holder: Weak::new(),
+        holder: None,
         signature: ctxt.signature,
     };
 
@@ -497,10 +496,10 @@ pub fn compile_class(
         interner,
     };
 
-    let static_class = Rc::new(RefCell::new(Class {
+    let static_class = Gc::new(GcCell::new(Class {
         name: static_class_ctxt.name.clone(),
-        class: MaybeWeak::Weak(Weak::new()),
-        super_class: Weak::new(),
+        class: MaybeWeak::Weak(None),
+        super_class: None,
         locals: IndexMap::new(),
         methods: IndexMap::new(),
         is_static: true,
@@ -509,8 +508,8 @@ pub fn compile_class(
     for method in &defn.static_methods {
         let signature = static_class_ctxt.interner.intern(method.signature.as_str());
         let mut method = compile_method(&mut static_class_ctxt, method)?;
-        method.holder = Rc::downgrade(&static_class);
-        static_class_ctxt.methods.insert(signature, Rc::new(method));
+        method.holder = Some(static_class.clone());
+        static_class_ctxt.methods.insert(signature, Gc::new(method));
     }
 
     if let Some(primitives) = primitives::get_class_primitives(&defn.name) {
@@ -526,10 +525,10 @@ pub fn compile_class(
             let method = Method {
                 signature: signature.to_string(),
                 kind: MethodKind::Primitive(primitive),
-                holder: Rc::downgrade(&static_class),
+                holder: Some(static_class.clone()),
             };
             let signature = static_class_ctxt.interner.intern(signature);
-            static_class_ctxt.methods.insert(signature, Rc::new(method));
+            static_class_ctxt.methods.insert(signature, Gc::new(method));
         }
     }
 
@@ -576,10 +575,10 @@ pub fn compile_class(
         interner,
     };
 
-    let instance_class = Rc::new(RefCell::new(Class {
+    let instance_class = Gc::new(GcCell::new(Class {
         name: instance_class_ctxt.name.clone(),
         class: MaybeWeak::Strong(static_class.clone()),
-        super_class: Weak::new(),
+        super_class: None,
         locals: IndexMap::new(),
         methods: IndexMap::new(),
         is_static: false,
@@ -590,10 +589,10 @@ pub fn compile_class(
             .interner
             .intern(method.signature.as_str());
         let mut method = compile_method(&mut instance_class_ctxt, method)?;
-        method.holder = Rc::downgrade(&instance_class);
+        method.holder = Some(instance_class.clone());
         instance_class_ctxt
             .methods
-            .insert(signature, Rc::new(method));
+            .insert(signature, Gc::new(method));
     }
 
     if let Some(primitives) = primitives::get_instance_primitives(&defn.name) {
@@ -609,12 +608,12 @@ pub fn compile_class(
             let method = Method {
                 signature: signature.to_string(),
                 kind: MethodKind::Primitive(primitive),
-                holder: Rc::downgrade(&instance_class),
+                holder: Some(instance_class.clone()),
             };
             let signature = instance_class_ctxt.interner.intern(signature);
             instance_class_ctxt
                 .methods
-                .insert(signature, Rc::new(method));
+                .insert(signature, Gc::new(method));
         }
     }
 

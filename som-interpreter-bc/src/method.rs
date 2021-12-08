@@ -1,5 +1,6 @@
 use std::fmt;
-use std::rc::Rc;
+
+use gc::{Finalize, Gc, Trace};
 
 use som_core::bytecode::Bytecode;
 
@@ -12,20 +13,21 @@ use crate::universe::Universe;
 use crate::value::Value;
 use crate::{SOMRef, SOMWeakRef};
 
-#[derive(Clone)]
+#[derive(Clone, Trace, Finalize)]
 pub struct MethodEnv {
     pub locals: Vec<Value>,
     pub literals: Vec<Literal>,
+    #[unsafe_ignore_trace]
     pub body: Vec<Bytecode>,
 }
 
 /// The kind of a class method.
-#[derive(Clone)]
+#[derive(Clone, Trace, Finalize)]
 pub enum MethodKind {
     /// A user-defined method from the AST.
     Defined(MethodEnv),
     /// An interpreter primitive.
-    Primitive(PrimitiveFn),
+    Primitive(#[unsafe_ignore_trace] PrimitiveFn),
     /// A non-implemented primitive.
     NotImplemented(String),
 }
@@ -38,7 +40,7 @@ impl MethodKind {
 }
 
 /// Represents a class method.
-#[derive(Clone)]
+#[derive(Clone, Trace, Finalize)]
 pub struct Method {
     pub kind: MethodKind,
     pub holder: SOMWeakRef<Class>,
@@ -72,17 +74,17 @@ impl Method {
     }
 
     pub fn invoke(
-        self: Rc<Self>,
+        method: Gc<Self>,
         interpreter: &mut Interpreter,
         universe: &mut Universe,
         receiver: Value,
         mut args: Vec<Value>,
     ) {
-        match self.kind() {
+        match method.kind() {
             MethodKind::Defined(_) => {
-                let holder = self.holder().upgrade().unwrap();
+                let holder = method.holder().clone().unwrap();
                 let kind = FrameKind::Method {
-                    method: self,
+                    method,
                     holder,
                     self_value: receiver.clone(),
                 };
@@ -106,7 +108,7 @@ impl fmt::Display for Method {
         write!(
             f,
             "#{}>>#{} = ",
-            self.holder.upgrade().unwrap().borrow().name(),
+            self.holder.as_ref().unwrap().borrow().name(),
             self.signature
         )?;
         match &self.kind {

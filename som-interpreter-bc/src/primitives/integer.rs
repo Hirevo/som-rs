@@ -1,5 +1,4 @@
-use std::rc::Rc;
-
+use gc::Gc;
 use num_bigint::{BigInt, Sign};
 use num_traits::ToPrimitive;
 use rand::distributions::Uniform;
@@ -65,7 +64,6 @@ fn from_string(interpreter: &mut Interpreter, universe: &mut Universe) {
     match parsed {
         Ok(parsed) => {
             interpreter.stack.push(parsed);
-            return;
         }
         Err(err) => panic!("{}", err),
     }
@@ -78,16 +76,13 @@ fn as_string(interpreter: &mut Interpreter, _: &mut Universe) {
         value => value,
     ]);
 
-    let value = match value {
+    let value = match &value {
         Value::Integer(value) => value.to_string(),
         Value::BigInteger(value) => value.to_string(),
         _ => panic!("'{}': wrong types", SIGNATURE),
     };
 
-    {
-        interpreter.stack.push(Value::String(Rc::new(value)));
-        return;
-    }
+    interpreter.stack.push(Value::String(Gc::new(value)));
 }
 
 fn as_double(interpreter: &mut Interpreter, _: &mut Universe) {
@@ -97,8 +92,8 @@ fn as_double(interpreter: &mut Interpreter, _: &mut Universe) {
         value => value,
     ]);
 
-    let value = match value {
-        Value::Integer(value) => Value::Double(value as f64),
+    let value = match &value {
+        Value::Integer(value) => Value::Double(*value as f64),
         Value::BigInteger(value) => match value.to_i64() {
             Some(value) => Value::Double(value as f64),
             None => panic!(
@@ -119,9 +114,9 @@ fn at_random(interpreter: &mut Interpreter, _: &mut Universe) {
         value => value,
     ]);
 
-    let chosen = match value {
+    let chosen = match &value {
         Value::Integer(value) => {
-            let distribution = Uniform::new(0, value);
+            let distribution = Uniform::new(0, *value);
             let mut rng = rand::thread_rng();
             rng.sample(distribution)
         }
@@ -145,8 +140,8 @@ fn as_32bit_signed_value(interpreter: &mut Interpreter, _: &mut Universe) {
         value => value,
     ]);
 
-    let value = match value {
-        Value::Integer(value) => value as i32 as i64,
+    let value = match &value {
+        Value::Integer(value) => *value as i32 as i64,
         Value::BigInteger(value) => match value.to_u32_digits() {
             (Sign::Minus, values) => -(values[0] as i64),
             (Sign::Plus, values) | (Sign::NoSign, values) => values[0] as i64,
@@ -167,8 +162,8 @@ fn as_32bit_unsigned_value(interpreter: &mut Interpreter, _: &mut Universe) {
         value => value,
     ]);
 
-    let value = match value {
-        Value::Integer(value) => value as u32 as i64,
+    let value = match &value {
+        Value::Integer(value) => *value as u32 as i64,
         Value::BigInteger(value) => {
             let (_, values) = value.to_u32_digits();
             values[0] as i64
@@ -190,18 +185,18 @@ fn plus(interpreter: &mut Interpreter, _: &mut Universe) {
         b => b,
     ]);
 
-    let value = match (a, b) {
-        (Value::Integer(a), Value::Integer(b)) => match a.checked_add(b) {
+    let value = match (&a, &b) {
+        (Value::Integer(a), Value::Integer(b)) => match a.checked_add(*b) {
             Some(value) => Value::Integer(value),
-            None => demote!(interpreter, BigInt::from(a) + BigInt::from(b)),
+            None => demote!(interpreter, BigInt::from(*a) + BigInt::from(*b)),
         },
         (Value::BigInteger(a), Value::BigInteger(b)) => demote!(interpreter, a + b),
         (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
-            demote!(interpreter, a + BigInt::from(b))
+            demote!(interpreter, a + BigInt::from(*b))
         }
         (Value::Double(a), Value::Double(b)) => Value::Double(a + b),
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
-            Value::Double((a as f64) + b)
+            Value::Double((*a as f64) + b)
         }
         (Value::BigInteger(a), Value::Double(b)) | (Value::Double(b), Value::BigInteger(a)) => {
             match a.to_f64() {
@@ -226,21 +221,21 @@ fn minus(interpreter: &mut Interpreter, _: &mut Universe) {
         b => b,
     ]);
 
-    let value = match (a, b) {
-        (Value::Integer(a), Value::Integer(b)) => match a.checked_sub(b) {
+    let value = match (&a, &b) {
+        (Value::Integer(a), Value::Integer(b)) => match a.checked_sub(*b) {
             Some(value) => Value::Integer(value),
-            None => demote!(interpreter, BigInt::from(a) - BigInt::from(b)),
+            None => demote!(interpreter, BigInt::from(*a) - BigInt::from(*b)),
         },
         (Value::BigInteger(a), Value::BigInteger(b)) => demote!(interpreter, a - b),
         (Value::BigInteger(a), Value::Integer(b)) => {
-            demote!(interpreter, a - BigInt::from(b))
+            demote!(interpreter, a - &BigInt::from(*b))
         }
         (Value::Integer(a), Value::BigInteger(b)) => {
-            demote!(interpreter, BigInt::from(a) - b)
+            demote!(interpreter, &BigInt::from(*a) - b)
         }
         (Value::Double(a), Value::Double(b)) => Value::Double(a - b),
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
-            Value::Double((a as f64) - b)
+            Value::Double((*a as f64) - *b)
         }
         (Value::BigInteger(a), Value::Double(b)) => match a.to_f64() {
             Some(a) => Value::Double(a - b),
@@ -270,18 +265,18 @@ fn times(interpreter: &mut Interpreter, _: &mut Universe) {
         b => b,
     ]);
 
-    let value = match (a, b) {
-        (Value::Integer(a), Value::Integer(b)) => match a.checked_mul(b) {
+    let value = match (&a, &b) {
+        (Value::Integer(a), Value::Integer(b)) => match a.checked_mul(*b) {
             Some(value) => Value::Integer(value),
-            None => demote!(interpreter, BigInt::from(a) * BigInt::from(b)),
+            None => demote!(interpreter, BigInt::from(*a) * BigInt::from(*b)),
         },
         (Value::BigInteger(a), Value::BigInteger(b)) => demote!(interpreter, a * b),
         (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
-            demote!(interpreter, a * BigInt::from(b))
+            demote!(interpreter, a * &BigInt::from(*b))
         }
         (Value::Double(a), Value::Double(b)) => Value::Double(a * b),
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
-            Value::Double((a as f64) * b)
+            Value::Double((*a as f64) * *b)
         }
         (Value::BigInteger(a), Value::Double(b)) | (Value::Double(b), Value::BigInteger(a)) => {
             match a.to_f64() {
@@ -306,21 +301,21 @@ fn divide(interpreter: &mut Interpreter, _: &mut Universe) {
         b => b,
     ]);
 
-    let value = match (a, b) {
-        (Value::Integer(a), Value::Integer(b)) => match a.checked_div(b) {
+    let value = match (&a, &b) {
+        (Value::Integer(a), Value::Integer(b)) => match a.checked_div(*b) {
             Some(value) => Value::Integer(value),
-            None => demote!(interpreter, BigInt::from(a) / BigInt::from(b)),
+            None => demote!(interpreter, BigInt::from(*a) / BigInt::from(*b)),
         },
         (Value::BigInteger(a), Value::BigInteger(b)) => demote!(interpreter, a / b),
         (Value::BigInteger(a), Value::Integer(b)) => {
-            demote!(interpreter, a / BigInt::from(b))
+            demote!(interpreter, a / &BigInt::from(*b))
         }
         (Value::Integer(a), Value::BigInteger(b)) => {
-            demote!(interpreter, BigInt::from(a) / b)
+            demote!(interpreter, &BigInt::from(*a) / b)
         }
         (Value::Double(a), Value::Double(b)) => Value::Double(a / b),
         (Value::Integer(a), Value::Double(b)) | (Value::Double(b), Value::Integer(a)) => {
-            Value::Double((a as f64) / b)
+            Value::Double((*a as f64) / *b)
         }
         (Value::BigInteger(a), Value::Double(b)) => match a.to_f64() {
             Some(a) => Value::Double(a / b),
@@ -350,8 +345,8 @@ fn divide_float(interpreter: &mut Interpreter, _: &mut Universe) {
         b => b,
     ]);
 
-    let a = match a {
-        Value::Integer(a) => a as f64,
+    let a = match &a {
+        Value::Integer(a) => *a as f64,
         Value::BigInteger(a) => match a.to_f64() {
             Some(a) => a,
             None => panic!(
@@ -359,12 +354,12 @@ fn divide_float(interpreter: &mut Interpreter, _: &mut Universe) {
                 SIGNATURE
             ),
         },
-        Value::Double(a) => a,
+        Value::Double(a) => *a,
         _ => panic!("'{}': wrong types", SIGNATURE),
     };
 
-    let b = match b {
-        Value::Integer(b) => b as f64,
+    let b = match &b {
+        Value::Integer(b) => *b as f64,
         Value::BigInteger(b) => match b.to_f64() {
             Some(b) => b,
             None => panic!(
@@ -372,7 +367,7 @@ fn divide_float(interpreter: &mut Interpreter, _: &mut Universe) {
                 SIGNATURE
             ),
         },
-        Value::Double(b) => b,
+        Value::Double(b) => *b,
         _ => panic!("'{}': wrong types", SIGNATURE),
     };
 
@@ -415,12 +410,12 @@ fn sqrt(interpreter: &mut Interpreter, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#sqrt";
 
     expect_args!(SIGNATURE, interpreter, [
-        a => a,
+        value => value,
     ]);
 
-    let value = match a {
-        Value::Integer(a) => {
-            let sqrt = (a as f64).sqrt();
+    let value = match &value {
+        Value::Integer(value) => {
+            let sqrt = (*value as f64).sqrt();
             let trucated = sqrt.trunc();
             if sqrt == trucated {
                 Value::Integer(trucated as i64)
@@ -444,11 +439,11 @@ fn bitand(interpreter: &mut Interpreter, _: &mut Universe) {
         b => b,
     ]);
 
-    let value = match (a, b) {
+    let value = match (&a, &b) {
         (Value::Integer(a), Value::Integer(b)) => Value::Integer(a & b),
         (Value::BigInteger(a), Value::BigInteger(b)) => demote!(interpreter, a & b),
         (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
-            demote!(interpreter, a & BigInt::from(b))
+            demote!(interpreter, a & BigInt::from(*b))
         }
         _ => panic!("'{}': wrong types", SIGNATURE),
     };
@@ -464,11 +459,11 @@ fn bitxor(interpreter: &mut Interpreter, _: &mut Universe) {
         b => b,
     ]);
 
-    let value = match (a, b) {
+    let value = match (&a, &b) {
         (Value::Integer(a), Value::Integer(b)) => Value::Integer(a ^ b),
         (Value::BigInteger(a), Value::BigInteger(b)) => demote!(interpreter, a ^ b),
         (Value::BigInteger(a), Value::Integer(b)) | (Value::Integer(b), Value::BigInteger(a)) => {
-            demote!(interpreter, a ^ BigInt::from(b))
+            demote!(interpreter, a ^ &BigInt::from(*b))
         }
         _ => panic!("'{}': wrong types", SIGNATURE),
     };
@@ -484,14 +479,14 @@ fn lt(interpreter: &mut Interpreter, _: &mut Universe) {
         b => b,
     ]);
 
-    let value = match (a, b) {
+    let value = match (&a, &b) {
         (Value::Integer(a), Value::Integer(b)) => Value::Boolean(a < b),
         (Value::BigInteger(a), Value::BigInteger(b)) => Value::Boolean(a < b),
         (Value::Double(a), Value::Double(b)) => Value::Boolean(a < b),
-        (Value::Integer(a), Value::Double(b)) => Value::Boolean((a as f64) < b),
-        (Value::Double(a), Value::Integer(b)) => Value::Boolean(a < (b as f64)),
-        (Value::BigInteger(a), Value::Integer(b)) => Value::Boolean(a < BigInt::from(b)),
-        (Value::Integer(a), Value::BigInteger(b)) => Value::Boolean(BigInt::from(a) < b),
+        (Value::Integer(a), Value::Double(b)) => Value::Boolean((*a as f64) < *b),
+        (Value::Double(a), Value::Integer(b)) => Value::Boolean(*a < (*b as f64)),
+        (Value::BigInteger(a), Value::Integer(b)) => Value::Boolean(*a < BigInt::from(*b)),
+        (Value::Integer(a), Value::BigInteger(b)) => Value::Boolean(&BigInt::from(*a) < b),
         _ => panic!("'{}': wrong types", SIGNATURE),
     };
 
@@ -506,12 +501,12 @@ fn eq(interpreter: &mut Interpreter, _: &mut Universe) {
         b => b,
     ]);
 
-    let value = match (a, b) {
+    let value = match (&a, &b) {
         (Value::Integer(a), Value::Integer(b)) => Value::Boolean(a == b),
         (Value::BigInteger(a), Value::BigInteger(b)) => Value::Boolean(a == b),
         (Value::Double(a), Value::Double(b)) => Value::Boolean(a == b),
-        (Value::Integer(a), Value::Double(b)) => Value::Boolean((a as f64) == b),
-        (Value::Double(a), Value::Integer(b)) => Value::Boolean(a == (b as f64)),
+        (Value::Integer(a), Value::Double(b)) => Value::Boolean((*a as f64) == *b),
+        (Value::Double(a), Value::Integer(b)) => Value::Boolean(*a == (*b as f64)),
         _ => Value::Boolean(false),
     };
 
@@ -526,10 +521,10 @@ fn shift_left(interpreter: &mut Interpreter, _: &mut Universe) {
         Value::Integer(b) => b,
     ]);
 
-    let value = match a {
+    let value = match &a {
         Value::Integer(a) => match a.checked_shl(b as u32) {
             Some(value) => Value::Integer(value),
-            None => demote!(interpreter, BigInt::from(a) << (b as usize)),
+            None => demote!(interpreter, BigInt::from(*a) << (b as usize)),
         },
         Value::BigInteger(a) => demote!(interpreter, a << (b as usize)),
         _ => panic!("'{}': wrong types", SIGNATURE),
@@ -546,10 +541,10 @@ fn shift_right(interpreter: &mut Interpreter, _: &mut Universe) {
         Value::Integer(b) => b,
     ]);
 
-    let value = match a {
+    let value = match &a {
         Value::Integer(a) => match a.checked_shr(b as u32) {
             Some(value) => Value::Integer(value),
-            None => demote!(interpreter, BigInt::from(a) >> (b as usize)),
+            None => demote!(interpreter, BigInt::from(*a) >> (b as usize)),
         },
         Value::BigInteger(a) => demote!(interpreter, a >> (b as usize)),
         _ => panic!("'{}': wrong types", SIGNATURE),

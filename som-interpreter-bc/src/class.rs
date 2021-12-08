@@ -1,6 +1,6 @@
 use std::fmt;
-use std::rc::Rc;
 
+use gc::{custom_trace, Finalize, Gc, Trace};
 use indexmap::IndexMap;
 
 use crate::interner::Interned;
@@ -9,8 +9,8 @@ use crate::value::Value;
 use crate::{SOMRef, SOMWeakRef};
 
 /// A reference that may be either weak or owned/strong.
-#[derive(Debug, Clone)]
-pub enum MaybeWeak<A> {
+#[derive(Debug, Clone, Trace, Finalize)]
+pub enum MaybeWeak<A: Trace + Finalize + 'static> {
     /// An owned reference.
     Strong(SOMRef<A>),
     /// A weak reference.
@@ -18,7 +18,7 @@ pub enum MaybeWeak<A> {
 }
 
 /// Represents a loaded class.
-#[derive(Clone)]
+#[derive(Clone, Finalize)]
 pub struct Class {
     /// The class' name.
     pub name: String,
@@ -30,9 +30,24 @@ pub struct Class {
     /// The class' locals.
     pub locals: IndexMap<Interned, Value>,
     /// The class' methods/invokables.
-    pub methods: IndexMap<Interned, Rc<Method>>,
+    pub methods: IndexMap<Interned, Gc<Method>>,
     /// Is this class a static one ?
     pub is_static: bool,
+}
+
+unsafe impl Trace for Class {
+    custom_trace!(this, {
+        mark(&this.name);
+        mark(&this.class);
+        mark(&this.super_class);
+        for (_, v) in this.locals.iter() {
+            mark(v);
+        }
+        for (_, v) in this.methods.iter() {
+            mark(v);
+        }
+        mark(&this.is_static);
+    });
 }
 
 impl Class {
@@ -44,7 +59,7 @@ impl Class {
     /// Get the class of this class.
     pub fn class(&self) -> SOMRef<Self> {
         match self.class {
-            MaybeWeak::Weak(ref weak) => weak.upgrade().unwrap_or_else(|| {
+            MaybeWeak::Weak(ref weak) => weak.clone().unwrap_or_else(|| {
                 panic!("superclass dropped, cannot upgrade ref ({})", self.name())
             }),
             MaybeWeak::Strong(ref owned) => owned.clone(),
@@ -53,7 +68,7 @@ impl Class {
 
     /// Set the class of this class (as a weak reference).
     pub fn set_class(&mut self, class: &SOMRef<Self>) {
-        self.class = MaybeWeak::Weak(Rc::downgrade(class));
+        self.class = MaybeWeak::Weak(Some(class.clone()));
     }
 
     /// Set the class of this class (as a strong reference).
@@ -63,19 +78,20 @@ impl Class {
 
     /// Get the superclass of this class.
     pub fn super_class(&self) -> Option<SOMRef<Self>> {
-        self.super_class.upgrade()
+        self.super_class.clone()
     }
 
     /// Set the superclass of this class (as a weak reference).
     pub fn set_super_class(&mut self, class: &SOMRef<Self>) {
-        self.super_class = Rc::downgrade(class);
+        self.super_class = Some(class.clone());
     }
 
     /// Search for a given method within this class.
-    pub fn lookup_method(&self, signature: Interned) -> Option<Rc<Method>> {
+    pub fn lookup_method(&self, signature: Interned) -> Option<Gc<Method>> {
         self.methods.get(&signature).cloned().or_else(|| {
             self.super_class
-                .upgrade()?
+                .as_ref()
+                .unwrap()
                 .borrow()
                 .lookup_method(signature)
         })

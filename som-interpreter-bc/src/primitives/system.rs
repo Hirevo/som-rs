@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 use std::fs;
-use std::rc::Rc;
+
+use gc::Gc;
 
 use crate::frame::FrameKind;
 use crate::interpreter::Interpreter;
@@ -42,7 +43,7 @@ fn load_file(interpreter: &mut Interpreter, universe: &mut Universe) {
     };
 
     let value = match fs::read_to_string(path) {
-        Ok(value) => Value::String(Rc::new(value)),
+        Ok(value) => Value::String(Gc::new(value)),
         Err(_) => Value::Nil,
     };
 
@@ -234,8 +235,10 @@ fn full_gc(interpreter: &mut Interpreter, _: &mut Universe) {
 
     expect_args!(SIGNATURE, interpreter, [Value::System]);
 
+    gc::force_collect();
+
     // We don't do any garbage collection at all, so we return false.
-    interpreter.stack.push(Value::Boolean(false));
+    interpreter.stack.push(Value::Boolean(true));
 }
 
 /// Search for an instance primitive matching the given signature.

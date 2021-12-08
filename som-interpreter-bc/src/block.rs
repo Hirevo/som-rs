@@ -1,5 +1,7 @@
 use std::fmt;
 
+use gc::{Finalize, Trace};
+
 use som_core::bytecode::Bytecode;
 
 use crate::class::Class;
@@ -10,12 +12,13 @@ use crate::value::Value;
 use crate::SOMRef;
 
 /// Represents an executable block.
-#[derive(Clone)]
+#[derive(Clone, Trace, Finalize)]
 pub struct Block {
     /// Reference to the captured stack frame.
     pub frame: Option<SOMRef<Frame>>,
     pub locals: Vec<Value>,
     pub literals: Vec<Literal>,
+    #[unsafe_ignore_trace]
     pub body: Vec<Bytecode>,
     pub nb_params: usize,
 }

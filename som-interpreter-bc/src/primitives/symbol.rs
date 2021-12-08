@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use gc::Gc;
 
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
@@ -17,7 +17,7 @@ fn as_string(interpreter: &mut Interpreter, universe: &mut Universe) {
         Value::Symbol(sym) => sym,
     ]);
 
-    interpreter.stack.push(Value::String(Rc::new(
+    interpreter.stack.push(Value::String(Gc::new(
         universe.lookup_symbol(sym).to_string(),
     )));
 }
