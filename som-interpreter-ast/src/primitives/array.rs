@@ -8,6 +8,14 @@ use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
 
+pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
+    ("at:", self::at, true),
+    ("at:put:", self::at_put, true),
+    ("length", self::length, true),
+];
+
+pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[("new:", self::new, true)];
+
 fn at(_: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "Array>>#at:";
 
@@ -74,13 +82,18 @@ fn new(_: &mut Universe, args: Vec<Value>) -> Return {
     }
 }
 
-/// Search for a primitive matching the given signature.
-pub fn get_primitive(signature: impl AsRef<str>) -> Option<PrimitiveFn> {
-    match signature.as_ref() {
-        "at:" => Some(self::at),
-        "at:put:" => Some(self::at_put),
-        "length" => Some(self::length),
-        "new:" => Some(self::new),
-        _ => None,
-    }
+/// Search for an instance primitive matching the given signature.
+pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
+    INSTANCE_PRIMITIVES
+        .iter()
+        .find(|it| it.0 == signature)
+        .map(|it| it.1)
+}
+
+/// Search for a class primitive matching the given signature.
+pub fn get_class_primitive(signature: &str) -> Option<PrimitiveFn> {
+    CLASS_PRIMITIVES
+        .iter()
+        .find(|it| it.0 == signature)
+        .map(|it| it.1)
 }

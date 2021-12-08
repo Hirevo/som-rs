@@ -11,6 +11,29 @@ use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
 
+pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
+    ("<", self::lt, true),
+    ("=", self::eq, true),
+    ("+", self::plus, true),
+    ("-", self::minus, true),
+    ("*", self::times, true),
+    ("/", self::divide, true),
+    ("//", self::divide_float, true),
+    ("%", self::modulo, true),
+    ("rem:", self::remainder, true),
+    ("&", self::bitand, true),
+    ("<<", self::shift_left, true),
+    (">>>", self::shift_right, true),
+    ("bitXor:", self::bitxor, true),
+    ("sqrt", self::sqrt, true),
+    ("asString", self::as_string, true),
+    ("atRandom", self::at_random, true),
+    ("as32BitSignedValue", self::as_32bit_signed_value, true),
+    ("as32BitUnsignedValue", self::as_32bit_unsigned_value, true),
+];
+pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] =
+    &[("fromString:", self::from_string, true)];
+
 macro_rules! demote {
     ($expr:expr) => {{
         let value = $expr;
@@ -438,28 +461,18 @@ fn shift_right(_: &mut Universe, args: Vec<Value>) -> Return {
     }
 }
 
-/// Search for a primitive matching the given signature.
-pub fn get_primitive(signature: impl AsRef<str>) -> Option<PrimitiveFn> {
-    match signature.as_ref() {
-        "fromString:" => Some(self::from_string),
-        "asString" => Some(self::as_string),
-        "atRandom" => Some(self::at_random),
-        "as32BitSignedValue" => Some(self::as_32bit_signed_value),
-        "as32BitUnsignedValue" => Some(self::as_32bit_unsigned_value),
-        "<" => Some(self::lt),
-        "=" => Some(self::eq),
-        "+" => Some(self::plus),
-        "-" => Some(self::minus),
-        "*" => Some(self::times),
-        "/" => Some(self::divide),
-        "//" => Some(self::divide_float),
-        "%" => Some(self::modulo),
-        "rem:" => Some(self::remainder),
-        "&" => Some(self::bitand),
-        "<<" => Some(self::shift_left),
-        ">>>" => Some(self::shift_right),
-        "bitXor:" => Some(self::bitxor),
-        "sqrt" => Some(self::sqrt),
-        _ => None,
-    }
+/// Search for an instance primitive matching the given signature.
+pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
+    INSTANCE_PRIMITIVES
+        .iter()
+        .find(|it| it.0 == signature)
+        .map(|it| it.1)
+}
+
+/// Search for a class primitive matching the given signature.
+pub fn get_class_primitive(signature: &str) -> Option<PrimitiveFn> {
+    CLASS_PRIMITIVES
+        .iter()
+        .find(|it| it.0 == signature)
+        .map(|it| it.1)
 }

@@ -15,6 +15,7 @@ use crate::block::Block;
 use crate::class::{Class, MaybeWeak};
 use crate::interner::{Interned, Interner};
 use crate::method::{Method, MethodEnv, MethodKind};
+use crate::primitives;
 use crate::value::Value;
 use crate::SOMRef;
 
@@ -408,11 +409,7 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
 
     let method = Method {
         kind: match &defn.body {
-            ast::MethodBody::Primitive => MethodKind::primitive_from_signature(
-                ctxt.class_name().split_whitespace().next().unwrap(),
-                defn.signature.as_str(),
-            ),
-            // ast::MethodBody::Primitive => MethodKind::NotImplemented(defn.signature.clone()),
+            ast::MethodBody::Primitive => MethodKind::NotImplemented(defn.signature.clone()),
             ast::MethodBody::Body { .. } => {
                 let env = MethodEnv {
                     locals: ctxt.inner.locals.iter().map(|_| Value::Nil).collect(),
@@ -465,7 +462,6 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
     Some(block)
 }
 
-// println!("compiling '{}' ...", defn.name);
 pub fn compile_class(
     interner: &mut Interner,
     defn: &ast::ClassDef,
@@ -511,10 +507,30 @@ pub fn compile_class(
     }));
 
     for method in &defn.static_methods {
-        let mut method = compile_method(&mut static_class_ctxt, method)?;
         let signature = static_class_ctxt.interner.intern(method.signature.as_str());
+        let mut method = compile_method(&mut static_class_ctxt, method)?;
         method.holder = Rc::downgrade(&static_class);
         static_class_ctxt.methods.insert(signature, Rc::new(method));
+    }
+
+    if let Some(primitives) = primitives::get_class_primitives(&defn.name) {
+        for &(signature, primitive, warning) in primitives {
+            let symbol = static_class_ctxt.interner.intern(signature);
+            if warning && !static_class_ctxt.methods.contains_key(&symbol) {
+                eprintln!(
+                    "Warning: Primitive '{}' is not in class definition for class '{}'",
+                    signature, defn.name
+                );
+            }
+
+            let method = Method {
+                signature: signature.to_string(),
+                kind: MethodKind::Primitive(primitive),
+                holder: Rc::downgrade(&static_class),
+            };
+            let signature = static_class_ctxt.interner.intern(signature);
+            static_class_ctxt.methods.insert(signature, Rc::new(method));
+        }
     }
 
     let mut static_class_mut = static_class.borrow_mut();
@@ -570,14 +586,36 @@ pub fn compile_class(
     }));
 
     for method in &defn.instance_methods {
-        let mut method = compile_method(&mut instance_class_ctxt, method)?;
         let signature = instance_class_ctxt
             .interner
             .intern(method.signature.as_str());
+        let mut method = compile_method(&mut instance_class_ctxt, method)?;
         method.holder = Rc::downgrade(&instance_class);
         instance_class_ctxt
             .methods
             .insert(signature, Rc::new(method));
+    }
+
+    if let Some(primitives) = primitives::get_instance_primitives(&defn.name) {
+        for &(signature, primitive, warning) in primitives {
+            let symbol = instance_class_ctxt.interner.intern(signature);
+            if warning && !instance_class_ctxt.methods.contains_key(&symbol) {
+                eprintln!(
+                    "Warning: Primitive '{}' is not in class definition for class '{}'",
+                    signature, defn.name
+                );
+            }
+
+            let method = Method {
+                signature: signature.to_string(),
+                kind: MethodKind::Primitive(primitive),
+                holder: Rc::downgrade(&instance_class),
+            };
+            let signature = instance_class_ctxt.interner.intern(signature);
+            instance_class_ctxt
+                .methods
+                .insert(signature, Rc::new(method));
+        }
     }
 
     let mut instance_class_mut = instance_class.borrow_mut();

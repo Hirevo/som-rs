@@ -1,6 +1,4 @@
 use std::convert::TryFrom;
-// use std::io::BufRead;
-// use std::rc::Rc;
 
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
@@ -8,17 +6,18 @@ use crate::universe::Universe;
 use crate::value::Value;
 use crate::{expect_args, reverse};
 
-// fn read_line(interpreter: &mut Interpreter, _: &mut Universe) {
-//     const SIGNATURE: &str = "System>>#readLine";
-//
-//     expect_args!(SIGNATURE, interpreter, [Value::System]);
-//
-//     match std::io::stdin().lock().lines().next() {
-//         Some(Ok(line)) => interpreter.stack.push(Value::String(Rc::new(line))),
-//         Some(Err(err)) => panic!("'{}': {}", SIGNATURE, err),
-//         None => panic!("'{}': {}", SIGNATURE, "error"),
-//     }
-// }
+pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
+    ("printString:", self::print_string, true),
+    ("printNewline", self::print_newline, true),
+    ("load:", self::load, true),
+    ("ticks", self::ticks, true),
+    ("time", self::time, true),
+    ("fullGC", self::full_gc, true),
+    ("exit:", self::exit, true),
+    ("global:", self::global, true),
+    ("global:put:", self::global_put, true),
+];
+pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
 
 fn print_string(interpreter: &mut Interpreter, universe: &mut Universe) {
     const SIGNATURE: &str = "System>>#printString:";
@@ -35,6 +34,8 @@ fn print_string(interpreter: &mut Interpreter, universe: &mut Universe) {
     };
 
     print!("{}", string);
+    use std::io::Write;
+    std::io::stdout().flush().unwrap();
     interpreter.stack.push(Value::System)
 }
 
@@ -133,19 +134,18 @@ fn full_gc(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Boolean(false))
 }
 
-/// Search for a primitive matching the given signature.
-pub fn get_primitive(signature: impl AsRef<str>) -> Option<PrimitiveFn> {
-    match signature.as_ref() {
-        // "readLine" => Some(self::read_line),
-        "printString:" => Some(self::print_string),
-        "printNewline" => Some(self::print_newline),
-        "load:" => Some(self::load),
-        "ticks" => Some(self::ticks),
-        "time" => Some(self::time),
-        "fullGC" => Some(self::full_gc),
-        "exit:" => Some(self::exit),
-        "global:" => Some(self::global),
-        "global:put:" => Some(self::global_put),
-        _ => None,
-    }
+/// Search for an instance primitive matching the given signature.
+pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
+    INSTANCE_PRIMITIVES
+        .iter()
+        .find(|it| it.0 == signature)
+        .map(|it| it.1)
+}
+
+/// Search for a class primitive matching the given signature.
+pub fn get_class_primitive(signature: &str) -> Option<PrimitiveFn> {
+    CLASS_PRIMITIVES
+        .iter()
+        .find(|it| it.0 == signature)
+        .map(|it| it.1)
 }

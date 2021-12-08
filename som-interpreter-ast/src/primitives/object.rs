@@ -9,6 +9,24 @@ use crate::universe::Universe;
 use crate::value::Value;
 use crate::{expect_args, SOMRef};
 
+pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
+    ("class", self::class, true),
+    ("objectSize", self::object_size, true),
+    ("hashcode", self::hashcode, true),
+    ("perform:", self::perform, true),
+    ("perform:withArguments:", self::perform_with_arguments, true),
+    ("perform:inSuperclass:", self::perform_in_super_class, true),
+    (
+        "perform:withArguments:inSuperclass:",
+        self::perform_with_arguments_in_super_class,
+        true,
+    ),
+    ("instVarAt:", self::inst_var_at, true),
+    ("instVarAt:put:", self::inst_var_at_put, true),
+    ("==", self::eq, true),
+];
+pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
+
 fn class(universe: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &'static str = "Object>>#class";
 
@@ -245,19 +263,18 @@ fn gather_locals(universe: &mut Universe, class: SOMRef<Class>) -> Vec<String> {
     fields
 }
 
-/// Search for a primitive matching the given signature.
-pub fn get_primitive(signature: impl AsRef<str>) -> Option<PrimitiveFn> {
-    match signature.as_ref() {
-        "class" => Some(self::class),
-        "objectSize" => Some(self::object_size),
-        "hashcode" => Some(self::hashcode),
-        "perform:" => Some(self::perform),
-        "perform:withArguments:" => Some(self::perform_with_arguments),
-        "perform:inSuperclass:" => Some(self::perform_in_super_class),
-        "perform:withArguments:inSuperclass:" => Some(self::perform_with_arguments_in_super_class),
-        "instVarAt:" => Some(self::inst_var_at),
-        "instVarAt:put:" => Some(self::inst_var_at_put),
-        "==" => Some(self::eq),
-        _ => None,
-    }
+/// Search for an instance primitive matching the given signature.
+pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
+    INSTANCE_PRIMITIVES
+        .iter()
+        .find(|it| it.0 == signature)
+        .map(|it| it.1)
+}
+
+/// Search for a class primitive matching the given signature.
+pub fn get_class_primitive(signature: &str) -> Option<PrimitiveFn> {
+    CLASS_PRIMITIVES
+        .iter()
+        .find(|it| it.0 == signature)
+        .map(|it| it.1)
 }

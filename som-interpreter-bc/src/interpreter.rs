@@ -230,6 +230,12 @@ impl Interpreter {
                                 func(self, universe);
                             }
                             MethodKind::NotImplemented(err) => {
+                                let self_value = self.stack.iter().nth_back(nb_params).unwrap();
+                                println!(
+                                    "{}>>#{}",
+                                    self_value.class(&universe).borrow().name(),
+                                    method.signature()
+                                );
                                 panic!("Primitive `#{}` not implemented", err)
                             }
                         }

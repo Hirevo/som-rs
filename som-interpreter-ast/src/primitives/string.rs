@@ -9,6 +9,19 @@ use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
 
+pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
+    ("length", self::length, true),
+    ("hashcode", self::hashcode, true),
+    ("isLetters", self::is_letters, true),
+    ("isDigits", self::is_digits, true),
+    ("isWhiteSpace", self::is_whitespace, true),
+    ("asSymbol", self::as_symbol, true),
+    ("concatenate:", self::concatenate, true),
+    ("primSubstringFrom:to:", self::prim_substring_from_to, true),
+    ("=", self::eq, true),
+];
+pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
+
 fn length(universe: &mut Universe, args: Vec<Value>) -> Return {
     const SIGNATURE: &str = "String>>#length";
 
@@ -176,18 +189,18 @@ fn prim_substring_from_to(universe: &mut Universe, args: Vec<Value>) -> Return {
     Return::Local(Value::String(string))
 }
 
-/// Search for a primitive matching the given signature.
-pub fn get_primitive(signature: impl AsRef<str>) -> Option<PrimitiveFn> {
-    match signature.as_ref() {
-        "length" => Some(self::length),
-        "hashcode" => Some(self::hashcode),
-        "isLetters" => Some(self::is_letters),
-        "isDigits" => Some(self::is_digits),
-        "isWhiteSpace" => Some(self::is_whitespace),
-        "asSymbol" => Some(self::as_symbol),
-        "concatenate:" => Some(self::concatenate),
-        "primSubstringFrom:to:" => Some(self::prim_substring_from_to),
-        "=" => Some(self::eq),
-        _ => None,
-    }
+/// Search for an instance primitive matching the given signature.
+pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
+    INSTANCE_PRIMITIVES
+        .iter()
+        .find(|it| it.0 == signature)
+        .map(|it| it.1)
+}
+
+/// Search for a class primitive matching the given signature.
+pub fn get_class_primitive(signature: &str) -> Option<PrimitiveFn> {
+    CLASS_PRIMITIVES
+        .iter()
+        .find(|it| it.0 == signature)
+        .map(|it| it.1)
 }

@@ -7,6 +7,7 @@ use indexmap::IndexMap;
 use som_core::ast::{ClassDef, MethodBody};
 
 use crate::method::{Method, MethodKind};
+use crate::primitives;
 use crate::value::Value;
 use crate::{SOMRef, SOMWeakRef};
 
@@ -84,16 +85,13 @@ impl Class {
             is_static: false,
         }));
 
-        let static_methods = defn
+        let mut static_methods: IndexMap<String, Rc<Method>> = defn
             .static_methods
             .iter()
             .map(|method| {
                 let signature = method.signature.clone();
                 let kind = match method.body {
-                    MethodBody::Primitive => MethodKind::primitive_from_signature(
-                        defn.name.as_str(),
-                        method.signature.as_str(),
-                    ),
+                    MethodBody::Primitive => MethodKind::NotImplemented(signature.clone()),
                     MethodBody::Body { .. } => MethodKind::Defined(method.clone()),
                 };
                 let method = Method {
@@ -105,16 +103,31 @@ impl Class {
             })
             .collect();
 
-        let instance_methods = defn
+        if let Some(primitives) = primitives::get_class_primitives(&defn.name) {
+            for (signature, primitive, warning) in primitives {
+                if *warning && !static_methods.contains_key(*signature) {
+                    eprintln!(
+                        "Warning: Primitive '{}' is not in class definition for class '{}'",
+                        signature, defn.name
+                    );
+                }
+
+                let method = Method {
+                    kind: MethodKind::Primitive(*primitive),
+                    signature: signature.to_string(),
+                    holder: Rc::downgrade(&static_class),
+                };
+                static_methods.insert(signature.to_string(), Rc::new(method));
+            }
+        }
+
+        let mut instance_methods: IndexMap<String, Rc<Method>> = defn
             .instance_methods
             .iter()
             .map(|method| {
                 let signature = method.signature.clone();
                 let kind = match method.body {
-                    MethodBody::Primitive => MethodKind::primitive_from_signature(
-                        defn.name.as_str(),
-                        method.signature.as_str(),
-                    ),
+                    MethodBody::Primitive => MethodKind::NotImplemented(signature.clone()),
                     MethodBody::Body { .. } => MethodKind::Defined(method.clone()),
                 };
                 let method = Method {
@@ -125,6 +138,24 @@ impl Class {
                 (signature, Rc::new(method))
             })
             .collect();
+
+        if let Some(primitives) = primitives::get_instance_primitives(&defn.name) {
+            for (signature, primitive, warning) in primitives {
+                if *warning && !instance_methods.contains_key(*signature) {
+                    eprintln!(
+                        "Warning: Primitive '{}' is not in class definition for class '{}'",
+                        signature, defn.name
+                    );
+                }
+
+                let method = Method {
+                    kind: MethodKind::Primitive(*primitive),
+                    signature: signature.to_string(),
+                    holder: Rc::downgrade(&instance_class),
+                };
+                instance_methods.insert(signature.to_string(), Rc::new(method));
+            }
+        }
 
         static_class.borrow_mut().methods = static_methods;
         instance_class.borrow_mut().methods = instance_methods;
