@@ -15,18 +15,17 @@ som-parser = { package = "som-parser-symbols", path = "../som-parser-symbols", v
 # som-parser = { package = "som-parser-text", path = "../som-parser-text", version = "0.1.0" }
 
 # CLI interface
-structopt = "0.3.14"
+structopt = "0.3.25"
 
 # error handling
-anyhow = "1.0.31"
+anyhow = "1.0.51"
 
 # consistently-ordered hashmaps
-indexmap = "1.4.0"
+indexmap = "1.7.0"
 
 # big integers
-num-bigint = "0.2.6"
-num-traits = "0.2.11"
+num-bigint = "0.4.3"
+num-traits = "0.2.14"
 
 # random numbers
-rand = "0.7.3"
-
+rand = "0.8.4"
