@@ -272,7 +272,12 @@ impl MethodCodegen for ast::Expression {
                 let sym = ctxt.intern_symbol(message.signature.as_str());
                 let idx = ctxt.push_literal(Literal::Symbol(sym));
                 if super_send {
-                    ctxt.push_instr(Bytecode::SuperSend(idx as u8));
+                    match nb_params {
+                        1 => ctxt.push_instr(Bytecode::SuperSend1(idx as u8)),
+                        2 => ctxt.push_instr(Bytecode::SuperSend2(idx as u8)),
+                        3 => ctxt.push_instr(Bytecode::SuperSend3(idx as u8)),
+                        _ => ctxt.push_instr(Bytecode::SuperSendN(idx as u8))
+                    }
                 } else {
                     match nb_params {
                         1 => ctxt.push_instr(Bytecode::Send1(idx as u8)),
@@ -293,7 +298,7 @@ impl MethodCodegen for ast::Expression {
                 let sym = ctxt.intern_symbol(message.op.as_str());
                 let idx = ctxt.push_literal(Literal::Symbol(sym));
                 if super_send {
-                    ctxt.push_instr(Bytecode::SuperSend(idx as u8));
+                    ctxt.push_instr(Bytecode::SuperSendN(idx as u8));
                 } else {
                     ctxt.push_instr(Bytecode::SendN(idx as u8));
                 }

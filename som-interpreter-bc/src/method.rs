@@ -168,7 +168,10 @@ impl fmt::Display for Method {
                         Bytecode::SendN(idx) => {
                             write!(f, "index: {}", idx)?;
                         }
-                        Bytecode::SuperSend(idx) => {
+                        Bytecode::SuperSend1(idx) |
+                        Bytecode::SuperSend2(idx) |
+                        Bytecode::SuperSend3(idx) |
+                        Bytecode::SuperSendN(idx) => {
                             write!(f, "index: {}", idx)?;
                         }
                         Bytecode::ReturnLocal => {}
