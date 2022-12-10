@@ -8,3 +8,6 @@ members = [
     "som-parser-symbols",
     "som-parser-text",
 ]
+
+[profile.release]
+debug=true

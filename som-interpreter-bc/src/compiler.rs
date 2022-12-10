@@ -263,12 +263,23 @@ impl MethodCodegen for ast::Expression {
                     .values
                     .iter()
                     .try_for_each(|value| value.codegen(ctxt))?;
+
+                let nb_params = match message.signature.chars().nth(0) {
+                    Some(ch) if !ch.is_alphabetic() => 1,
+                    _ => message.signature.chars().filter(|ch| *ch == ':').count(),
+                };
+
                 let sym = ctxt.intern_symbol(message.signature.as_str());
                 let idx = ctxt.push_literal(Literal::Symbol(sym));
                 if super_send {
                     ctxt.push_instr(Bytecode::SuperSend(idx as u8));
                 } else {
-                    ctxt.push_instr(Bytecode::Send(idx as u8));
+                    match nb_params {
+                        1 => ctxt.push_instr(Bytecode::Send1(idx as u8)),
+                        2 => ctxt.push_instr(Bytecode::Send2(idx as u8)),
+                        3 => ctxt.push_instr(Bytecode::Send3(idx as u8)),
+                        _ => ctxt.push_instr(Bytecode::SendN(idx as u8))
+                    }
                 }
                 Some(())
             }
@@ -284,7 +295,7 @@ impl MethodCodegen for ast::Expression {
                 if super_send {
                     ctxt.push_instr(Bytecode::SuperSend(idx as u8));
                 } else {
-                    ctxt.push_instr(Bytecode::Send(idx as u8));
+                    ctxt.push_instr(Bytecode::SendN(idx as u8));
                 }
                 Some(())
             }
