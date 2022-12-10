@@ -47,7 +47,7 @@ impl Interpreter {
         self.frames.last()
     }
 
-    fn send(&mut self, idx: u8, mut nb_params: usize, frame: SOMRef<Frame>, universe: &mut Universe) {
+    fn send(&mut self, idx: u8, nb_params_opt: Option<usize>, frame: SOMRef<Frame>, universe: &mut Universe) {
         let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
         let symbol = match literal {
             Literal::Symbol(sym) => sym,
@@ -56,12 +56,15 @@ impl Interpreter {
             }
         };
         let signature = universe.lookup_symbol(symbol);
-        if nb_params == usize::MAX {
-            nb_params = match signature.chars().nth(0) {
-                Some(ch) if !ch.is_alphabetic() => 1,
-                _ => signature.chars().filter(|ch| *ch == ':').count(),
-            };
-        }
+        let nb_params = match nb_params_opt {
+            Some(x) => x,
+            None => {
+                match signature.chars().nth(0) {
+                    Some(ch) if !ch.is_alphabetic() => 1,
+                    _ => signature.chars().filter(|ch| *ch == ':').count(),
+                }
+            }
+        };
 
         let method = self
             .stack
@@ -125,7 +128,7 @@ impl Interpreter {
         }
     }
 
-    fn super_send(&mut self, idx: u8, mut nb_params: usize, frame: SOMRef<Frame>, universe: &mut Universe) {
+    fn super_send(&mut self, idx: u8, nb_params_opt: Option<usize>, frame: SOMRef<Frame>, universe: &mut Universe) {
         let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
         let symbol = match literal {
             Literal::Symbol(sym) => sym,
@@ -134,12 +137,15 @@ impl Interpreter {
             }
         };
         let signature = universe.lookup_symbol(symbol);
-        if nb_params == usize::MAX {
-            nb_params = match signature.chars().nth(0) {
-                Some(ch) if !ch.is_alphabetic() => 1,
-                _ => signature.chars().filter(|ch| *ch == ':').count(),
-            };
-        }
+        let nb_params = match nb_params_opt {
+            Some(x) => x,
+            None => {
+                match signature.chars().nth(0) {
+                    Some(ch) if !ch.is_alphabetic() => 1,
+                    _ => signature.chars().filter(|ch| *ch == ':').count(),
+                }
+            }
+        };
 
         let method = frame
             .borrow()
@@ -342,28 +348,28 @@ impl Interpreter {
                     }
                 }
                 Bytecode::Send1(idx) => {
-                    self.send(idx, 1, frame.clone(), universe);
+                    self.send(idx, Some(1), frame.clone(), universe);
                 }
                 Bytecode::Send2(idx) => {
-                    self.send(idx, 2, frame.clone(), universe);
+                    self.send(idx, Some(2), frame.clone(), universe);
                 }
                 Bytecode::Send3(idx) => {
-                    self.send(idx, 3, frame.clone(), universe);
+                    self.send(idx, Some(3), frame.clone(), universe);
                 }
                 Bytecode::SendN(idx) => {
-                    self.send(idx, usize::MAX, frame.clone(), universe);
+                    self.send(idx, None, frame.clone(), universe);
                 }
                 Bytecode::SuperSend1(idx) => {
-                    self.super_send(idx, 1, frame.clone(), universe);
+                    self.super_send(idx, Some(1), frame.clone(), universe);
                 }
                 Bytecode::SuperSend2(idx) => {
-                    self.super_send(idx, 2, frame.clone(), universe);
+                    self.super_send(idx, Some(2), frame.clone(), universe);
                 }
                 Bytecode::SuperSend3(idx) => {
-                    self.super_send(idx, 3, frame.clone(), universe);
+                    self.super_send(idx, Some(3), frame.clone(), universe);
                 }
                 Bytecode::SuperSendN(idx) => {
-                    self.super_send(idx, usize::MAX, frame.clone(), universe);
+                    self.super_send(idx, None, frame.clone(), universe);
                 }
                 Bytecode::ReturnLocal => {
                     let value = self.stack.pop().unwrap();
