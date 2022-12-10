@@ -347,7 +347,12 @@ impl MethodCodegen for ast::Expression {
                     Literal::Integer(1) => ctxt.push_instr(Bytecode::Push1),
                     _ => {
                         let idx = ctxt.push_literal(literal);
-                        ctxt.push_instr(Bytecode::PushConstant(idx as u8));
+                        match idx {
+                            0 => ctxt.push_instr(Bytecode::PushConstant0),
+                            1 => ctxt.push_instr(Bytecode::PushConstant1),
+                            2 => ctxt.push_instr(Bytecode::PushConstant2),
+                            _ => ctxt.push_instr(Bytecode::PushConstant(idx as u8))
+                        }
                     }
                 }
 

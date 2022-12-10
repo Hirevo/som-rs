@@ -134,6 +134,7 @@ impl fmt::Display for Method {
                         Bytecode::PushBlock(idx) => {
                             write!(f, "index: {}", idx)?;
                         }
+                        Bytecode::PushConstant0 | Bytecode::PushConstant1 | Bytecode::PushConstant2 => {}
                         Bytecode::PushConstant(idx) => {
                             write!(f, "index: {}, ", idx)?;
                             let constant = &env.literals[*idx as usize];
