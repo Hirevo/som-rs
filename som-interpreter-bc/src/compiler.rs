@@ -100,6 +100,8 @@ trait InnerGenCtxt: GenCtxt {
     fn push_arg(&mut self, name: String) -> usize;
     fn push_local(&mut self, name: String) -> usize;
     fn push_literal(&mut self, literal: Literal) -> usize;
+    fn get_instr_idx(&mut self) -> usize;
+    fn backpatch(&mut self, idx_to_backpatch: usize, bytecode_with_new_val: Bytecode);
 }
 
 struct BlockGenCtxt<'a> {
@@ -161,6 +163,15 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
         let (idx, _) = self.literals.insert_full(literal);
         idx
     }
+
+    fn get_instr_idx(&mut self) -> usize {
+        return self.body.as_ref().unwrap().iter().len();
+    }
+
+    fn backpatch(&mut self, idx_to_backpatch: usize, bytecode_with_new_val: Bytecode) {
+        let mut bytecode_to_patch = self.body.as_mut().unwrap().get_mut(idx_to_backpatch).unwrap();
+        bytecode_to_patch = &mut bytecode_with_new_val.clone();
+    }
 }
 
 struct MethodGenCtxt<'a> {
@@ -203,6 +214,14 @@ impl InnerGenCtxt for MethodGenCtxt<'_> {
 
     fn push_literal(&mut self, literal: Literal) -> usize {
         self.inner.push_literal(literal)
+    }
+
+    fn get_instr_idx(&mut self) -> usize {
+        return self.inner.get_instr_idx();
+    }
+
+    fn backpatch(&mut self, idx_to_backpatch: usize, bytecode_with_new_val: Bytecode) {
+        self.inner.backpatch(idx_to_backpatch, bytecode_with_new_val);
     }
 }
 
@@ -266,35 +285,59 @@ impl MethodCodegen for ast::Expression {
                     ast::Expression::Reference(value) if value == "super" => true,
                     _ => false,
                 };
+
                 message.receiver.codegen(ctxt)?;
-                message
-                    .values
-                    .iter()
-                    .try_for_each(|value| value.codegen(ctxt))?;
 
-                let nb_params = match message.signature.chars().nth(0) {
-                    Some(ch) if !ch.is_alphabetic() => 1,
-                    _ => message.signature.chars().filter(|ch| *ch == ':').count(),
-                };
+                // We inline ifTrue:
+                if message.signature == "ifTrue:" {
+                    assert_eq!(message.values.len(), 1);
+                    let block = message.values.get(0).unwrap();
+                    let val = match block {
+                        ast::Expression::Block(val) => val ,
+                        _ => panic!("Invalid argument supplied to ifTrue:") // TODO, not the best error handling! Will do for now though.
+                    };
 
-                let sym = ctxt.intern_symbol(message.signature.as_str());
-                let idx = ctxt.push_literal(Literal::Symbol(sym));
-                if super_send {
-                    match nb_params {
-                        1 => ctxt.push_instr(Bytecode::SuperSend1(idx as u8)),
-                        2 => ctxt.push_instr(Bytecode::SuperSend2(idx as u8)),
-                        3 => ctxt.push_instr(Bytecode::SuperSend3(idx as u8)),
-                        _ => ctxt.push_instr(Bytecode::SuperSendN(idx as u8))
+                    let jump_idx = ctxt.get_instr_idx();
+                    ctxt.push_instr(Bytecode::JumpOnFalseTopNil(0));
+                    for x in &val.body.exprs {
+                        x.codegen(ctxt);
                     }
+                    let new_val = ctxt.get_instr_idx() + 1; // that + 1 feels shady, what if there's nothing after
+                    ctxt.backpatch(jump_idx, Bytecode::JumpOnFalseTopNil(new_val));
+
+                    Some(())
                 } else {
-                    match nb_params {
-                        1 => ctxt.push_instr(Bytecode::Send1(idx as u8)),
-                        2 => ctxt.push_instr(Bytecode::Send2(idx as u8)),
-                        3 => ctxt.push_instr(Bytecode::Send3(idx as u8)),
-                        _ => ctxt.push_instr(Bytecode::SendN(idx as u8))
+                    message
+                        .values
+                        .iter()
+                        .try_for_each(|value|
+                            value.codegen(ctxt)
+                        )?;
+
+                    let nb_params = match message.signature.chars().nth(0) {
+                        Some(ch) if !ch.is_alphabetic() => 1,
+                        _ => message.signature.chars().filter(|ch| *ch == ':').count(),
+                    };
+
+                    let sym = ctxt.intern_symbol(message.signature.as_str());
+                    let idx = ctxt.push_literal(Literal::Symbol(sym));
+                    if super_send {
+                        match nb_params {
+                            1 => ctxt.push_instr(Bytecode::SuperSend1(idx as u8)),
+                            2 => ctxt.push_instr(Bytecode::SuperSend2(idx as u8)),
+                            3 => ctxt.push_instr(Bytecode::SuperSend3(idx as u8)),
+                            _ => ctxt.push_instr(Bytecode::SuperSendN(idx as u8))
+                        }
+                    } else {
+                        match nb_params {
+                            1 => ctxt.push_instr(Bytecode::Send1(idx as u8)),
+                            2 => ctxt.push_instr(Bytecode::Send2(idx as u8)),
+                            3 => ctxt.push_instr(Bytecode::Send3(idx as u8)),
+                            _ => ctxt.push_instr(Bytecode::SendN(idx as u8))
+                        }
                     }
+                    Some(())
                 }
-                Some(())
             }
             ast::Expression::BinaryOp(message) => {
                 let super_send = match message.lhs.as_ref() {
@@ -306,7 +349,7 @@ impl MethodCodegen for ast::Expression {
                 let sym = ctxt.intern_symbol(message.op.as_str());
                 let idx = ctxt.push_literal(Literal::Symbol(sym));
                 if super_send {
-                    ctxt.push_instr(Bytecode::SuperSendN(idx as u8));
+                    ctxt.push_instr(Bytecode::SendN(idx as u8)); // TODO why doesn't send2 work?
                 } else {
                     ctxt.push_instr(Bytecode::SendN(idx as u8));
                 }
@@ -446,6 +489,7 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
 
     let method = Method {
         kind: match &defn.body {
+
             ast::MethodBody::Primitive => MethodKind::NotImplemented(defn.signature.clone()),
             ast::MethodBody::Body { .. } => {
                 let env = MethodEnv {

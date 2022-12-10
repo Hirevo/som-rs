@@ -31,6 +31,7 @@ pub enum Bytecode {
     SuperSendN(u8),
     ReturnLocal,
     ReturnNonLocal,
+    JumpOnFalseTopNil(usize)
 }
 
 impl Bytecode {
@@ -67,6 +68,7 @@ impl Bytecode {
             Self::SuperSendN(_)       => "SUPER_SEND N",
             Self::ReturnLocal        => "RETURN_LOCAL",
             Self::ReturnNonLocal     => "RETURN_NON_LOCAL",
+            Self::JumpOnFalseTopNil(_) => "JUMP_ON_FALSE_TOP_NIL",
         }
     }
 
@@ -103,11 +105,12 @@ impl Bytecode {
             Self::SuperSendN(_)      => "SUPER_SEND N    ",
             Self::ReturnLocal        => "RETURN_LOCAL    ",
             Self::ReturnNonLocal     => "RETURN_NON_LOCAL",
+            Self::JumpOnFalseTopNil(_) => "JUMP_ON_FALSE_TOP_NIL",
         }
     }
 }
 
-pub static NAMES: [&str; 28] = [
+pub static NAMES: [&str; 29] = [
     "HALT",
     "DUP",
     "PUSH_LOCAL",
@@ -136,9 +139,10 @@ pub static NAMES: [&str; 28] = [
     "SUPER_SEND_N",
     "RETURN_LOCAL",
     "RETURN_NON_LOCAL",
+    "JUMP_ON_FALSE_TOP_NIL"
 ];
 
-pub static PADDED_NAMES: [&str; 28] = [
+pub static PADDED_NAMES: [&str; 29] = [
     "HALT            ",
     "DUP             ",
     "PUSH_LOCAL      ",
@@ -167,6 +171,7 @@ pub static PADDED_NAMES: [&str; 28] = [
     "SUPER_SEND_N    ",
     "RETURN_LOCAL    ",
     "RETURN_NON_LOCAL",
+    "JUMP_ON_FALSE_TOP_NIL"
 ];
 
 impl fmt::Display for Bytecode {
@@ -201,6 +206,7 @@ impl fmt::Display for Bytecode {
             Self::SuperSendN(idx)            => write!(f, "SUPER_SEND_N {}", idx),
             Self::ReturnLocal               => write!(f, "RETURN_LOCAL", ),
             Self::ReturnNonLocal            => write!(f, "RETURN_NON_LOCAL", ),
+            Self::JumpOnFalseTopNil(idx) => write!(f, "JUMP_ON_FALSE_TOP_NIL {}", idx),
         }
     }
 }

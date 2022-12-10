@@ -57,6 +57,11 @@ impl Interpreter {
             }
         };
         let signature = universe.lookup_symbol(symbol);
+        match signature {
+            "if" => println!("KNEW IT"),
+            _ => {}
+        }
+
         let nb_params = match nb_params_opt {
             Some(x) => x,
             None => {
@@ -429,6 +434,19 @@ impl Interpreter {
                         universe.escaped_block(self, instance, block).expect(
                             "A block has escaped and `escapedBlock:` is not defined on receiver",
                         );
+                    }
+                }
+                Bytecode::JumpOnFalseTopNil(offset) => {
+                    let condition_result = self.stack.pop().unwrap();
+
+                    match condition_result {
+                        Value::Boolean(true) => {
+                            let frame = self.current_frame().unwrap();
+                            frame.clone().borrow_mut().bytecode_idx += offset;
+                            self.stack.push(Value::Nil);
+                        },
+                        Value::Boolean(false) => {},
+                        _ => panic!()
                     }
                 }
             }
