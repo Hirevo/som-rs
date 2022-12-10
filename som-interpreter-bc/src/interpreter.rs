@@ -45,12 +45,12 @@ impl Interpreter {
         self.frames.last()
     }
 
-    fn send(&mut self, idx: u8, mut nb_params: usize, frame: SOMRef<Frame>, universe: &mut Universe) -> Option<Value> {
+    fn send(&mut self, idx: u8, mut nb_params: usize, frame: SOMRef<Frame>, universe: &mut Universe) {
         let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
         let symbol = match literal {
             Literal::Symbol(sym) => sym,
             _ => {
-                return None;
+                return;
             }
         };
         let signature = universe.lookup_symbol(symbol);
@@ -121,7 +121,80 @@ impl Interpreter {
                     "A message cannot be handled and `doesNotUnderstand:arguments:` is not defined on receiver"
                 );
         }
-        None
+    }
+
+    fn super_send(&mut self, idx: u8, mut nb_params: usize, frame: SOMRef<Frame>, universe: &mut Universe) {
+        let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
+        let symbol = match literal {
+            Literal::Symbol(sym) => sym,
+            _ => {
+                return;
+            }
+        };
+        let signature = universe.lookup_symbol(symbol);
+        if nb_params == usize::MAX {
+            nb_params = match signature.chars().nth(0) {
+                Some(ch) if !ch.is_alphabetic() => 1,
+                _ => signature.chars().filter(|ch| *ch == ':').count(),
+            };
+        }
+
+        let method = frame
+            .borrow()
+            .get_method_holder()
+            .borrow()
+            .super_class()
+            .unwrap()
+            .borrow()
+            .lookup_method(symbol);
+
+        if let Some(method) = method {
+            match method.kind() {
+                MethodKind::Defined(_) => {
+                    let mut args = Vec::with_capacity(nb_params + 1);
+
+                    for _ in 0..nb_params {
+                        let arg = self.stack.pop().unwrap();
+                        args.push(arg);
+                    }
+                    let self_value = self.stack.pop().unwrap();
+                    args.push(self_value.clone());
+
+                    args.reverse();
+
+                    let holder = method.holder.upgrade().unwrap();
+                    self.push_frame(FrameKind::Method {
+                        self_value,
+                        method,
+                        holder,
+                    });
+
+                    let frame = self.current_frame().unwrap();
+                    frame.borrow_mut().args = args;
+                }
+                MethodKind::Primitive(func) => {
+                    func(self, universe);
+                }
+                MethodKind::NotImplemented(err) => {
+                    panic!("Primitive `#{}` not implemented", err)
+                }
+            }
+        } else {
+            let mut args = Vec::with_capacity(nb_params + 1);
+
+            for _ in 0..nb_params {
+                let arg = self.stack.pop().unwrap();
+                args.push(arg);
+            }
+            let self_value = self.stack.pop().unwrap();
+
+            args.reverse();
+
+            universe.does_not_understand(self, self_value, symbol, args)
+                .expect(
+                    "A message cannot be handled and `doesNotUnderstand:arguments:` is not defined on receiver"
+                );
+        }
     }
 
     pub fn run(&mut self, universe: &mut Universe) -> Option<Value> {
@@ -277,73 +350,17 @@ impl Interpreter {
                 Bytecode::SendN(idx) => {
                     self.send(idx, usize::MAX, frame.clone(), universe);
                 }
-                Bytecode::SuperSend(idx) => {
-                    let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
-                    let symbol = match literal {
-                        Literal::Symbol(sym) => sym,
-                        _ => {
-                            return None;
-                        }
-                    };
-                    let signature = universe.lookup_symbol(symbol);
-                    let nb_params = nb_params(signature);
-
-                    let method = frame
-                        .borrow()
-                        .get_method_holder()
-                        .borrow()
-                        .super_class()
-                        .unwrap()
-                        .borrow()
-                        .lookup_method(symbol);
-
-                    if let Some(method) = method {
-                        match method.kind() {
-                            MethodKind::Defined(_) => {
-                                let mut args = Vec::with_capacity(nb_params + 1);
-
-                                for _ in 0..nb_params {
-                                    let arg = self.stack.pop().unwrap();
-                                    args.push(arg);
-                                }
-                                let self_value = self.stack.pop().unwrap();
-                                args.push(self_value.clone());
-
-                                args.reverse();
-
-                                let holder = method.holder.upgrade().unwrap();
-                                self.push_frame(FrameKind::Method {
-                                    self_value,
-                                    method,
-                                    holder,
-                                });
-
-                                let frame = self.current_frame().unwrap();
-                                frame.borrow_mut().args = args;
-                            }
-                            MethodKind::Primitive(func) => {
-                                func(self, universe);
-                            }
-                            MethodKind::NotImplemented(err) => {
-                                panic!("Primitive `#{}` not implemented", err)
-                            }
-                        }
-                    } else {
-                        let mut args = Vec::with_capacity(nb_params + 1);
-
-                        for _ in 0..nb_params {
-                            let arg = self.stack.pop().unwrap();
-                            args.push(arg);
-                        }
-                        let self_value = self.stack.pop().unwrap();
-
-                        args.reverse();
-
-                        universe.does_not_understand(self, self_value, symbol, args)
-                            .expect(
-                                "A message cannot be handled and `doesNotUnderstand:arguments:` is not defined on receiver"
-                            );
-                    }
+                Bytecode::SuperSend1(idx) => {
+                    self.super_send(idx, 1, frame.clone(), universe);
+                }
+                Bytecode::SuperSend2(idx) => {
+                    self.super_send(idx, 2, frame.clone(), universe);
+                }
+                Bytecode::SuperSend3(idx) => {
+                    self.super_send(idx, 3, frame.clone(), universe);
+                }
+                Bytecode::SuperSendN(idx) => {
+                    self.super_send(idx, usize::MAX, frame.clone(), universe);
                 }
                 Bytecode::ReturnLocal => {
                     let value = self.stack.pop().unwrap();
@@ -407,13 +424,6 @@ impl Interpreter {
                 Literal::Block(val) => Value::Block(val),
             };
             Some(value)
-        }
-
-        fn nb_params(signature: &str) -> usize {
-            match signature.chars().nth(0) {
-                Some(ch) if !ch.is_alphabetic() => 1,
-                _ => signature.chars().filter(|ch| *ch == ':').count(),
-            }
         }
     }
 }

@@ -11,3 +11,7 @@
 /.vscode
 /.nova
 /.idea
+
+# Rebench stuff
+payload.json
+rebench.data
