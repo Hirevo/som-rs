@@ -15,6 +15,9 @@ use crate::universe::Universe;
 use crate::value::Value;
 use crate::SOMRef;
 
+const INT_0: Value = Value::Integer(0);
+const INT_1: Value = Value::Integer(1);
+
 pub struct Interpreter {
     /// The interpreter's stack frames.
     pub frames: Vec<SOMRef<Frame>>,
@@ -297,6 +300,15 @@ impl Interpreter {
                         let self_value = frame.borrow().get_self();
                         universe.unknown_global(self, self_value, symbol).unwrap();
                     }
+                }
+                Bytecode::Push0 => {
+                    self.stack.push(INT_0);
+                }
+                Bytecode::Push1 => {
+                    self.stack.push(INT_1);
+                }
+                Bytecode::PushNil => {
+                    self.stack.push(Value::Nil);
                 }
                 Bytecode::Pop => {
                     self.stack.pop();
