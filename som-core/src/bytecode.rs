@@ -19,7 +19,10 @@ pub enum Bytecode {
     Send2(u8),
     Send3(u8),
     SendN(u8),
-    SuperSend(u8),
+    SuperSend1(u8),
+    SuperSend2(u8),
+    SuperSend3(u8),
+    SuperSendN(u8),
     ReturnLocal,
     ReturnNonLocal,
 }
@@ -46,7 +49,10 @@ impl Bytecode {
             Self::Send2(_)            => "SEND 2",
             Self::Send3(_)            => "SEND 3",
             Self::SendN(_)            => "SEND N",
-            Self::SuperSend(_)       => "SUPER_SEND",
+            Self::SuperSend1(_)       => "SUPER_SEND 1",
+            Self::SuperSend2(_)       => "SUPER_SEND 2",
+            Self::SuperSend3(_)       => "SUPER_SEND 3",
+            Self::SuperSendN(_)       => "SUPER_SEND N",
             Self::ReturnLocal        => "RETURN_LOCAL",
             Self::ReturnNonLocal     => "RETURN_NON_LOCAL",
         }
@@ -69,18 +75,21 @@ impl Bytecode {
             Self::PopLocal(_, _)     => "POP_LOCAL       ",
             Self::PopArgument(_, _)  => "POP_ARGUMENT    ",
             Self::PopField(_)        => "POP_FIELD       ",
-            Self::Send1(_)            => "SEND 1          ",
-            Self::Send2(_)            => "SEND 2          ",
-            Self::Send3(_)            => "SEND 3          ",
-            Self::SendN(_)            => "SEND N          ",
-            Self::SuperSend(_)       => "SUPER_SEND      ",
+            Self::Send1(_)           => "SEND 1          ",
+            Self::Send2(_)           => "SEND 2          ",
+            Self::Send3(_)           => "SEND 3          ",
+            Self::SendN(_)           => "SEND N          ",
+            Self::SuperSend1(_)      => "SUPER_SEND 1    ",
+            Self::SuperSend2(_)      => "SUPER_SEND 2    ",
+            Self::SuperSend3(_)      => "SUPER_SEND 3    ",
+            Self::SuperSendN(_)      => "SUPER_SEND N    ",
             Self::ReturnLocal        => "RETURN_LOCAL    ",
             Self::ReturnNonLocal     => "RETURN_NON_LOCAL",
         }
     }
 }
 
-pub static NAMES: [&str; 19] = [
+pub static NAMES: [&str; 22] = [
     "HALT",
     "DUP",
     "PUSH_LOCAL",
@@ -97,12 +106,15 @@ pub static NAMES: [&str; 19] = [
     "SEND_2",
     "SEND_3",
     "SEND_N",
-    "SUPER_SEND",
+    "SUPER_SEND_1",
+    "SUPER_SEND_2",
+    "SUPER_SEND_3",
+    "SUPER_SEND_N",
     "RETURN_LOCAL",
     "RETURN_NON_LOCAL",
 ];
 
-pub static PADDED_NAMES: [&str; 19] = [
+pub static PADDED_NAMES: [&str; 22] = [
     "HALT            ",
     "DUP             ",
     "PUSH_LOCAL      ",
@@ -115,11 +127,14 @@ pub static PADDED_NAMES: [&str; 19] = [
     "POP_LOCAL       ",
     "POP_ARGUMENT    ",
     "POP_FIELD       ",
-    "SEND 1           ",
-    "SEND 2          ",
-    "SEND 3           ",
-    "SEND N           ",
-    "SUPER_SEND      ",
+    "SEND_1          ",
+    "SEND_2          ",
+    "SEND_3          ",
+    "SEND_N          ",
+    "SUPER_SEND 1    ",
+    "SUPER_SEND 2    ",
+    "SUPER_SEND 3    ",
+    "SUPER_SEND N    ",
     "RETURN_LOCAL    ",
     "RETURN_NON_LOCAL",
 ];
@@ -144,7 +159,10 @@ impl fmt::Display for Bytecode {
             Self::Send2(idx)                 => write!(f, "SEND 2 {}", idx),
             Self::Send3(idx)                 => write!(f, "SEND 3 {}", idx),
             Self::SendN(idx)                 => write!(f, "SEND N {}", idx),
-            Self::SuperSend(idx)            => write!(f, "SUPER_SEND {}", idx),
+            Self::SuperSend1(idx)            => write!(f, "SUPER_SEND 1 {}", idx),
+            Self::SuperSend2(idx)            => write!(f, "SUPER_SEND 2 {}", idx),
+            Self::SuperSend3(idx)            => write!(f, "SUPER_SEND 3 {}", idx),
+            Self::SuperSendN(idx)            => write!(f, "SUPER_SEND N {}", idx),
             Self::ReturnLocal               => write!(f, "RETURN_LOCAL", ),
             Self::ReturnNonLocal            => write!(f, "RETURN_NON_LOCAL", ),
         }

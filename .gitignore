@@ -12,5 +12,9 @@
 /.nova
 /.idea
 
+# Rebench stuff
+payload.json
+rebench.data
+
 # Folder to put files not intended to be pushed (like temporary files)
 /ignored
