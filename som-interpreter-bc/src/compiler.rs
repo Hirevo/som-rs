@@ -232,9 +232,17 @@ impl MethodCodegen for ast::Expression {
                     }
                     Some(FoundVar::Field(idx)) => ctxt.push_instr(Bytecode::PushField(idx)),
                     None => {
-                        let name = ctxt.intern_symbol(name);
-                        let idx = ctxt.push_literal(Literal::Symbol(name));
-                        ctxt.push_instr(Bytecode::PushGlobal(idx as u8));
+                        match name.as_str() {
+                            "nil" => ctxt.push_instr(Bytecode::PushNil),
+                            // TODO should cache those false and true, although pushing 0 and 1 isn't functional
+                            // "false" => ctxt.push_instr(Bytecode::Push0),
+                            // "true" => ctxt.push_instr(Bytecode::Push1),
+                            _ => {
+                                let name = ctxt.intern_symbol(name);
+                                let idx = ctxt.push_literal(Literal::Symbol(name));
+                                ctxt.push_instr(Bytecode::PushGlobal(idx as u8));
+                            }
+                        }
                     }
                 }
                 Some(())
@@ -333,8 +341,16 @@ impl MethodCodegen for ast::Expression {
                 }
 
                 let literal = convert_literal(ctxt, literal);
-                let idx = ctxt.push_literal(literal);
-                ctxt.push_instr(Bytecode::PushConstant(idx as u8));
+
+                match literal {
+                    Literal::Integer(0) => ctxt.push_instr(Bytecode::Push0),
+                    Literal::Integer(1) => ctxt.push_instr(Bytecode::Push1),
+                    _ => {
+                        let idx = ctxt.push_literal(literal);
+                        ctxt.push_instr(Bytecode::PushConstant(idx as u8));
+                    }
+                }
+
                 Some(())
             }
             ast::Expression::Block(val) => {

@@ -152,6 +152,9 @@ impl fmt::Display for Method {
                         Bytecode::PushGlobal(idx) => {
                             write!(f, "index: {}", idx)?;
                         }
+                        Bytecode::Push0 => {}
+                        Bytecode::Push1 => {}
+                        Bytecode::PushNil => {}
                         Bytecode::Pop => {}
                         Bytecode::PopLocal(up_idx, idx) => {
                             write!(f, "local: {}, context: {}", idx, up_idx)?;
