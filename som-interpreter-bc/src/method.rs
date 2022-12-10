@@ -162,7 +162,10 @@ impl fmt::Display for Method {
                         Bytecode::PopField(idx) => {
                             write!(f, "index: {}", idx)?;
                         }
-                        Bytecode::Send(idx) => {
+                        Bytecode::Send1(idx) |
+                        Bytecode::Send2(idx) |
+                        Bytecode::Send3(idx) |
+                        Bytecode::SendN(idx) => {
                             write!(f, "index: {}", idx)?;
                         }
                         Bytecode::SuperSend(idx) => {

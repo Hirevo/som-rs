@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Instant;
+use std::usize;
 
 use som_core::bytecode::Bytecode;
 
@@ -44,6 +45,85 @@ impl Interpreter {
 
     pub fn current_frame(&self) -> Option<&SOMRef<Frame>> {
         self.frames.last()
+    }
+
+    fn send(&mut self, idx: u8, mut nb_params: usize, frame: SOMRef<Frame>, universe: &mut Universe) -> Option<Value> {
+        let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
+        let symbol = match literal {
+            Literal::Symbol(sym) => sym,
+            _ => {
+                return None;
+            }
+        };
+        let signature = universe.lookup_symbol(symbol);
+        if nb_params == usize::MAX {
+            nb_params = match signature.chars().nth(0) {
+                Some(ch) if !ch.is_alphabetic() => 1,
+                _ => signature.chars().filter(|ch| *ch == ':').count(),
+            };
+        }
+
+        let method = self
+            .stack
+            .iter()
+            .nth_back(nb_params)
+            .unwrap()
+            .lookup_method(universe, symbol);
+
+        if let Some(method) = method {
+            match method.kind() {
+                MethodKind::Defined(_) => {
+                    let mut args = Vec::with_capacity(nb_params + 1);
+
+                    for _ in 0..nb_params {
+                        let arg = self.stack.pop().unwrap();
+                        args.push(arg);
+                    }
+                    let self_value = self.stack.pop().unwrap();
+                    args.push(self_value.clone());
+
+                    args.reverse();
+
+                    let holder = method.holder.upgrade().unwrap();
+                    self.push_frame(FrameKind::Method {
+                        self_value,
+                        method,
+                        holder,
+                    });
+
+                    let frame = self.current_frame().unwrap();
+                    frame.borrow_mut().args = args;
+                }
+                MethodKind::Primitive(func) => {
+                    func(self, universe);
+                }
+                MethodKind::NotImplemented(err) => {
+                    let self_value = self.stack.iter().nth_back(nb_params).unwrap();
+                    println!(
+                        "{}>>#{}",
+                        self_value.class(&universe).borrow().name(),
+                        method.signature()
+                    );
+                    panic!("Primitive `#{}` not implemented", err)
+                }
+            }
+        } else {
+            let mut args = Vec::with_capacity(nb_params + 1);
+
+            for _ in 0..nb_params {
+                let arg = self.stack.pop().unwrap();
+                args.push(arg);
+            }
+            let self_value = self.stack.pop().unwrap();
+
+            args.reverse();
+
+            universe.does_not_understand(self, self_value, symbol, args)
+                .expect(
+                    "A message cannot be handled and `doesNotUnderstand:arguments:` is not defined on receiver"
+                );
+        }
+        None
     }
 
     pub fn run(&mut self, universe: &mut Universe) -> Option<Value> {
@@ -188,20 +268,17 @@ impl Interpreter {
                         self_value.assign_local(idx as usize, value).unwrap();
                     }
                 }
-                Bytecode::Send(idx) => {
-                    let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
-                    let Literal::Symbol(symbol) = literal else {
-                        return None;
-                    };
-                    let signature = universe.lookup_symbol(symbol);
-                    let nb_params = nb_params(signature);
-                    let method = {
-                        let receiver = self.stack.iter().nth_back(nb_params)?;
-                        let receiver_class = receiver.class(universe);
-                        resolve_method(frame, &receiver_class, symbol, bytecode_idx)
-                    };
-
-                    do_send(self, universe, method, symbol, nb_params);
+                Bytecode::Send1(idx) => {
+                    self.send(idx, 1, frame.clone(), universe);
+                }
+                Bytecode::Send2(idx) => {
+                    self.send(idx, 2, frame.clone(), universe);
+                }
+                Bytecode::Send3(idx) => {
+                    self.send(idx, 3, frame.clone(), universe);
+                }
+                Bytecode::SendN(idx) => {
+                    self.send(idx, usize::MAX, frame.clone(), universe);
                 }
                 Bytecode::SuperSend(idx) => {
                     let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
