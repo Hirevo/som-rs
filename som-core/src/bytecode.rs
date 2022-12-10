@@ -11,6 +11,9 @@ pub enum Bytecode {
     PushBlock(u8),
     PushConstant(u8),
     PushGlobal(u8),
+    Push0,
+    Push1,
+    PushNil,
     Pop,
     PopLocal(u8, u8),
     PopArgument(u8, u8),
@@ -41,6 +44,9 @@ impl Bytecode {
             Self::PushBlock(_)       => "PUSH_BLOCK",
             Self::PushConstant(_)    => "PUSH_CONSTANT",
             Self::PushGlobal(_)      => "PUSH_GLOBAL",
+            Self::Push0              => "PUSH_0",
+            Self::Push1              => "PUSH_1",
+            Self::PushNil            => "PUSH_NIL",
             Self::Pop                => "POP",
             Self::PopLocal(_, _)     => "POP_LOCAL",
             Self::PopArgument(_, _)  => "POP_ARGUMENT",
@@ -71,6 +77,9 @@ impl Bytecode {
             Self::PushBlock(_)       => "PUSH_BLOCK      ",
             Self::PushConstant(_)    => "PUSH_CONSTANT   ",
             Self::PushGlobal(_)      => "PUSH_GLOBAL     ",
+            Self::Push0              => "PUSH_0          ",
+            Self::Push1              => "PUSH_1          ",
+            Self::PushNil            => "PUSH_NIL        ",
             Self::Pop                => "POP             ",
             Self::PopLocal(_, _)     => "POP_LOCAL       ",
             Self::PopArgument(_, _)  => "POP_ARGUMENT    ",
@@ -89,7 +98,7 @@ impl Bytecode {
     }
 }
 
-pub static NAMES: [&str; 22] = [
+pub static NAMES: [&str; 25] = [
     "HALT",
     "DUP",
     "PUSH_LOCAL",
@@ -98,6 +107,9 @@ pub static NAMES: [&str; 22] = [
     "PUSH_BLOCK",
     "PUSH_CONSTANT",
     "PUSH_GLOBAL",
+    "PUSH_0",
+    "PUSH_1",
+    "PUSH_NIL",
     "POP",
     "POP_LOCAL",
     "POP_ARGUMENT",
@@ -114,7 +126,7 @@ pub static NAMES: [&str; 22] = [
     "RETURN_NON_LOCAL",
 ];
 
-pub static PADDED_NAMES: [&str; 22] = [
+pub static PADDED_NAMES: [&str; 25] = [
     "HALT            ",
     "DUP             ",
     "PUSH_LOCAL      ",
@@ -123,6 +135,9 @@ pub static PADDED_NAMES: [&str; 22] = [
     "PUSH_BLOCK      ",
     "PUSH_CONSTANT   ",
     "PUSH_GLOBAL     ",
+    "PUSH_0          ",
+    "PUSH_1          ",
+    "PUSH_NIL        ",
     "POP             ",
     "POP_LOCAL       ",
     "POP_ARGUMENT    ",
@@ -151,6 +166,9 @@ impl fmt::Display for Bytecode {
             Self::PushBlock(idx)            => write!(f, "PUSH_BLOCK {}", idx),
             Self::PushConstant(idx)         => write!(f, "PUSH_CONSTANT {}", idx),
             Self::PushGlobal(idx)           => write!(f, "PUSH_GLOBAL {}", idx),
+            Self::Push0                       => write!(f, "PUSH_0"),
+            Self::Push1                       => write!(f, "PUSH_1"),
+            Self::PushNil                       => write!(f, "PUSH_NIL"),
             Self::Pop                       => write!(f, "POP"),
             Self::PopLocal(up_idx, idx)     => write!(f, "POP_LOCAL {}, {}", up_idx, idx),
             Self::PopArgument(up_idx, idx)  => write!(f, "POP_ARGUMENT {}, {}", up_idx, idx),
