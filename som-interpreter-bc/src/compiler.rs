@@ -169,8 +169,7 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
     }
 
     fn backpatch(&mut self, idx_to_backpatch: usize, bytecode_with_new_val: Bytecode) {
-        let mut bytecode_to_patch = self.body.as_mut().unwrap().get_mut(idx_to_backpatch).unwrap();
-        bytecode_to_patch = &mut bytecode_with_new_val.clone();
+        self.body.as_mut().unwrap()[idx_to_backpatch] = bytecode_with_new_val;
     }
 }
 
@@ -302,7 +301,7 @@ impl MethodCodegen for ast::Expression {
                     for x in &val.body.exprs {
                         x.codegen(ctxt);
                     }
-                    let new_val = ctxt.get_instr_idx() + 1; // that + 1 feels shady, what if there's nothing after
+                    let new_val = ctxt.get_instr_idx();
                     ctxt.backpatch(jump_idx, Bytecode::JumpOnFalseTopNil(new_val));
 
                     Some(())

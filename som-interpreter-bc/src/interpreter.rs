@@ -57,10 +57,6 @@ impl Interpreter {
             }
         };
         let signature = universe.lookup_symbol(symbol);
-        match signature {
-            "if" => println!("KNEW IT"),
-            _ => {}
-        }
 
         let nb_params = match nb_params_opt {
             Some(x) => x,
@@ -227,6 +223,22 @@ impl Interpreter {
                     continue;
                 }
             };
+
+            // TODO remove this debug
+            // if &frame.borrow().get_method().signature == "initialize:" {
+            //     println!("bp");
+            //     // match &frame.borrow().kind {
+            //     //     FrameKind::Method { holder, method, .. } => match method.kind() {
+            //     //         MethodKind::Defined(env) => {
+            //     //             dbg!(&holder);
+            //     //             dbg!(&env.body);
+            //     //         },
+            //     //         MethodKind::Primitive(_) => {},
+            //     //         MethodKind::NotImplemented(_) => {},
+            //     //     },
+            //     //     FrameKind::Block { block, .. } => {},
+            //     // };
+            // }
 
             frame.borrow_mut().bytecode_idx += 1;
 
@@ -440,12 +452,12 @@ impl Interpreter {
                     let condition_result = self.stack.pop().unwrap();
 
                     match condition_result {
-                        Value::Boolean(true) => {
+                        Value::Boolean(false) => {
                             let frame = self.current_frame().unwrap();
                             frame.clone().borrow_mut().bytecode_idx += offset;
                             self.stack.push(Value::Nil);
                         },
-                        Value::Boolean(false) => {},
+                        Value::Boolean(true) => {},
                         _ => panic!()
                     }
                 }
