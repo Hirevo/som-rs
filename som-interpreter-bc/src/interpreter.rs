@@ -229,22 +229,6 @@ impl Interpreter {
                 None => return Some(self.stack.pop().unwrap_or(Value::Nil)),
             };
 
-            if frame.borrow().get_bytecode_idx() == 0 {
-                if &frame.borrow().get_method().signature == "initialize:" {
-                    match &frame.borrow().kind {
-                        FrameKind::Method { holder, method, .. } => match method.kind() {
-                            MethodKind::Defined(env) => {
-                                // dbg!(&holder);
-                                // dbg!(&env.body);
-                                // exit(1);
-                            },
-                            _ => {},
-                        },
-                        _ => {},
-                    };
-                }
-            }
-
             let opt_bytecode = frame.borrow().get_current_bytecode();
             let bytecode = match opt_bytecode {
                 Some(bytecode) => bytecode,
@@ -272,10 +256,7 @@ impl Interpreter {
             // }
 
             frame.borrow_mut().bytecode_idx += 1;
-            dbg!(&frame.borrow().get_method().signature);
-            // if &frame.borrow().get_method().signature == "mandelbrot:" {
-            //     println!("{}", &bytecode);
-            // }
+            // dbg!(&frame.borrow().get_method().signature);
 
             match bytecode {
                 Bytecode::Halt => {
@@ -492,7 +473,8 @@ impl Interpreter {
                             frame.clone().borrow_mut().bytecode_idx += offset - 1; // minus one because it gets incremented by one already every loop
                             self.stack.push(Value::Nil);
                         },
-                        Value::Boolean(true) => {},
+                        Value::Boolean(true) => {
+                        },
                         _ => panic!()
                     }
                 }

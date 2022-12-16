@@ -306,29 +306,12 @@ impl MethodCodegen for ast::Expression {
 
                             if let Some((last, rest)) = splitted {
                                 for expr in rest {
-                                    // dbg!(&expr);
                                     expr.codegen(ctxt);
                                     ctxt.push_instr(Bytecode::Pop);
                                 }
 
-                                // match last {
-                                //     ast::Expression::Exit(expr) => {
-                                //         expr.codegen(ctxt)?;
-                                //         ctxt.push_instr(Bytecode::ReturnNonLocal);
-                                //         Some(())
-                                //     }
-                                // }
-                                match last {
-                                    ast::Expression::Exit(expr) => {
-                                        expr.codegen(ctxt)?;
-                                        ctxt.push_instr(Bytecode::ReturnLocal);
-                                    },
-                                    _ => {}
-                                }
-                                // last.codegen(ctxt)?;
-                                // dbg!(&last);
+                                last.codegen(ctxt)?;
                             }
-                            // exit(1);
                         } ,
                         _ => panic!("Invalid argument supplied to ifTrue:") // TODO, not the best error handling! Will do for now though.
                         // arg => {arg.codegen(ctxt);} // TODO is this supposed to be possible?
