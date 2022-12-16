@@ -122,6 +122,11 @@ impl Frame {
         self.get_bytecode(self.bytecode_idx)
     }
 
+    // todo remove me
+    pub fn get_bytecode_idx(&self) -> usize {
+        self.bytecode_idx
+    }
+
     pub fn lookup_constant(&self, idx: usize) -> Option<Literal> {
         match self.kind() {
             FrameKind::Block { block } => block.literals.get(idx).cloned(),

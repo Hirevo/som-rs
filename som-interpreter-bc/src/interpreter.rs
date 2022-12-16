@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::process::exit;
 use std::rc::Rc;
 use std::time::Instant;
 use std::usize;
@@ -57,6 +58,20 @@ impl Interpreter {
             }
         };
         let signature = universe.lookup_symbol(symbol);
+
+        // if signature == "verify:inner:" {
+        //     print!("bp");
+        //     // match &frame.borrow().kind {
+        //     //     FrameKind::Method { holder, method, .. } => match method.kind() {
+        //     //         MethodKind::Defined(env) => {
+        //     //             dbg!(&holder);
+        //     //             dbg!(&env.body);
+        //     //         },
+        //     //         _ => {}
+        //     //     },
+        //     //     _ => {},
+        //     // };
+        // }
 
         let nb_params = match nb_params_opt {
             Some(x) => x,
@@ -214,6 +229,22 @@ impl Interpreter {
                 None => return Some(self.stack.pop().unwrap_or(Value::Nil)),
             };
 
+            if frame.borrow().get_bytecode_idx() == 0 {
+                if &frame.borrow().get_method().signature == "initialize:" {
+                    match &frame.borrow().kind {
+                        FrameKind::Method { holder, method, .. } => match method.kind() {
+                            MethodKind::Defined(env) => {
+                                // dbg!(&holder);
+                                // dbg!(&env.body);
+                                // exit(1);
+                            },
+                            _ => {},
+                        },
+                        _ => {},
+                    };
+                }
+            }
+
             let opt_bytecode = frame.borrow().get_current_bytecode();
             let bytecode = match opt_bytecode {
                 Some(bytecode) => bytecode,
@@ -241,6 +272,10 @@ impl Interpreter {
             // }
 
             frame.borrow_mut().bytecode_idx += 1;
+            dbg!(&frame.borrow().get_method().signature);
+            // if &frame.borrow().get_method().signature == "mandelbrot:" {
+            //     println!("{}", &bytecode);
+            // }
 
             match bytecode {
                 Bytecode::Halt => {
@@ -454,7 +489,7 @@ impl Interpreter {
                     match condition_result {
                         Value::Boolean(false) => {
                             let frame = self.current_frame().unwrap();
-                            frame.clone().borrow_mut().bytecode_idx += offset;
+                            frame.clone().borrow_mut().bytecode_idx += offset - 1; // minus one because it gets incremented by one already every loop
                             self.stack.push(Value::Nil);
                         },
                         Value::Boolean(true) => {},

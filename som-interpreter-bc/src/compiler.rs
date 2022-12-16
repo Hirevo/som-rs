@@ -3,6 +3,7 @@
 //!
 use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
+use std::process::exit;
 use std::rc::{Rc, Weak};
 
 use indexmap::{IndexMap, IndexSet};
@@ -18,6 +19,9 @@ use crate::method::{Method, MethodEnv, MethodKind};
 use crate::primitives;
 use crate::value::Value;
 use crate::SOMRef;
+
+static mut NBR_INLINING: usize = 0;
+
 
 #[derive(Debug, Clone)]
 pub enum Literal {
@@ -169,6 +173,7 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
     }
 
     fn backpatch(&mut self, idx_to_backpatch: usize, bytecode_with_new_val: Bytecode) {
+        // dbg!(&self.outer.class_name());
         self.body.as_mut().unwrap()[idx_to_backpatch] = bytecode_with_new_val;
     }
 }
@@ -279,7 +284,7 @@ impl MethodCodegen for ast::Expression {
                 }
                 Some(())
             }
-            ast::Expression::Message(message) => {
+            ast::Expression::Message(message) => unsafe {
                 let super_send = match message.receiver.as_ref() {
                     ast::Expression::Reference(value) if value == "super" => true,
                     _ => false,
@@ -288,21 +293,52 @@ impl MethodCodegen for ast::Expression {
                 message.receiver.codegen(ctxt)?;
 
                 // We inline ifTrue:
-                if message.signature == "ifTrue:" {
+                if message.signature == "ifTrue:" && NBR_INLINING < 10000 {
                     assert_eq!(message.values.len(), 1);
-                    let block = message.values.get(0).unwrap();
-                    let val = match block {
-                        ast::Expression::Block(val) => val ,
-                        _ => panic!("Invalid argument supplied to ifTrue:") // TODO, not the best error handling! Will do for now though.
-                    };
 
                     let jump_idx = ctxt.get_instr_idx();
                     ctxt.push_instr(Bytecode::JumpOnFalseTopNil(0));
-                    for x in &val.body.exprs {
-                        x.codegen(ctxt);
-                    }
-                    let new_val = ctxt.get_instr_idx();
-                    ctxt.backpatch(jump_idx, Bytecode::JumpOnFalseTopNil(new_val));
+
+                    let block = message.values.get(0).unwrap();
+                    match block {
+                        ast::Expression::Block(val) => {
+                            let splitted = val.body.exprs.split_last();
+
+                            if let Some((last, rest)) = splitted {
+                                for expr in rest {
+                                    // dbg!(&expr);
+                                    expr.codegen(ctxt);
+                                    ctxt.push_instr(Bytecode::Pop);
+                                }
+
+                                // match last {
+                                //     ast::Expression::Exit(expr) => {
+                                //         expr.codegen(ctxt)?;
+                                //         ctxt.push_instr(Bytecode::ReturnNonLocal);
+                                //         Some(())
+                                //     }
+                                // }
+                                match last {
+                                    ast::Expression::Exit(expr) => {
+                                        expr.codegen(ctxt)?;
+                                        ctxt.push_instr(Bytecode::ReturnLocal);
+                                    },
+                                    _ => {}
+                                }
+                                // last.codegen(ctxt)?;
+                                // dbg!(&last);
+                            }
+                            // exit(1);
+                        } ,
+                        _ => panic!("Invalid argument supplied to ifTrue:") // TODO, not the best error handling! Will do for now though.
+                        // arg => {arg.codegen(ctxt);} // TODO is this supposed to be possible?
+                    };
+
+                    let new_idx = ctxt.get_instr_idx();
+                    let jump_by = new_idx - jump_idx;
+                    ctxt.backpatch(jump_idx, Bytecode::JumpOnFalseTopNil(jump_by));
+
+                    NBR_INLINING += 1;
 
                     Some(())
                 } else {
