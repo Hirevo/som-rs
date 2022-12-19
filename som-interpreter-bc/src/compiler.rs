@@ -3,7 +3,6 @@
 //!
 use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
-use std::process::exit;
 use std::rc::{Rc, Weak};
 
 use indexmap::{IndexMap, IndexSet};
@@ -19,9 +18,6 @@ use crate::method::{Method, MethodEnv, MethodKind};
 use crate::primitives;
 use crate::value::Value;
 use crate::SOMRef;
-
-static mut NBR_INLINING: usize = 0;
-
 
 #[derive(Debug, Clone)]
 pub enum Literal {
@@ -284,7 +280,7 @@ impl MethodCodegen for ast::Expression {
                 }
                 Some(())
             }
-            ast::Expression::Message(message) => unsafe {
+            ast::Expression::Message(message) => {
                 let super_send = match message.receiver.as_ref() {
                     ast::Expression::Reference(value) if value == "super" => true,
                     _ => false,
@@ -293,9 +289,7 @@ impl MethodCodegen for ast::Expression {
                 message.receiver.codegen(ctxt)?;
 
                 // We inline ifTrue:
-                if message.signature == "ifTrue:" && NBR_INLINING < 10000 {
-                    assert_eq!(message.values.len(), 1);
-
+                if message.signature == "ifTrue:" && message.values.len() == 1 && matches!(message.values.get(0).unwrap(), ast::Expression::Block(_)) {
                     let jump_idx = ctxt.get_instr_idx();
                     ctxt.push_instr(Bytecode::JumpOnFalseTopNil(0));
 
@@ -313,7 +307,7 @@ impl MethodCodegen for ast::Expression {
                                 last.codegen(ctxt)?;
                             }
                         } ,
-                        _ => panic!("Invalid argument supplied to ifTrue:") // TODO, not the best error handling! Will do for now though.
+                        val => panic!("Invalid argument supplied to ifTrue: {:?}", val) // TODO, not the best error handling! Will do for now though.
                         // arg => {arg.codegen(ctxt);} // TODO is this supposed to be possible?
                     };
 
@@ -321,41 +315,39 @@ impl MethodCodegen for ast::Expression {
                     let jump_by = new_idx - jump_idx;
                     ctxt.backpatch(jump_idx, Bytecode::JumpOnFalseTopNil(jump_by));
 
-                    NBR_INLINING += 1;
-
-                    Some(())
-                } else {
-                    message
-                        .values
-                        .iter()
-                        .try_for_each(|value|
-                            value.codegen(ctxt)
-                        )?;
-
-                    let nb_params = match message.signature.chars().nth(0) {
-                        Some(ch) if !ch.is_alphabetic() => 1,
-                        _ => message.signature.chars().filter(|ch| *ch == ':').count(),
-                    };
-
-                    let sym = ctxt.intern_symbol(message.signature.as_str());
-                    let idx = ctxt.push_literal(Literal::Symbol(sym));
-                    if super_send {
-                        match nb_params {
-                            1 => ctxt.push_instr(Bytecode::SuperSend1(idx as u8)),
-                            2 => ctxt.push_instr(Bytecode::SuperSend2(idx as u8)),
-                            3 => ctxt.push_instr(Bytecode::SuperSend3(idx as u8)),
-                            _ => ctxt.push_instr(Bytecode::SuperSendN(idx as u8))
-                        }
-                    } else {
-                        match nb_params {
-                            1 => ctxt.push_instr(Bytecode::Send1(idx as u8)),
-                            2 => ctxt.push_instr(Bytecode::Send2(idx as u8)),
-                            3 => ctxt.push_instr(Bytecode::Send3(idx as u8)),
-                            _ => ctxt.push_instr(Bytecode::SendN(idx as u8))
-                        }
-                    }
-                    Some(())
+                    return Some(());
                 }
+
+                message
+                    .values
+                    .iter()
+                    .try_for_each(|value|
+                        value.codegen(ctxt)
+                    )?;
+
+                let nb_params = match message.signature.chars().nth(0) {
+                    Some(ch) if !ch.is_alphabetic() => 1,
+                    _ => message.signature.chars().filter(|ch| *ch == ':').count(),
+                };
+
+                let sym = ctxt.intern_symbol(message.signature.as_str());
+                let idx = ctxt.push_literal(Literal::Symbol(sym));
+                if super_send {
+                    match nb_params {
+                        1 => ctxt.push_instr(Bytecode::SuperSend1(idx as u8)),
+                        2 => ctxt.push_instr(Bytecode::SuperSend2(idx as u8)),
+                        3 => ctxt.push_instr(Bytecode::SuperSend3(idx as u8)),
+                        _ => ctxt.push_instr(Bytecode::SuperSendN(idx as u8))
+                    }
+                } else {
+                    match nb_params {
+                        1 => ctxt.push_instr(Bytecode::Send1(idx as u8)),
+                        2 => ctxt.push_instr(Bytecode::Send2(idx as u8)),
+                        3 => ctxt.push_instr(Bytecode::Send3(idx as u8)),
+                        _ => ctxt.push_instr(Bytecode::SendN(idx as u8))
+                    }
+                }
+                Some(())
             }
             ast::Expression::BinaryOp(message) => {
                 let super_send = match message.lhs.as_ref() {
