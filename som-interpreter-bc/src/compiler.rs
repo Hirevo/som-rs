@@ -298,6 +298,10 @@ impl MethodCodegen for ast::Expression {
                         ast::Expression::Block(val) => {
                             let splitted = val.body.exprs.split_last();
 
+                            for block_local in &val.locals {
+                                ctxt.push_local(String::from(block_local));
+                            }
+
                             if let Some((last, rest)) = splitted {
                                 for expr in rest {
                                     expr.codegen(ctxt);
