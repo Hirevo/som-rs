@@ -478,7 +478,7 @@ impl Interpreter {
                         },
                         Value::Boolean(false) => {
                         },
-                        _ => panic!()
+                        _ => panic!("Jump condition did not evaluate to boolean")
                     }
                 },
                 Bytecode::JumpOnFalseTopNil(offset) => {
@@ -492,7 +492,7 @@ impl Interpreter {
                         },
                         Value::Boolean(true) => {
                         },
-                        _ => panic!()
+                        _ => panic!("Jump condition did not evaluate to boolean")
                     }
                 },
                 Bytecode::JumpOnTruePop(offset) => {
@@ -504,7 +504,7 @@ impl Interpreter {
                             frame.clone().borrow_mut().bytecode_idx += offset - 1;
                         },
                         Value::Boolean(false) => {},
-                        _ => panic!()
+                        _ => panic!("Jump condition did not evaluate to boolean")
                     }
                 },
                 Bytecode::JumpOnFalsePop(offset) => {
@@ -516,7 +516,7 @@ impl Interpreter {
                             frame.clone().borrow_mut().bytecode_idx += offset - 1;
                         },
                         Value::Boolean(true) => {},
-                        _ => panic!()
+                        _ => panic!("Jump condition did not evaluate to boolean")
                     }
                 },
             }

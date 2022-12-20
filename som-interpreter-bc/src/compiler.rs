@@ -410,6 +410,7 @@ impl MethodCodegen for ast::Expression {
 impl PrimMessageInliner for ast::Expression {
     fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
         if message.signature == "ifTrue:" || message.signature == "ifFalse" {
+            // TODO we can inline more than blocks if we rely on the existing codegen methods. However, that's a pain for some reason.
             if message.values.len() != 1 || !matches!(message.values.get(0).unwrap(), ast::Expression::Block(_)) {
                 return None;
             }
