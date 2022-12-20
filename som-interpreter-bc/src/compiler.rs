@@ -9,7 +9,6 @@ use indexmap::{IndexMap, IndexSet};
 use num_bigint::BigInt;
 
 use som_core::ast;
-use som_core::ast::Message;
 use som_core::bytecode::Bytecode;
 
 use crate::block::Block;
@@ -231,7 +230,8 @@ trait MethodCodegen {
 }
 
 trait PrimMessageInliner {
-    fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &Message) -> Option<()>;
+    fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()>;
+    fn inline_block(&self, ctxt: &mut dyn InnerGenCtxt, block: &ast::Expression) -> Option<()>;
 }
 
 impl MethodCodegen for ast::Body {
@@ -408,53 +408,120 @@ impl MethodCodegen for ast::Expression {
 }
 
 impl PrimMessageInliner for ast::Expression {
-    fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &Message) -> Option<()> {
+    fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
         if message.signature == "ifTrue:" || message.signature == "ifFalse" {
             if message.values.len() != 1 || !matches!(message.values.get(0).unwrap(), ast::Expression::Block(_)) {
                 return Some(());
             }
 
+            // avoids some panic! match arms, there's only two possibilities
+            let is_if_true = message.signature == "ifTrue:";
+
             let jump_idx = ctxt.get_instr_idx();
 
-            match message.signature.as_str() {
-                "ifTrue:" => ctxt.push_instr(Bytecode::JumpOnFalseTopNil(0)),
-                "ifFalse:" => ctxt.push_instr(Bytecode::JumpOnTrueTopNil(0)),
-                _ => panic!("Unreachable")
+            match is_if_true {
+                true => ctxt.push_instr(Bytecode::JumpOnFalseTopNil(0)),
+                false => ctxt.push_instr(Bytecode::JumpOnTrueTopNil(0))
             }
 
-            let block = message.values.get(0).unwrap();
-            match block {
-                ast::Expression::Block(val) => {
-                    let splitted = val.body.exprs.split_last();
+            self.inline_block(ctxt, message.values.get(0).unwrap());
 
-                    for block_local in &val.locals {
-                        ctxt.push_local(String::from(block_local));
-                    }
-
-                    if let Some((last, rest)) = splitted {
-                        for expr in rest {
-                            expr.codegen(ctxt);
-                            ctxt.push_instr(Bytecode::Pop);
-                        }
-
-                        last.codegen(ctxt)?;
-                    }
-                } ,
-                val => panic!("Invalid argument supplied to ifTrue: {:?}", val) // not the best error handling! Will do for now though.
-            };
-
-            let new_idx = ctxt.get_instr_idx();
-            let jump_by = new_idx - jump_idx;
-
-            match message.signature.as_str() {
-                "ifTrue:" => ctxt.backpatch(jump_idx, Bytecode::JumpOnFalseTopNil(jump_by)),
-                "ifFalse:" => ctxt.backpatch(jump_idx, Bytecode::JumpOnTrueTopNil(jump_by)),
-                _ => panic!("Unreachable")
+            let jump_by = ctxt.get_instr_idx() - jump_idx;
+            match is_if_true {
+                true => ctxt.backpatch(jump_idx, Bytecode::JumpOnFalseTopNil(jump_by)),
+                false => ctxt.backpatch(jump_idx, Bytecode::JumpOnTrueTopNil(jump_by)),
             }
 
             return Some(());
         }
+
+        /*if message.signature == "ifTrue:ifFalse:" { // || message.signature == "ifFalse:ifTrue:"
+            if message.values.len() != 2
+                || !matches!(message.values.get(0).unwrap(), ast::Expression::Block(_))
+                || !matches!(message.values.get(1).unwrap(), ast::Expression::Block(_)) {
+                return Some(());
+            }
+
+            // avoids some panic! match arms, there's only two possibilities
+            let is_if_true_if_false = message.signature == "ifTrue:ifFalse";
+
+            let start_jump_idx = ctxt.get_instr_idx();
+
+            match is_if_true_if_false {
+                true => ctxt.push_instr(Bytecode::JumpOnFalseTopNil(0)),
+                false => ctxt.push_instr(Bytecode::JumpOnTrueTopNil(0))
+            }
+
+            if let ast::Expression::Block(block1) = message.values.get(0).unwrap() {
+                for block_local in &block1.locals {
+                    ctxt.push_local(String::from(block_local));
+                }
+
+                if let Some((last, rest)) = block1.body.exprs.split_last() {
+                    for expr in rest {
+                        expr.codegen(ctxt);
+                        ctxt.push_instr(Bytecode::Pop);
+                    }
+                    last.codegen(ctxt)?;
+                }
+            }
+
+            let end_first_jump_idx = ctxt.get_instr_idx(); // the JUMP we've just emitted.
+            ctxt.push_instr(Bytecode::Jump(0));
+
+            let jump_by = ctxt.get_instr_idx() - start_jump_idx;
+            match is_if_true_if_false {
+                true => ctxt.backpatch(start_jump_idx, Bytecode::JumpOnFalseTopNil(jump_by)),
+                false => ctxt.backpatch(start_jump_idx, Bytecode::JumpOnTrueTopNil(jump_by)),
+            }
+
+            if let ast::Expression::Block(block2) = message.values.get(1).unwrap() {
+                for block_local in &block2.locals {
+                    ctxt.push_local(String::from(block_local));
+                }
+
+                if let Some((last, rest)) = block2.body.exprs.split_last() {
+                    for expr in rest {
+                        expr.codegen(ctxt);
+                        ctxt.push_instr(Bytecode::Pop);
+                    }
+                    last.codegen(ctxt)?;
+                }
+            }
+
+            let jump_by = ctxt.get_instr_idx() - end_first_jump_idx;
+            match is_if_true_if_false {
+                true => ctxt.backpatch(end_first_jump_idx, Bytecode::Jump(jump_by)),
+                false => ctxt.backpatch(end_first_jump_idx, Bytecode::Jump(jump_by)),
+            }
+
+            return Some(());
+        }*/
+
+        // TODO: [whileTrue, whileFalse], [or, and]
         return None;
+    }
+
+    fn inline_block(&self, ctxt: &mut dyn InnerGenCtxt, block_expr: &ast::Expression) -> Option<()> {
+        match block_expr {
+            ast::Expression::Block(block) => {
+                for block_local in &block.locals {
+                    ctxt.push_local(String::from(block_local));
+                }
+
+                // TODO i suspect we can reuse compile_block() instead, but a quick attempt failed.
+                // TODO also, need remove those POPs somehow.
+                if let Some((last, rest)) = block.body.exprs.split_last() {
+                    for expr in rest {
+                        expr.codegen(ctxt);
+                        ctxt.push_instr(Bytecode::Pop);
+                    }
+                    last.codegen(ctxt)?;
+                }
+                Some(())
+            },
+            _ => panic!("Expression was not a block")
+        }
     }
 }
 

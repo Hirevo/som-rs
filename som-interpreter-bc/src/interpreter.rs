@@ -463,6 +463,10 @@ impl Interpreter {
                         );
                     }
                 }
+                Bytecode::Jump(offset) => {
+                    let frame = self.current_frame().unwrap();
+                    frame.clone().borrow_mut().bytecode_idx += offset - 1;
+                },
                 Bytecode::JumpOnFalseTopNil(offset) => {
                     let condition_result = self.stack.pop().unwrap();
 
