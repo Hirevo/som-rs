@@ -434,9 +434,7 @@ impl PrimMessageInliner for ast::Expression {
             }
 
             return Some(());
-        }
-
-        if message.signature == "ifTrue:ifFalse:" {// || message.signature == "ifFalse:ifTrue:" {
+        } else if message.signature == "ifTrue:ifFalse:" || message.signature == "ifFalse:ifTrue:" {
             if message.values.len() != 2
                 || !matches!(message.values.get(0).unwrap(), ast::Expression::Block(_))
                 || !matches!(message.values.get(1).unwrap(), ast::Expression::Block(_)) {
