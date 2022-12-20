@@ -435,68 +435,39 @@ impl PrimMessageInliner for ast::Expression {
             return Some(());
         }
 
-        /*if message.signature == "ifTrue:ifFalse:" { // || message.signature == "ifFalse:ifTrue:"
+        if message.signature == "ifTrue:ifFalse:" || message.signature == "ifFalse:ifTrue:" {
             if message.values.len() != 2
                 || !matches!(message.values.get(0).unwrap(), ast::Expression::Block(_))
                 || !matches!(message.values.get(1).unwrap(), ast::Expression::Block(_)) {
                 return Some(());
             }
 
-            // avoids some panic! match arms, there's only two possibilities
-            let is_if_true_if_false = message.signature == "ifTrue:ifFalse";
+            let is_if_true_if_false = message.signature == "ifTrue:ifFalse:";
 
             let start_jump_idx = ctxt.get_instr_idx();
-
             match is_if_true_if_false {
-                true => ctxt.push_instr(Bytecode::JumpOnFalseTopNil(0)),
-                false => ctxt.push_instr(Bytecode::JumpOnTrueTopNil(0))
+                true => ctxt.push_instr(Bytecode::JumpOnFalsePop(0)),
+                false => ctxt.push_instr(Bytecode::JumpOnTruePop(0)),
             }
 
-            if let ast::Expression::Block(block1) = message.values.get(0).unwrap() {
-                for block_local in &block1.locals {
-                    ctxt.push_local(String::from(block_local));
-                }
+            self.inline_block(ctxt, message.values.get(0).unwrap());
 
-                if let Some((last, rest)) = block1.body.exprs.split_last() {
-                    for expr in rest {
-                        expr.codegen(ctxt);
-                        ctxt.push_instr(Bytecode::Pop);
-                    }
-                    last.codegen(ctxt)?;
-                }
-            }
-
-            let end_first_jump_idx = ctxt.get_instr_idx(); // the JUMP we've just emitted.
+            let middle_jump_idx = ctxt.get_instr_idx();
             ctxt.push_instr(Bytecode::Jump(0));
 
             let jump_by = ctxt.get_instr_idx() - start_jump_idx;
             match is_if_true_if_false {
-                true => ctxt.backpatch(start_jump_idx, Bytecode::JumpOnFalseTopNil(jump_by)),
-                false => ctxt.backpatch(start_jump_idx, Bytecode::JumpOnTrueTopNil(jump_by)),
+                true => ctxt.backpatch(start_jump_idx, Bytecode::JumpOnFalsePop(jump_by)),
+                false => ctxt.backpatch(start_jump_idx, Bytecode::JumpOnTruePop(jump_by)),
             }
 
-            if let ast::Expression::Block(block2) = message.values.get(1).unwrap() {
-                for block_local in &block2.locals {
-                    ctxt.push_local(String::from(block_local));
-                }
+            self.inline_block(ctxt, message.values.get(1).unwrap());
 
-                if let Some((last, rest)) = block2.body.exprs.split_last() {
-                    for expr in rest {
-                        expr.codegen(ctxt);
-                        ctxt.push_instr(Bytecode::Pop);
-                    }
-                    last.codegen(ctxt)?;
-                }
-            }
-
-            let jump_by = ctxt.get_instr_idx() - end_first_jump_idx;
-            match is_if_true_if_false {
-                true => ctxt.backpatch(end_first_jump_idx, Bytecode::Jump(jump_by)),
-                false => ctxt.backpatch(end_first_jump_idx, Bytecode::Jump(jump_by)),
-            }
+            let jump_by = ctxt.get_instr_idx() - middle_jump_idx;
+            ctxt.backpatch(middle_jump_idx, Bytecode::Jump(jump_by));
 
             return Some(());
-        }*/
+        }
 
         // TODO: [whileTrue, whileFalse], [or, and]
         return None;

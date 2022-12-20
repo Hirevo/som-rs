@@ -32,8 +32,10 @@ pub enum Bytecode {
     ReturnLocal,
     ReturnNonLocal,
     Jump(usize),
+    JumpOnTrueTopNil(usize),
     JumpOnFalseTopNil(usize),
-    JumpOnTrueTopNil(usize)
+    JumpOnTruePop(usize),
+    JumpOnFalsePop(usize)
 }
 
 impl Bytecode {
@@ -71,7 +73,7 @@ impl Bytecode {
             Self::ReturnLocal        => "RETURN_LOCAL",
             Self::ReturnNonLocal     => "RETURN_NON_LOCAL",
             Self::Jump(_)            => "JUMP",
-            _                        => "NO NAME, TODO"
+            _                        => "NO NAME, TODO" // laziness
         }
     }
 

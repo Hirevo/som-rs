@@ -467,20 +467,6 @@ impl Interpreter {
                     let frame = self.current_frame().unwrap();
                     frame.clone().borrow_mut().bytecode_idx += offset - 1;
                 },
-                Bytecode::JumpOnFalseTopNil(offset) => {
-                    let condition_result = self.stack.pop().unwrap();
-
-                    match condition_result {
-                        Value::Boolean(false) => {
-                            let frame = self.current_frame().unwrap();
-                            frame.clone().borrow_mut().bytecode_idx += offset - 1; // minus one because it gets incremented by one already every loop
-                            self.stack.push(Value::Nil);
-                        },
-                        Value::Boolean(true) => {
-                        },
-                        _ => panic!()
-                    }
-                },
                 Bytecode::JumpOnTrueTopNil(offset) => {
                     let condition_result = self.stack.pop().unwrap();
 
@@ -488,13 +474,51 @@ impl Interpreter {
                         Value::Boolean(true) => {
                             let frame = self.current_frame().unwrap();
                             frame.clone().borrow_mut().bytecode_idx += offset - 1; // minus one because it gets incremented by one already every loop
-                            self.stack.push(Value::Nil);
+                            self.stack.push(Value::Nil); // TODO read and rewrite OR pop, instead of pop then optional push
                         },
                         Value::Boolean(false) => {
                         },
                         _ => panic!()
                     }
-                }
+                },
+                Bytecode::JumpOnFalseTopNil(offset) => {
+                    let condition_result = self.stack.pop().unwrap();
+
+                    match condition_result {
+                        Value::Boolean(false) => {
+                            let frame = self.current_frame().unwrap();
+                            frame.clone().borrow_mut().bytecode_idx += offset - 1;
+                            self.stack.push(Value::Nil);
+                        },
+                        Value::Boolean(true) => {
+                        },
+                        _ => panic!()
+                    }
+                },
+                Bytecode::JumpOnTruePop(offset) => {
+                    let condition_result = self.stack.pop().unwrap();
+
+                    match condition_result {
+                        Value::Boolean(true) => {
+                            let frame = self.current_frame().unwrap();
+                            frame.clone().borrow_mut().bytecode_idx += offset - 1;
+                        },
+                        Value::Boolean(false) => {},
+                        _ => panic!()
+                    }
+                },
+                Bytecode::JumpOnFalsePop(offset) => {
+                    let condition_result = self.stack.pop().unwrap();
+
+                    match condition_result {
+                        Value::Boolean(false) => {
+                            let frame = self.current_frame().unwrap();
+                            frame.clone().borrow_mut().bytecode_idx += offset - 1;
+                        },
+                        Value::Boolean(true) => {},
+                        _ => panic!()
+                    }
+                },
             }
         }
 
