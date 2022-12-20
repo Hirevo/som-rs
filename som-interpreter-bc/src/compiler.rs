@@ -411,7 +411,7 @@ impl PrimMessageInliner for ast::Expression {
     fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
         if message.signature == "ifTrue:" || message.signature == "ifFalse" {
             if message.values.len() != 1 || !matches!(message.values.get(0).unwrap(), ast::Expression::Block(_)) {
-                return Some(());
+                return None;
             }
 
             // avoids some panic! match arms, there's only two possibilities
@@ -435,11 +435,11 @@ impl PrimMessageInliner for ast::Expression {
             return Some(());
         }
 
-        if message.signature == "ifTrue:ifFalse:" || message.signature == "ifFalse:ifTrue:" {
+        if message.signature == "ifTrue:ifFalse:" {// || message.signature == "ifFalse:ifTrue:" {
             if message.values.len() != 2
                 || !matches!(message.values.get(0).unwrap(), ast::Expression::Block(_))
                 || !matches!(message.values.get(1).unwrap(), ast::Expression::Block(_)) {
-                return Some(());
+                return None;
             }
 
             let is_if_true_if_false = message.signature == "ifTrue:ifFalse:";
