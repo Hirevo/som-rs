@@ -9,6 +9,7 @@ use indexmap::{IndexMap, IndexSet};
 use num_bigint::BigInt;
 
 use som_core::ast;
+use som_core::ast::Message;
 use som_core::bytecode::Bytecode;
 
 use crate::block::Block;
@@ -229,6 +230,10 @@ trait MethodCodegen {
     fn codegen(&self, ctxt: &mut dyn InnerGenCtxt) -> Option<()>;
 }
 
+trait PrimMessageInliner {
+    fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &Message) -> Option<()>;
+}
+
 impl MethodCodegen for ast::Body {
     fn codegen(&self, ctxt: &mut dyn InnerGenCtxt) -> Option<()> {
         for expr in &self.exprs {
@@ -288,37 +293,7 @@ impl MethodCodegen for ast::Expression {
 
                 message.receiver.codegen(ctxt)?;
 
-                // We inline ifTrue:
-                if message.signature == "ifTrue:" && message.values.len() == 1 && matches!(message.values.get(0).unwrap(), ast::Expression::Block(_)) {
-                    let jump_idx = ctxt.get_instr_idx();
-                    ctxt.push_instr(Bytecode::JumpOnFalseTopNil(0));
-
-                    let block = message.values.get(0).unwrap();
-                    match block {
-                        ast::Expression::Block(val) => {
-                            let splitted = val.body.exprs.split_last();
-
-                            for block_local in &val.locals {
-                                ctxt.push_local(String::from(block_local));
-                            }
-
-                            if let Some((last, rest)) = splitted {
-                                for expr in rest {
-                                    expr.codegen(ctxt);
-                                    ctxt.push_instr(Bytecode::Pop);
-                                }
-
-                                last.codegen(ctxt)?;
-                            }
-                        } ,
-                        val => panic!("Invalid argument supplied to ifTrue: {:?}", val) // TODO, not the best error handling! Will do for now though.
-                        // arg => {arg.codegen(ctxt);} // TODO is this supposed to be possible?
-                    };
-
-                    let new_idx = ctxt.get_instr_idx();
-                    let jump_by = new_idx - jump_idx;
-                    ctxt.backpatch(jump_idx, Bytecode::JumpOnFalseTopNil(jump_by));
-
+                if self.inline_if_possible(ctxt, message).is_some() {
                     return Some(());
                 }
 
@@ -431,6 +406,58 @@ impl MethodCodegen for ast::Expression {
         }
     }
 }
+
+impl PrimMessageInliner for ast::Expression {
+    fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &Message) -> Option<()> {
+        if message.signature == "ifTrue:" || message.signature == "ifFalse" {
+            if message.values.len() != 1 || !matches!(message.values.get(0).unwrap(), ast::Expression::Block(_)) {
+                return Some(());
+            }
+
+            let jump_idx = ctxt.get_instr_idx();
+
+            match message.signature.as_str() {
+                "ifTrue:" => ctxt.push_instr(Bytecode::JumpOnFalseTopNil(0)),
+                "ifFalse:" => ctxt.push_instr(Bytecode::JumpOnTrueTopNil(0)),
+                _ => panic!("Unreachable")
+            }
+
+            let block = message.values.get(0).unwrap();
+            match block {
+                ast::Expression::Block(val) => {
+                    let splitted = val.body.exprs.split_last();
+
+                    for block_local in &val.locals {
+                        ctxt.push_local(String::from(block_local));
+                    }
+
+                    if let Some((last, rest)) = splitted {
+                        for expr in rest {
+                            expr.codegen(ctxt);
+                            ctxt.push_instr(Bytecode::Pop);
+                        }
+
+                        last.codegen(ctxt)?;
+                    }
+                } ,
+                val => panic!("Invalid argument supplied to ifTrue: {:?}", val) // not the best error handling! Will do for now though.
+            };
+
+            let new_idx = ctxt.get_instr_idx();
+            let jump_by = new_idx - jump_idx;
+
+            match message.signature.as_str() {
+                "ifTrue:" => ctxt.backpatch(jump_idx, Bytecode::JumpOnFalseTopNil(jump_by)),
+                "ifFalse:" => ctxt.backpatch(jump_idx, Bytecode::JumpOnTrueTopNil(jump_by)),
+                _ => panic!("Unreachable")
+            }
+
+            return Some(());
+        }
+        return None;
+    }
+}
+
 
 struct ClassGenCtxt<'a> {
     pub name: String,

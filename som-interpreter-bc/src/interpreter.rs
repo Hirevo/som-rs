@@ -476,6 +476,20 @@ impl Interpreter {
                         },
                         _ => panic!()
                     }
+                },
+                Bytecode::JumpOnTrueTopNil(offset) => {
+                    let condition_result = self.stack.pop().unwrap();
+
+                    match condition_result {
+                        Value::Boolean(true) => {
+                            let frame = self.current_frame().unwrap();
+                            frame.clone().borrow_mut().bytecode_idx += offset - 1; // minus one because it gets incremented by one already every loop
+                            self.stack.push(Value::Nil);
+                        },
+                        Value::Boolean(false) => {
+                        },
+                        _ => panic!()
+                    }
                 }
             }
         }

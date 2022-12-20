@@ -31,7 +31,8 @@ pub enum Bytecode {
     SuperSendN(u8),
     ReturnLocal,
     ReturnNonLocal,
-    JumpOnFalseTopNil(usize)
+    JumpOnFalseTopNil(usize),
+    JumpOnTrueTopNil(usize)
 }
 
 impl Bytecode {
@@ -69,6 +70,7 @@ impl Bytecode {
             Self::ReturnLocal        => "RETURN_LOCAL",
             Self::ReturnNonLocal     => "RETURN_NON_LOCAL",
             Self::JumpOnFalseTopNil(_) => "JUMP_ON_FALSE_TOP_NIL",
+            Self::JumpOnTrueTopNil(_) => "JUMP_ON_FALSE_TOP_NIL",
         }
     }
 
@@ -106,11 +108,12 @@ impl Bytecode {
             Self::ReturnLocal        => "RETURN_LOCAL    ",
             Self::ReturnNonLocal     => "RETURN_NON_LOCAL",
             Self::JumpOnFalseTopNil(_) => "JUMP_ON_FALSE_TOP_NIL",
+            Self::JumpOnTrueTopNil(_) => "JUMP_ON_TRUE_TOP_NIL",
         }
     }
 }
 
-pub static NAMES: [&str; 29] = [
+pub static NAMES: [&str; 30] = [
     "HALT",
     "DUP",
     "PUSH_LOCAL",
@@ -139,10 +142,11 @@ pub static NAMES: [&str; 29] = [
     "SUPER_SEND_N",
     "RETURN_LOCAL",
     "RETURN_NON_LOCAL",
-    "JUMP_ON_FALSE_TOP_NIL"
+    "JUMP_ON_FALSE_TOP_NIL",
+    "JUMP_ON_TRUE_TOP_NIL",
 ];
 
-pub static PADDED_NAMES: [&str; 29] = [
+pub static PADDED_NAMES: [&str; 30] = [
     "HALT            ",
     "DUP             ",
     "PUSH_LOCAL      ",
@@ -171,7 +175,8 @@ pub static PADDED_NAMES: [&str; 29] = [
     "SUPER_SEND_N    ",
     "RETURN_LOCAL    ",
     "RETURN_NON_LOCAL",
-    "JUMP_ON_FALSE_TOP_NIL"
+    "JUMP_ON_FALSE_TOP_NIL", // those two are so long they broke the padding, oops. TODO fix
+    "JUMP_ON_TRUE_TOP_NIL",
 ];
 
 impl fmt::Display for Bytecode {
@@ -207,6 +212,7 @@ impl fmt::Display for Bytecode {
             Self::ReturnLocal               => write!(f, "RETURN_LOCAL", ),
             Self::ReturnNonLocal            => write!(f, "RETURN_NON_LOCAL", ),
             Self::JumpOnFalseTopNil(idx) => write!(f, "JUMP_ON_FALSE_TOP_NIL {}", idx),
+            Self::JumpOnTrueTopNil(idx) => write!(f, "JUMP_ON_TRUE_TOP_NIL {}", idx),
         }
     }
 }

@@ -180,6 +180,9 @@ impl fmt::Display for Method {
                         Bytecode::JumpOnFalseTopNil(idx) => {
                             write!(f, "index: {}", idx)?;
                         }
+                        Bytecode::JumpOnTrueTopNil(idx) => {
+                            write!(f, "index: {}", idx)?;
+                        }
                     }
                 }
                 Ok(())
