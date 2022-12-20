@@ -338,9 +338,9 @@ impl MethodCodegen for ast::Expression {
                 let sym = ctxt.intern_symbol(message.op.as_str());
                 let idx = ctxt.push_literal(Literal::Symbol(sym));
                 if super_send {
-                    ctxt.push_instr(Bytecode::SendN(idx as u8)); // TODO why doesn't send2 work?
+                    ctxt.push_instr(Bytecode::Send1(idx as u8));
                 } else {
-                    ctxt.push_instr(Bytecode::SendN(idx as u8));
+                    ctxt.push_instr(Bytecode::Send1(idx as u8));
                 }
                 Some(())
             }
