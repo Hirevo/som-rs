@@ -97,10 +97,14 @@ trait GenCtxt {
 trait InnerGenCtxt: GenCtxt {
     fn as_gen_ctxt(&mut self) -> &mut dyn GenCtxt;
     fn push_instr(&mut self, instr: Bytecode);
+    fn pop_instr(&mut self);
+    fn get_instructions(&self) -> &Vec<Bytecode>;
     fn push_arg(&mut self, name: String) -> usize;
     fn push_local(&mut self, name: String) -> usize;
+    fn get_literal(&self, idx: usize) -> Option<&Literal>; // is this needed?
     fn push_literal(&mut self, literal: Literal) -> usize;
-    fn get_instr_idx(&mut self) -> usize;
+    fn remove_literal(&mut self, idx: usize) -> Option<Literal>;
+    fn get_instr_idx(&self) -> usize;
     fn backpatch(&mut self, idx_to_backpatch: usize, bytecode_with_new_val: Bytecode);
 }
 
@@ -149,6 +153,14 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
         body.push(instr);
     }
 
+    fn pop_instr(&mut self) {
+        self.body.as_mut().unwrap().pop();
+    }
+
+    fn get_instructions(&self) -> &Vec<Bytecode> {
+        self.body.as_ref().unwrap()
+    }
+
     fn push_arg(&mut self, name: String) -> usize {
         let (idx, _) = self.args.insert_full(name);
         idx
@@ -159,12 +171,20 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
         idx
     }
 
+    fn get_literal(&self, idx: usize) -> Option<&Literal> {
+        self.literals.get_index(idx)
+    }
+
     fn push_literal(&mut self, literal: Literal) -> usize {
         let (idx, _) = self.literals.insert_full(literal);
         idx
     }
 
-    fn get_instr_idx(&mut self) -> usize {
+    fn remove_literal(&mut self, idx: usize) -> Option<Literal> {
+        self.literals.shift_remove_index(idx)
+    }
+
+    fn get_instr_idx(&self) -> usize {
         return self.body.as_ref().unwrap().iter().len();
     }
 
@@ -204,6 +224,14 @@ impl InnerGenCtxt for MethodGenCtxt<'_> {
         self.inner.push_instr(instr)
     }
 
+    fn pop_instr(&mut self) {
+        self.inner.pop_instr();
+    }
+
+    fn get_instructions(&self) -> &Vec<Bytecode> {
+        self.inner.get_instructions()
+    }
+
     fn push_arg(&mut self, name: String) -> usize {
         self.inner.push_arg(name)
     }
@@ -216,7 +244,15 @@ impl InnerGenCtxt for MethodGenCtxt<'_> {
         self.inner.push_literal(literal)
     }
 
-    fn get_instr_idx(&mut self) -> usize {
+    fn get_literal(&self, idx: usize) -> Option<&Literal> {
+        self.inner.get_literal(idx)
+    }
+
+    fn remove_literal(&mut self, idx: usize) -> Option<Literal> {
+        self.inner.remove_literal(idx)
+    }
+
+    fn get_instr_idx(&self) -> usize {
         return self.inner.get_instr_idx();
     }
 
@@ -231,7 +267,8 @@ trait MethodCodegen {
 
 trait PrimMessageInliner {
     fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()>;
-    fn inline_block(&self, ctxt: &mut dyn InnerGenCtxt, block: &ast::Expression) -> Option<()>;
+    fn inline_block_expr(&self, ctxt: &mut dyn InnerGenCtxt, block: &ast::Expression) -> Option<()>;
+    fn inline_compiled_block(&self, ctxt: &mut dyn InnerGenCtxt, block: &Block) -> Option<()>;
 }
 
 impl MethodCodegen for ast::Body {
@@ -411,7 +448,7 @@ impl PrimMessageInliner for ast::Expression {
     fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
         if message.signature == "ifTrue:" || message.signature == "ifFalse" {
             // TODO we can inline more than blocks if we rely on the existing codegen methods. However, that's a pain for some reason.
-            if message.values.len() != 1 || !matches!(message.values.get(0).unwrap(), ast::Expression::Block(_)) {
+            if message.values.len() != 1 || !matches!(message.values.get(0)?, ast::Expression::Block(_)) {
                 return None;
             }
 
@@ -425,7 +462,7 @@ impl PrimMessageInliner for ast::Expression {
                 false => ctxt.push_instr(Bytecode::JumpOnTrueTopNil(0))
             }
 
-            self.inline_block(ctxt, message.values.get(0).unwrap());
+            self.inline_block_expr(ctxt, message.values.get(0)?);
 
             let jump_by = ctxt.get_instr_idx() - jump_idx;
             match is_if_true {
@@ -436,8 +473,8 @@ impl PrimMessageInliner for ast::Expression {
             return Some(());
         } else if message.signature == "ifTrue:ifFalse:" || message.signature == "ifFalse:ifTrue:" {
             if message.values.len() != 2
-                || !matches!(message.values.get(0).unwrap(), ast::Expression::Block(_))
-                || !matches!(message.values.get(1).unwrap(), ast::Expression::Block(_)) {
+                || !matches!(message.values.get(0)?, ast::Expression::Block(_))
+                || !matches!(message.values.get(1)?, ast::Expression::Block(_)) {
                 return None;
             }
 
@@ -449,7 +486,7 @@ impl PrimMessageInliner for ast::Expression {
                 false => ctxt.push_instr(Bytecode::JumpOnTruePop(0)),
             }
 
-            self.inline_block(ctxt, message.values.get(0).unwrap());
+            self.inline_block_expr(ctxt, message.values.get(0)?);
 
             let middle_jump_idx = ctxt.get_instr_idx();
             ctxt.push_instr(Bytecode::Jump(0));
@@ -460,19 +497,59 @@ impl PrimMessageInliner for ast::Expression {
                 false => ctxt.backpatch(start_jump_idx, Bytecode::JumpOnTruePop(jump_by)),
             }
 
-            self.inline_block(ctxt, message.values.get(1).unwrap());
+            self.inline_block_expr(ctxt, message.values.get(1)?);
 
             let jump_by = ctxt.get_instr_idx() - middle_jump_idx;
             ctxt.backpatch(middle_jump_idx, Bytecode::Jump(jump_by));
 
             return Some(());
+        } else if message.signature == "whileTrueMARKED:" { // TODO whileFalse:
+            let block_idx = match ctxt.get_instructions().last()? {
+                Bytecode::PushBlock(val) => val,
+                _ => return None
+            };
+
+            let block_ref = match ctxt.remove_literal(*block_idx as usize)? {
+                Literal::Block(val) => val.clone(),
+                _ => return None
+            };
+
+            if message.values.len() != 1
+                || !matches!(message.values.get(0)?, ast::Expression::Block(_)) {
+                return None;
+            }
+
+            ctxt.pop_instr(); // we remove the PUSH_BLOCK
+
+            let cond_idx = ctxt.get_instr_idx();
+
+            self.inline_compiled_block(ctxt, block_ref.as_ref());
+
+            let loop_start_idx = ctxt.get_instr_idx();
+
+            ctxt.push_instr(Bytecode::JumpOnFalseTopNil(0));
+
+            self.inline_block_expr(ctxt, message.values.get(0).unwrap());
+            let jump_to_cond_val = ctxt.get_instr_idx() - cond_idx;
+            ctxt.push_instr(Bytecode::JumpBackward(jump_to_cond_val));
+
+            let loop_jump_by = ctxt.get_instr_idx() - loop_start_idx;
+            ctxt.backpatch(loop_start_idx, Bytecode::JumpOnFalseTopNil(loop_jump_by));
+
+            println!("BYTECODES:");
+            for instr in ctxt.get_instructions() {
+                println!("{}", instr);
+            }
+            println!("");
+
+            return Some(());
         }
 
-        // TODO: [whileTrue, whileFalse], [or, and]
+        // TODO: [or, and]
         return None;
     }
 
-    fn inline_block(&self, ctxt: &mut dyn InnerGenCtxt, block_expr: &ast::Expression) -> Option<()> {
+    fn inline_block_expr(&self, ctxt: &mut dyn InnerGenCtxt, block_expr: &ast::Expression) -> Option<()> {
         match block_expr {
             ast::Expression::Block(block) => {
                 for block_local in &block.locals {
@@ -492,6 +569,42 @@ impl PrimMessageInliner for ast::Expression {
             },
             _ => panic!("Expression was not a block")
         }
+    }
+
+    // not great to have two versions of the same method for structures that contain the same info. eh
+    fn inline_compiled_block(&self, ctxt: &mut dyn InnerGenCtxt, block: &Block) -> Option<()> {
+        for block_local in &block.locals {
+            dbg!(block_local);
+            todo!()
+            // TODO actually push locals.
+            // ctxt.push_local(String::from(block_local));
+        }
+
+        let literals_offset = block.literals.len();
+        for block_lit in &block.literals {
+            match block_lit {
+                Literal::Symbol(interned) => {ctxt.push_literal(Literal::Symbol(*interned))}
+                _ => { todo!() }
+            };
+            // ctxt.push_literal(Literal::from(block_lit));
+        }
+
+        if let Some((last, body)) = block.body.split_last() {
+            for block_bc in body {
+                match block_bc {
+                    Bytecode::PushLocal(up_idx, idx) => ctxt.push_instr( Bytecode::PushLocal(*up_idx - 1, *idx)),
+                    Bytecode::PushArgument(up_idx, idx) => ctxt.push_instr( Bytecode::PushArgument(*up_idx - 1, *idx)),
+                    Bytecode::Send1(lit_idx) => ctxt.push_instr( Bytecode::Send1(lit_idx + literals_offset as u8)),
+                    _ => ctxt.push_instr(*block_bc)
+                }
+            }
+            match last {
+                Bytecode::ReturnLocal => {},
+                _ => ctxt.push_instr(*last) // afaik it's always the case, so maybe should always be popped.
+            }
+        }
+
+        Some(())
     }
 }
 

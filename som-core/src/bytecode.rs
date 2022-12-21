@@ -32,6 +32,7 @@ pub enum Bytecode {
     ReturnLocal,
     ReturnNonLocal,
     Jump(usize),
+    JumpBackward(usize),
     JumpOnTrueTopNil(usize),
     JumpOnFalseTopNil(usize),
     JumpOnTruePop(usize),
@@ -149,8 +150,9 @@ impl fmt::Display for Bytecode {
             Self::ReturnLocal               => write!(f, "RETURN_LOCAL", ),
             Self::ReturnNonLocal            => write!(f, "RETURN_NON_LOCAL", ),
             Self::Jump(idx)             => write!(f, "JUMP {}", idx),
+            Self::JumpBackward(idx)             => write!(f, "JUMP_BACKWARD {}", idx),
             Self::JumpOnFalseTopNil(idx) => write!(f, "JUMP_ON_FALSE_TOP_NIL {}", idx),
-            _ => write!(f, "No display for this bytecode, TODO.") // I am lazy
+            _ => write!(f, "No display for this bytecode, TODO")
         }
     }
 }

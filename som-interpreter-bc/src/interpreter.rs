@@ -254,6 +254,10 @@ impl Interpreter {
             //     // };
             // }
 
+            if &frame.borrow().get_method().signature == "innerBenchmarkLoop:" {
+                println!("cur bc: {}", bytecode);
+                print!("");
+            }
             frame.borrow_mut().bytecode_idx += 1;
             // dbg!(&frame.borrow().get_method().signature);
 
@@ -307,7 +311,7 @@ impl Interpreter {
                     let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
                     let mut block = match literal {
                         Literal::Block(blk) => Block::clone(&blk),
-                        _ => return None,
+                        _ => panic!("PushBlock expected a block, but got another invalid literal"),
                     };
                     block.frame.replace(Rc::clone(frame));
                     self.stack.push(Value::Block(Rc::new(block)));
@@ -466,6 +470,10 @@ impl Interpreter {
                 Bytecode::Jump(offset) => {
                     let frame = self.current_frame().unwrap();
                     frame.clone().borrow_mut().bytecode_idx += offset - 1;
+                },
+                Bytecode::JumpBackward(offset) => {
+                    let frame = self.current_frame().unwrap();
+                    frame.clone().borrow_mut().bytecode_idx -= offset + 1;
                 },
                 Bytecode::JumpOnTrueTopNil(offset) => {
                     let condition_result = self.stack.pop().unwrap();
