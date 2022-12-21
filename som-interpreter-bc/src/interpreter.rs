@@ -254,10 +254,11 @@ impl Interpreter {
             //     // };
             // }
 
-            if &frame.borrow().get_method().signature == "innerBenchmarkLoop:" {
-                println!("cur bc: {}", bytecode);
-                print!("");
-            }
+            // if &frame.borrow().get_method().signature == "innerBenchmarkLoop:" {
+            //     println!("cur bc: {}", bytecode);
+            //     print!("");
+            // }
+
             frame.borrow_mut().bytecode_idx += 1;
             // dbg!(&frame.borrow().get_method().signature);
 

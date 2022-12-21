@@ -536,11 +536,11 @@ impl PrimMessageInliner for ast::Expression {
             let loop_jump_by = ctxt.get_instr_idx() - loop_start_idx;
             ctxt.backpatch(loop_start_idx, Bytecode::JumpOnFalseTopNil(loop_jump_by));
 
-            println!("BYTECODES:");
-            for instr in ctxt.get_instructions() {
-                println!("{}", instr);
-            }
-            println!("");
+            // println!("BYTECODES:");
+            // for instr in ctxt.get_instructions() {
+            //     println!("{}", instr);
+            // }
+            // println!("");
 
             return Some(());
         }
@@ -553,10 +553,11 @@ impl PrimMessageInliner for ast::Expression {
         match block_expr {
             ast::Expression::Block(block) => {
                 for block_local in &block.locals {
-                    ctxt.push_local(String::from(block_local));
+                    ctxt.push_local(String::from(block_local)); // breaks shadowing
                 }
 
                 // TODO i suspect we can reuse compile_block() instead, but a quick attempt failed.
+                // i suspect we can reuse the other inline function (inlines a compiled block) when it's done, since turning a block expr into a block is trivial.
                 // TODO also, need remove those POPs somehow.
                 if let Some((last, rest)) = block.body.exprs.split_last() {
                     for expr in rest {
@@ -575,18 +576,17 @@ impl PrimMessageInliner for ast::Expression {
     fn inline_compiled_block(&self, ctxt: &mut dyn InnerGenCtxt, block: &Block) -> Option<()> {
         for block_local in &block.locals {
             dbg!(block_local);
-            todo!()
-            // TODO actually push locals.
+            todo!("actually pushing locals would be nice")
             // ctxt.push_local(String::from(block_local));
         }
 
-        let literals_offset = block.literals.len();
+        let literals_offset = block.literals.len() - 1;
         for block_lit in &block.literals {
             match block_lit {
-                Literal::Symbol(interned) => {ctxt.push_literal(Literal::Symbol(*interned))}
+                Literal::Symbol(interned) => {
+                    ctxt.push_literal(Literal::Symbol(*interned))}
                 _ => { todo!() }
             };
-            // ctxt.push_literal(Literal::from(block_lit));
         }
 
         if let Some((last, body)) = block.body.split_last() {
