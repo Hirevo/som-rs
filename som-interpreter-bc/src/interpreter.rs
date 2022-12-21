@@ -254,7 +254,7 @@ impl Interpreter {
             //     // };
             // }
 
-            // if &frame.borrow().get_method().signature == "innerBenchmarkLoop:" {
+            // if &frame.borrow().get_method().signature == "resolve:" {
             //     println!("cur bc: {}", bytecode);
             //     print!("");
             // }

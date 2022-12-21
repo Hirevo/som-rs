@@ -503,7 +503,7 @@ impl PrimMessageInliner for ast::Expression {
             ctxt.backpatch(middle_jump_idx, Bytecode::Jump(jump_by));
 
             return Some(());
-        } else if message.signature == "whileTrueMARKED:" { // TODO whileFalse:
+        } else if message.signature == "whileTrue:" { // TODO whileFalse:
             let block_idx = match ctxt.get_instructions().last()? {
                 Bytecode::PushBlock(val) => val,
                 _ => return None
@@ -580,11 +580,12 @@ impl PrimMessageInliner for ast::Expression {
             // ctxt.push_local(String::from(block_local));
         }
 
-        let literals_offset = block.literals.len() - 1;
+        // let literals_offset = block.literals.len()- 1;
         for block_lit in &block.literals {
             match block_lit {
                 Literal::Symbol(interned) => {
-                    ctxt.push_literal(Literal::Symbol(*interned))}
+                    ctxt.push_literal(Literal::Symbol(*interned));
+                }
                 _ => { todo!() }
             };
         }
@@ -593,8 +594,9 @@ impl PrimMessageInliner for ast::Expression {
             for block_bc in body {
                 match block_bc {
                     Bytecode::PushLocal(up_idx, idx) => ctxt.push_instr( Bytecode::PushLocal(*up_idx - 1, *idx)),
+                    Bytecode::PopLocal(up_idx, idx) => ctxt.push_instr( Bytecode::PopLocal(*up_idx - 1, *idx)),
                     Bytecode::PushArgument(up_idx, idx) => ctxt.push_instr( Bytecode::PushArgument(*up_idx - 1, *idx)),
-                    Bytecode::Send1(lit_idx) => ctxt.push_instr( Bytecode::Send1(lit_idx + literals_offset as u8)),
+                    Bytecode::Send1(lit_idx) => ctxt.push_instr( Bytecode::Send1(*lit_idx)),
                     _ => ctxt.push_instr(*block_bc)
                 }
             }
