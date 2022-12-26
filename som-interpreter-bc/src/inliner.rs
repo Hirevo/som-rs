@@ -4,10 +4,12 @@ use crate::block::Block;
 use crate::compiler::{InnerGenCtxt, Literal};
 use crate::compiler::MethodCodegen;
 
+// TODO some of those should return Result types and throw errors instead, most likely.
 pub trait PrimMessageInliner {
     fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()>;
     fn inline_block_expr(&self, ctxt: &mut dyn InnerGenCtxt, block: &ast::Expression) -> Option<()>;
     fn inline_compiled_block(&self, ctxt: &mut dyn InnerGenCtxt, block: &Block) -> Option<()>;
+    fn patch_inner_block_during_inlining(&self, block: &Block) -> Block;
 
     fn inline_if_true_or_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()>;
     fn inline_if_true_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()>;
@@ -19,7 +21,7 @@ impl PrimMessageInliner for ast::Expression {
         match message.signature.as_str() {
             "ifTrue:" | "ifFalse:" => self.inline_if_true_or_if_false(ctxt, message),
             "ifTrue:ifFalse:" | "ifFalse:ifTrue:" => self.inline_if_true_if_false(ctxt, message),
-            // "whileTrue:" | "whileFalse:" => self.inline_while(ctxt, message),
+            "whileTrue:" | "whileFalse:" => self.inline_while(ctxt, message),
             // TODO: [or, and]
             _ => None
         }
@@ -50,78 +52,57 @@ impl PrimMessageInliner for ast::Expression {
     fn inline_compiled_block(&self, ctxt: &mut dyn InnerGenCtxt, block: &Block) -> Option<()> {
         for block_local in &block.locals {
             dbg!(block_local);
-            todo!("actually pushing locals would be nice")
+            todo!("actually pushing locals would be nice!")
             // ctxt.push_local(String::from(block_local));
         }
 
-
-        // let literals_offset = block.literals.len();
-        // for block_lit in &block.literals {
-        //     match block_lit {
-        //         Literal::Symbol(interned) => {
-        //             ctxt.push_literal(Literal::Symbol(*interned));
-        //         }
-        //         _ => { todo!() }
-        //     };
-        // }
-
-        if let Some((last, body)) = block.body.split_last() {
+        // last is always ReturnLocal, so it gets ignored
+        if let Some((_, body)) = block.body.split_last() {
             for block_bc in body {
                 match block_bc {
                     Bytecode::PushLocal(up_idx, idx) => ctxt.push_instr(Bytecode::PushLocal(*up_idx - 1, *idx)),
                     Bytecode::PopLocal(up_idx, idx) => ctxt.push_instr(Bytecode::PopLocal(*up_idx - 1, *idx)),
                     Bytecode::PushArgument(up_idx, idx) => ctxt.push_instr(Bytecode::PushArgument(*up_idx - 1, *idx)),
                     Bytecode::PopArgument(up_idx, idx) => ctxt.push_instr(Bytecode::PopArgument(*up_idx - 1, *idx)),
-                    Bytecode::Send1(lit_idx) => {
+                    Bytecode::Send1(lit_idx) | Bytecode::Send2(lit_idx) |
+                    Bytecode::Send3(lit_idx) | Bytecode::SendN(lit_idx) => {
                         match block.literals.get(*lit_idx as usize)? {
                             Literal::Symbol(interned) => {
+                                // does this push duplicate literals? I think it doesn't?
                                 let idx = ctxt.push_literal(Literal::Symbol(*interned));
-                                ctxt.push_instr(Bytecode::Send1(idx as u8));
+                                match block_bc {
+                                    Bytecode::Send1(_) => ctxt.push_instr(Bytecode::Send1(idx as u8)),
+                                    Bytecode::Send2(_) => ctxt.push_instr(Bytecode::Send2(idx as u8)),
+                                    Bytecode::Send3(_) => ctxt.push_instr(Bytecode::Send3(idx as u8)),
+                                    Bytecode::SendN(_) => ctxt.push_instr(Bytecode::SendN(idx as u8)),
+                                    _ => panic!("Unreachable branch")
+                                }
                             },
-                            _ => todo!()
+                            _ => panic!("Unexpected block literal type, not yet implemented")
                         }
                     },
-                    Bytecode::Send2(lit_idx) => {
-                        match block.literals.get(*lit_idx as usize)? {
-                            Literal::Symbol(interned) => {
-                                let idx = ctxt.push_literal(Literal::Symbol(*interned));
-                                ctxt.push_instr(Bytecode::Send2(idx as u8));
-                            },
-                            _ => todo!()
-                        }
-                    },
-                    Bytecode::Send3(lit_idx) => {
-                        match block.literals.get(*lit_idx as usize)? {
-                            Literal::Symbol(interned) => {
-                                let idx = ctxt.push_literal(Literal::Symbol(*interned));
-                                ctxt.push_instr(Bytecode::Send3(idx as u8));
-                            },
-                            _ => todo!()
-                        }
-                    },
-                    Bytecode::SendN(lit_idx) => {
-                        match block.literals.get(*lit_idx as usize)? {
-                            Literal::Symbol(interned) => {
-                                let idx = ctxt.push_literal(Literal::Symbol(*interned));
-                                ctxt.push_instr(Bytecode::SendN(idx as u8));
-                            },
-                            _ => todo!()
-                        }
+                    Bytecode::PushBlock(block_idx) => {
+                        dbg!(block_idx);
+                        match block.literals.get(*block_idx as usize)? {
+                            Literal::Block(inner_block) => self.patch_inner_block_during_inlining(inner_block.as_ref()),
+                            _ => panic!("PushBlock not actually pushing a block somehow")
+                        };
+                        todo!("then we push the new literal in place of the old one (needs the same index) and we make sure no block literal is pushed by the following send")
+                        // ctxt.push_literal(block);
                     },
                     _ => ctxt.push_instr(*block_bc)
-                }
-            }
-
-            match last {
-                Bytecode::ReturnLocal => {},
-                _ => {
-                    panic!("wait, this can happen?");
-                    // ctxt.push_instr(*last);
                 }
             }
         }
 
         Some(())
+    }
+
+    fn patch_inner_block_during_inlining(&self, block: &Block) -> Block {
+        for bc in &block.body {
+            dbg!(&bc);
+        }
+        todo!("A block is used in the compiled block, and needs to be modified to account for the moved vars in its outer context. It'll need to return a new block since Rc means immutable");
     }
 
     fn inline_if_true_or_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
