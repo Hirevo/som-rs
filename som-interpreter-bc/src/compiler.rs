@@ -462,7 +462,7 @@ impl MethodCodegen for ast::Expression {
 
 impl PrimMessageInliner for ast::Expression {
     fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
-        if message.signature == "ifTrue:" || message.signature == "ifFalse" {
+        if message.signature == "ifTrue:" || message.signature == "ifFalse:" {
             // TODO we can inline more than blocks if we rely on the existing codegen methods. However, that's a pain for some reason.
             if message.values.len() != 1 || !matches!(message.values.get(0)?, ast::Expression::Block(_)) {
                 return None;
@@ -487,7 +487,7 @@ impl PrimMessageInliner for ast::Expression {
             }
 
             return Some(());
-        } else if message.signature == "ifTrue:ifFalse:" || message.signature == "ifFalse:ifTrue:" {
+        } else if message.signature == "ifTrueXDDD:ifFalse:" || message.signature == "ifFalseDDX:ifTrue:" {
             if message.values.len() != 2
                 || !matches!(message.values.get(0)?, ast::Expression::Block(_))
                 || !matches!(message.values.get(1)?, ast::Expression::Block(_)) {
@@ -519,7 +519,7 @@ impl PrimMessageInliner for ast::Expression {
             ctxt.backpatch(middle_jump_idx, Bytecode::Jump(jump_by));
 
             return Some(());
-        } else if message.signature == "whileTrue:" { // TODO whileFalse:
+        } else if message.signature == "whileTrue:" || message.signature == "whileFalse:" {
             let block_idx = match ctxt.get_instructions().last()? {
                 Bytecode::PushBlock(val) => val,
                 _ => return None
@@ -537,6 +537,8 @@ impl PrimMessageInliner for ast::Expression {
             }
 
             ctxt.pop_instr(); // we remove the PUSH_BLOCK
+
+            let is_while_true = message.signature == "whileTrue:";
 
             let cond_idx = ctxt.get_instr_idx();
 
@@ -558,7 +560,10 @@ impl PrimMessageInliner for ast::Expression {
 
             let loop_start_idx = ctxt.get_instr_idx();
 
-            ctxt.push_instr(Bytecode::JumpOnFalsePop(0));
+            match is_while_true {
+                true => ctxt.push_instr(Bytecode::JumpOnFalsePop(0)),
+                false => ctxt.push_instr(Bytecode::JumpOnTruePop(0))
+            }
 
             self.inline_block_expr(ctxt, message.values.get(0).unwrap());
 
@@ -567,9 +572,12 @@ impl PrimMessageInliner for ast::Expression {
             let jump_to_cond_val = ctxt.get_instr_idx() - cond_idx;
             ctxt.push_instr(Bytecode::JumpBackward(jump_to_cond_val));
 
-
             let loop_jump_by = ctxt.get_instr_idx() - loop_start_idx;
-            ctxt.backpatch(loop_start_idx, Bytecode::JumpOnFalsePop(loop_jump_by));
+
+            match is_while_true {
+                true => ctxt.backpatch(loop_start_idx, Bytecode::JumpOnFalsePop(loop_jump_by)),
+                false => ctxt.backpatch(loop_start_idx, Bytecode::JumpOnTruePop(loop_jump_by))
+            }
 
             ctxt.push_instr(Bytecode::PushNil);
 
@@ -634,6 +642,7 @@ impl PrimMessageInliner for ast::Expression {
                     Bytecode::PushLocal(up_idx, idx) => ctxt.push_instr(Bytecode::PushLocal(*up_idx - 1, *idx)),
                     Bytecode::PopLocal(up_idx, idx) => ctxt.push_instr(Bytecode::PopLocal(*up_idx - 1, *idx)),
                     Bytecode::PushArgument(up_idx, idx) => ctxt.push_instr(Bytecode::PushArgument(*up_idx - 1, *idx)),
+                    Bytecode::PopArgument(up_idx, idx) => ctxt.push_instr(Bytecode::PopArgument(*up_idx - 1, *idx)),
                     Bytecode::Send1(lit_idx) => {
                         match block.literals.get(*lit_idx as usize)? {
                             Literal::Symbol(interned) => {
