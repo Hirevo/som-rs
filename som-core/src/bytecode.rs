@@ -152,6 +152,7 @@ impl fmt::Display for Bytecode {
             Self::Jump(idx)             => write!(f, "JUMP {}", idx),
             Self::JumpBackward(idx)             => write!(f, "JUMP_BACKWARD {}", idx),
             Self::JumpOnFalseTopNil(idx) => write!(f, "JUMP_ON_FALSE_TOP_NIL {}", idx),
+            Self::JumpOnFalsePop(idx) => write!(f, "JUMP_ON_FALSE_POP {}", idx),
             _ => write!(f, "No display for this bytecode, TODO")
         }
     }

@@ -106,6 +106,8 @@ trait InnerGenCtxt: GenCtxt {
     fn remove_literal(&mut self, idx: usize) -> Option<Literal>;
     fn get_instr_idx(&self) -> usize;
     fn backpatch(&mut self, idx_to_backpatch: usize, bytecode_with_new_val: Bytecode);
+    fn get_body_debug(&self) -> Option<&Vec<Bytecode>>;
+    fn get_literals_debug(&self) -> IndexSet<Literal>;
 }
 
 struct BlockGenCtxt<'a> {
@@ -144,6 +146,14 @@ impl GenCtxt for BlockGenCtxt<'_> {
 }
 
 impl InnerGenCtxt for BlockGenCtxt<'_> {
+    fn get_body_debug(&self) -> Option<&Vec<Bytecode>> {
+        self.body.as_ref()
+    }
+
+    fn get_literals_debug(&self) -> IndexSet<Literal> {
+        self.literals.clone()
+    }
+
     fn as_gen_ctxt(&mut self) -> &mut dyn GenCtxt {
         self
     }
@@ -216,6 +226,7 @@ impl GenCtxt for MethodGenCtxt<'_> {
 }
 
 impl InnerGenCtxt for MethodGenCtxt<'_> {
+
     fn as_gen_ctxt(&mut self) -> &mut dyn GenCtxt {
         self
     }
@@ -259,6 +270,14 @@ impl InnerGenCtxt for MethodGenCtxt<'_> {
     fn backpatch(&mut self, idx_to_backpatch: usize, bytecode_with_new_val: Bytecode) {
         self.inner.backpatch(idx_to_backpatch, bytecode_with_new_val);
     }
+
+    fn get_body_debug(&self) -> Option<&Vec<Bytecode>> {
+        self.inner.get_body_debug()
+    }
+
+    fn get_literals_debug(&self) -> IndexSet<Literal> {
+        self.inner.get_literals_debug()
+    }
 }
 
 trait MethodCodegen {
@@ -295,9 +314,6 @@ impl MethodCodegen for ast::Expression {
                     None => {
                         match name.as_str() {
                             "nil" => ctxt.push_instr(Bytecode::PushNil),
-                            // TODO should cache those false and true, although pushing 0 and 1 isn't functional
-                            // "false" => ctxt.push_instr(Bytecode::Push0),
-                            // "true" => ctxt.push_instr(Bytecode::Push1),
                             _ => {
                                 let name = ctxt.intern_symbol(name);
                                 let idx = ctxt.push_literal(Literal::Symbol(name));
@@ -509,7 +525,8 @@ impl PrimMessageInliner for ast::Expression {
                 _ => return None
             };
 
-            let block_ref = match ctxt.remove_literal(*block_idx as usize)? {
+            // todo pop the literal
+            let block_ref = match ctxt.get_literal(*block_idx as usize)? {
                 Literal::Block(val) => val.clone(),
                 _ => return None
             };
@@ -525,22 +542,42 @@ impl PrimMessageInliner for ast::Expression {
 
             self.inline_compiled_block(ctxt, block_ref.as_ref());
 
+            // println!("BYTECODES AFTER FIRST BLOCK:");
+            // for instr in ctxt.get_instructions() {
+            //     println!("{}", instr);
+            // }
+            // dbg!(ctxt.get_literals_debug());
+
+            // println!("BYTECODES IN FIRST BLOCK:");
+            // for instr in &block_ref.as_ref().body {
+            //     println!("{}", instr);
+            // }
+            // println!();
+            // println!("Block lits:");
+            // dbg!(&block_ref.as_ref().literals);
+
             let loop_start_idx = ctxt.get_instr_idx();
 
-            ctxt.push_instr(Bytecode::JumpOnFalseTopNil(0));
+            ctxt.push_instr(Bytecode::JumpOnFalsePop(0));
 
             self.inline_block_expr(ctxt, message.values.get(0).unwrap());
+
+            ctxt.push_instr(Bytecode::Pop);
+
             let jump_to_cond_val = ctxt.get_instr_idx() - cond_idx;
             ctxt.push_instr(Bytecode::JumpBackward(jump_to_cond_val));
 
+
             let loop_jump_by = ctxt.get_instr_idx() - loop_start_idx;
-            ctxt.backpatch(loop_start_idx, Bytecode::JumpOnFalseTopNil(loop_jump_by));
+            ctxt.backpatch(loop_start_idx, Bytecode::JumpOnFalsePop(loop_jump_by));
+
+            ctxt.push_instr(Bytecode::PushNil);
 
             // println!("BYTECODES:");
             // for instr in ctxt.get_instructions() {
             //     println!("{}", instr);
             // }
-            // println!("");
+            // println!();
 
             return Some(());
         }
@@ -580,29 +617,69 @@ impl PrimMessageInliner for ast::Expression {
             // ctxt.push_local(String::from(block_local));
         }
 
-        // let literals_offset = block.literals.len()- 1;
-        for block_lit in &block.literals {
-            match block_lit {
-                Literal::Symbol(interned) => {
-                    ctxt.push_literal(Literal::Symbol(*interned));
-                }
-                _ => { todo!() }
-            };
-        }
+
+        // let literals_offset = block.literals.len();
+        // for block_lit in &block.literals {
+        //     match block_lit {
+        //         Literal::Symbol(interned) => {
+        //             ctxt.push_literal(Literal::Symbol(*interned));
+        //         }
+        //         _ => { todo!() }
+        //     };
+        // }
 
         if let Some((last, body)) = block.body.split_last() {
             for block_bc in body {
                 match block_bc {
-                    Bytecode::PushLocal(up_idx, idx) => ctxt.push_instr( Bytecode::PushLocal(*up_idx - 1, *idx)),
-                    Bytecode::PopLocal(up_idx, idx) => ctxt.push_instr( Bytecode::PopLocal(*up_idx - 1, *idx)),
-                    Bytecode::PushArgument(up_idx, idx) => ctxt.push_instr( Bytecode::PushArgument(*up_idx - 1, *idx)),
-                    Bytecode::Send1(lit_idx) => ctxt.push_instr( Bytecode::Send1(*lit_idx)),
+                    Bytecode::PushLocal(up_idx, idx) => ctxt.push_instr(Bytecode::PushLocal(*up_idx - 1, *idx)),
+                    Bytecode::PopLocal(up_idx, idx) => ctxt.push_instr(Bytecode::PopLocal(*up_idx - 1, *idx)),
+                    Bytecode::PushArgument(up_idx, idx) => ctxt.push_instr(Bytecode::PushArgument(*up_idx - 1, *idx)),
+                    Bytecode::Send1(lit_idx) => {
+                        match block.literals.get(*lit_idx as usize)? {
+                            Literal::Symbol(interned) => {
+                                let idx = ctxt.push_literal(Literal::Symbol(*interned));
+                                ctxt.push_instr(Bytecode::Send1(idx as u8));
+                            },
+                            _ => todo!()
+                        }
+                    },
+                    Bytecode::Send2(lit_idx) => {
+                        match block.literals.get(*lit_idx as usize)? {
+                            Literal::Symbol(interned) => {
+                                let idx = ctxt.push_literal(Literal::Symbol(*interned));
+                                ctxt.push_instr(Bytecode::Send2(idx as u8));
+                            },
+                            _ => todo!()
+                        }
+                    },
+                    Bytecode::Send3(lit_idx) => {
+                        match block.literals.get(*lit_idx as usize)? {
+                            Literal::Symbol(interned) => {
+                                let idx = ctxt.push_literal(Literal::Symbol(*interned));
+                                ctxt.push_instr(Bytecode::Send3(idx as u8));
+                            },
+                            _ => todo!()
+                        }
+                    },
+                    Bytecode::SendN(lit_idx) => {
+                        match block.literals.get(*lit_idx as usize)? {
+                            Literal::Symbol(interned) => {
+                                let idx = ctxt.push_literal(Literal::Symbol(*interned));
+                                ctxt.push_instr(Bytecode::SendN(idx as u8));
+                            },
+                            _ => todo!()
+                        }
+                    },
                     _ => ctxt.push_instr(*block_bc)
                 }
             }
+
             match last {
                 Bytecode::ReturnLocal => {},
-                _ => ctxt.push_instr(*last) // afaik it's always the case, so maybe should always be popped.
+                _ => {
+                    panic!("wait, this can happen?");
+                    // ctxt.push_instr(*last);
+                }
             }
         }
 
@@ -697,14 +774,10 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
         signature: ctxt.signature,
     };
 
-    // println!("(method) compiled '{}' !", defn.signature);
-
     Some(method)
 }
 
 fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
-    // println!("(system) compiling block ...");
-
     let mut ctxt = BlockGenCtxt {
         outer,
         args: defn.parameters.iter().cloned().collect(),
@@ -730,8 +803,6 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
         body: ctxt.body.unwrap_or_default(),
         nb_params: ctxt.args.len(),
     };
-
-    // println!("(system) compiled block !");
 
     Some(block)
 }
@@ -900,12 +971,6 @@ pub fn compile_class(
         .collect();
     instance_class_mut.methods = instance_class_ctxt.methods;
     drop(instance_class_mut);
-
-    // for method in instance_class.borrow().methods.values() {
-    //     println!("{}", method);
-    // }
-
-    // println!("compiled '{}' !", defn.name);
 
     Some(instance_class)
 }
