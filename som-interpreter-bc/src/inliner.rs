@@ -105,15 +105,14 @@ impl PrimMessageInliner for ast::Expression {
     }
 
     fn inline_if_true_or_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
-        // TODO we can inline more than blocks if we rely on the existing codegen methods. However, that's a pain for some reason.
+        let is_if_true = message.signature == "ifTrue:";
+
+        // TODO we can inline more than blocks if we rely on the existing codegen methods.
         if message.values.len() != 1 || !matches!(message.values.get(0)?, ast::Expression::Block(_)) {
             return None;
         }
 
-        let is_if_true = message.signature == "ifTrue:";
-
-        let jump_idx = ctxt.get_instr_idx();
-
+        let jump_idx = ctxt.get_cur_instr_idx();
         match is_if_true {
             true => ctxt.push_instr(Bytecode::JumpOnFalseTopNil(0)),
             false => ctxt.push_instr(Bytecode::JumpOnTrueTopNil(0))
@@ -121,25 +120,21 @@ impl PrimMessageInliner for ast::Expression {
 
         self.inline_block_expr(ctxt, message.values.get(0)?);
 
-        let jump_by = ctxt.get_instr_idx() - jump_idx;
-        match is_if_true {
-            true => ctxt.backpatch(jump_idx, Bytecode::JumpOnFalseTopNil(jump_by)),
-            false => ctxt.backpatch(jump_idx, Bytecode::JumpOnTrueTopNil(jump_by)),
-        }
+        ctxt.backpatch_jump(jump_idx);
 
         return Some(());
     }
 
     fn inline_if_true_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
+        let is_if_true_if_false = message.signature == "ifTrue:ifFalse:";
+
         if message.values.len() != 2
             || !matches!(message.values.get(0)?, ast::Expression::Block(_))
             || !matches!(message.values.get(1)?, ast::Expression::Block(_)) {
             return None;
         }
 
-        let is_if_true_if_false = message.signature == "ifTrue:ifFalse:";
-
-        let start_jump_idx = ctxt.get_instr_idx();
+        let start_jump_idx = ctxt.get_cur_instr_idx();
         match is_if_true_if_false {
             true => ctxt.push_instr(Bytecode::JumpOnFalsePop(0)),
             false => ctxt.push_instr(Bytecode::JumpOnTruePop(0)),
@@ -147,31 +142,26 @@ impl PrimMessageInliner for ast::Expression {
 
         self.inline_block_expr(ctxt, message.values.get(0)?);
 
-        let middle_jump_idx = ctxt.get_instr_idx();
+        let middle_jump_idx = ctxt.get_cur_instr_idx();
         ctxt.push_instr(Bytecode::Jump(0));
 
-        let jump_by = ctxt.get_instr_idx() - start_jump_idx;
-        match is_if_true_if_false {
-            true => ctxt.backpatch(start_jump_idx, Bytecode::JumpOnFalsePop(jump_by)),
-            false => ctxt.backpatch(start_jump_idx, Bytecode::JumpOnTruePop(jump_by)),
-        }
-
+        ctxt.backpatch_jump(start_jump_idx);
         self.inline_block_expr(ctxt, message.values.get(1)?);
-
-        let jump_by = ctxt.get_instr_idx() - middle_jump_idx;
-        ctxt.backpatch(middle_jump_idx, Bytecode::Jump(jump_by));
+        ctxt.backpatch_jump(middle_jump_idx);
 
         return Some(());
     }
 
     fn inline_while(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
+        let is_while_true = message.signature == "whileTrue:";
+
         let block_idx = match ctxt.get_instructions().last()? {
             Bytecode::PushBlock(val) => val,
             _ => return None
         };
 
         // todo pop the literal
-        let block_ref = match ctxt.get_literal(*block_idx as usize)? {
+        let cond_block_ref = match ctxt.get_literal(*block_idx as usize)? {
             Literal::Block(val) => val.clone(),
             _ => return None
         };
@@ -183,14 +173,11 @@ impl PrimMessageInliner for ast::Expression {
 
         ctxt.pop_instr(); // we remove the PUSH_BLOCK
 
-        let is_while_true = message.signature == "whileTrue:";
+        let idx_before_condition = ctxt.get_cur_instr_idx();
 
-        let cond_idx = ctxt.get_instr_idx();
+        self.inline_compiled_block(ctxt, cond_block_ref.as_ref());
 
-        self.inline_compiled_block(ctxt, block_ref.as_ref());
-
-        let loop_start_idx = ctxt.get_instr_idx();
-
+        let cond_jump_idx = ctxt.get_cur_instr_idx();
         match is_while_true {
             true => ctxt.push_instr(Bytecode::JumpOnFalsePop(0)),
             false => ctxt.push_instr(Bytecode::JumpOnTruePop(0))
@@ -199,24 +186,9 @@ impl PrimMessageInliner for ast::Expression {
         self.inline_block_expr(ctxt, message.values.get(0).unwrap());
 
         ctxt.push_instr(Bytecode::Pop);
-
-        let jump_to_cond_val = ctxt.get_instr_idx() - cond_idx;
-        ctxt.push_instr(Bytecode::JumpBackward(jump_to_cond_val));
-
-        let loop_jump_by = ctxt.get_instr_idx() - loop_start_idx;
-
-        match is_while_true {
-            true => ctxt.backpatch(loop_start_idx, Bytecode::JumpOnFalsePop(loop_jump_by)),
-            false => ctxt.backpatch(loop_start_idx, Bytecode::JumpOnTruePop(loop_jump_by))
-        }
-
+        ctxt.push_instr(Bytecode::JumpBackward(ctxt.get_cur_instr_idx() - idx_before_condition));
+        ctxt.backpatch_jump(cond_jump_idx);
         ctxt.push_instr(Bytecode::PushNil);
-
-        // println!("BYTECODES:");
-        // for instr in ctxt.get_instructions() {
-        //     println!("{}", instr);
-        // }
-        // println!();
 
         return Some(());
     }

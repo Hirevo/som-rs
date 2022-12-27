@@ -105,8 +105,8 @@ pub trait InnerGenCtxt: GenCtxt {
     fn get_literal(&self, idx: usize) -> Option<&Literal>; // is this needed?
     fn push_literal(&mut self, literal: Literal) -> usize;
     fn remove_literal(&mut self, idx: usize) -> Option<Literal>;
-    fn get_instr_idx(&self) -> usize;
-    fn backpatch(&mut self, idx_to_backpatch: usize, bytecode_with_new_val: Bytecode);
+    fn get_cur_instr_idx(&self) -> usize;
+    fn backpatch_jump(&mut self, idx_to_backpatch: usize);
     fn get_body_debug(&self) -> Option<&Vec<Bytecode>>;
     fn get_literals_debug(&self) -> IndexSet<Literal>;
 }
@@ -195,13 +195,23 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
         self.literals.shift_remove_index(idx)
     }
 
-    fn get_instr_idx(&self) -> usize {
+    fn get_cur_instr_idx(&self) -> usize {
         return self.body.as_ref().unwrap().iter().len();
     }
 
-    fn backpatch(&mut self, idx_to_backpatch: usize, bytecode_with_new_val: Bytecode) {
-        // dbg!(&self.outer.class_name());
-        self.body.as_mut().unwrap()[idx_to_backpatch] = bytecode_with_new_val;
+    fn backpatch_jump(&mut self, idx_to_backpatch: usize) {
+        let jump_offset = self.get_cur_instr_idx() - idx_to_backpatch;
+
+        self.body.as_mut().unwrap()[idx_to_backpatch] =
+            match self.body.as_ref().unwrap()[idx_to_backpatch] {
+                Bytecode::Jump(_) => Bytecode::Jump(jump_offset),
+                Bytecode::JumpBackward(_) => Bytecode::JumpBackward(jump_offset),
+                Bytecode::JumpOnTrueTopNil(_) => Bytecode::JumpOnTrueTopNil(jump_offset),
+                Bytecode::JumpOnFalseTopNil(_) => Bytecode::JumpOnFalseTopNil(jump_offset),
+                Bytecode::JumpOnTruePop(_) => Bytecode::JumpOnTruePop(jump_offset),
+                Bytecode::JumpOnFalsePop(_) => Bytecode::JumpOnFalsePop(jump_offset),
+                _ => panic!("Attempting to backpatch a bytecode non jump")
+        };
     }
 }
 
@@ -264,12 +274,12 @@ impl InnerGenCtxt for MethodGenCtxt<'_> {
         self.inner.remove_literal(idx)
     }
 
-    fn get_instr_idx(&self) -> usize {
-        return self.inner.get_instr_idx();
+    fn get_cur_instr_idx(&self) -> usize {
+        return self.inner.get_cur_instr_idx();
     }
 
-    fn backpatch(&mut self, idx_to_backpatch: usize, bytecode_with_new_val: Bytecode) {
-        self.inner.backpatch(idx_to_backpatch, bytecode_with_new_val);
+    fn backpatch_jump(&mut self, idx_to_backpatch: usize) {
+        self.inner.backpatch_jump(idx_to_backpatch);
     }
 
     fn get_body_debug(&self) -> Option<&Vec<Bytecode>> {
