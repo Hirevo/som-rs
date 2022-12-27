@@ -544,7 +544,7 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
     Some(method)
 }
 
-fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
+pub fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
     let mut ctxt = BlockGenCtxt {
         outer,
         args: defn.parameters.iter().cloned().collect(),
@@ -569,6 +569,7 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
         literals: ctxt.literals.into_iter().collect(),
         body: ctxt.body.unwrap_or_default(),
         nb_params: ctxt.args.len(),
+        ast_body: defn.clone()
     };
 
     Some(block)

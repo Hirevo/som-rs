@@ -1,7 +1,8 @@
+use std::rc::Rc;
 use som_core::ast;
 use som_core::bytecode::Bytecode;
 use crate::block::Block;
-use crate::compiler::{InnerGenCtxt, Literal};
+use crate::compiler::{compile_block, InnerGenCtxt, Literal};
 use crate::compiler::MethodCodegen;
 
 // TODO some of those should return Result types and throw errors instead, most likely.
@@ -9,7 +10,7 @@ pub trait PrimMessageInliner {
     fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()>;
     fn inline_block_expr(&self, ctxt: &mut dyn InnerGenCtxt, block: &ast::Expression) -> Option<()>;
     fn inline_compiled_block(&self, ctxt: &mut dyn InnerGenCtxt, block: &Block) -> Option<()>;
-    fn patch_inner_block_during_inlining(&self, block: &Block) -> Block;
+    fn patch_inner_block_during_inlining(&self, ctxt: &mut dyn InnerGenCtxt, block: &Block) -> Block;
 
     fn inline_if_true_or_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()>;
     fn inline_if_true_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()>;
@@ -82,13 +83,14 @@ impl PrimMessageInliner for ast::Expression {
                         }
                     },
                     Bytecode::PushBlock(block_idx) => {
-                        dbg!(block_idx);
                         match block.literals.get(*block_idx as usize)? {
-                            Literal::Block(inner_block) => self.patch_inner_block_during_inlining(inner_block.as_ref()),
+                            Literal::Block(inner_block) => {
+                                let new_block = self.patch_inner_block_during_inlining(ctxt, inner_block.as_ref());
+                                let idx = ctxt.push_literal(Literal::Block(Rc::new(new_block)));
+                                ctxt.push_instr(Bytecode::PushBlock(idx as u8));
+                            },
                             _ => panic!("PushBlock not actually pushing a block somehow")
                         };
-                        todo!("then we push the new literal in place of the old one (needs the same index) and we make sure no block literal is pushed by the following send")
-                        // ctxt.push_literal(block);
                     },
                     _ => ctxt.push_instr(*block_bc)
                 }
@@ -98,11 +100,8 @@ impl PrimMessageInliner for ast::Expression {
         Some(())
     }
 
-    fn patch_inner_block_during_inlining(&self, block: &Block) -> Block {
-        for bc in &block.body {
-            dbg!(&bc);
-        }
-        todo!("A block is used in the compiled block, and needs to be modified to account for the moved vars in its outer context. It'll need to return a new block since Rc means immutable");
+    fn patch_inner_block_during_inlining(&self, ctxt: &mut dyn InnerGenCtxt, block: &Block) -> Block {
+        compile_block(ctxt.as_gen_ctxt(), &block.ast_body).unwrap() // ...is it really that simple?
     }
 
     fn inline_if_true_or_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
@@ -189,20 +188,6 @@ impl PrimMessageInliner for ast::Expression {
         let cond_idx = ctxt.get_instr_idx();
 
         self.inline_compiled_block(ctxt, block_ref.as_ref());
-
-        // println!("BYTECODES AFTER FIRST BLOCK:");
-        // for instr in ctxt.get_instructions() {
-        //     println!("{}", instr);
-        // }
-        // dbg!(ctxt.get_literals_debug());
-
-        // println!("BYTECODES IN FIRST BLOCK:");
-        // for instr in &block_ref.as_ref().body {
-        //     println!("{}", instr);
-        // }
-        // println!();
-        // println!("Block lits:");
-        // dbg!(&block_ref.as_ref().literals);
 
         let loop_start_idx = ctxt.get_instr_idx();
 
