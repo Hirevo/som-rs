@@ -36,7 +36,7 @@ impl PrimMessageInliner for ast::Expression {
                 }
 
                 // TODO i suspect we can reuse the other inline function (inlines a compiled block) when it's done, since turning a block expr into a block is trivial.
-                // TODO also, need remove those POPs somehow.
+                // also, need remove those POPs somehow.
                 if let Some((last, rest)) = block.body.exprs.split_last() {
                     for expr in rest {
                         expr.codegen(ctxt);
@@ -216,7 +216,16 @@ impl PrimMessageInliner for ast::Expression {
 
         self.inline_block_expr(ctxt, message.values.get(0).unwrap());
 
-        ctxt.push_instr(Bytecode::Pop);
+        // we push a POP, unless the body of the loop is empty.
+        match message.values.get(0).unwrap() {
+            ast::Expression::Block(block)  => {
+                if block.body.exprs.len() != 0 {
+                    ctxt.push_instr(Bytecode::Pop);
+                }
+            },
+            _ => panic!("unreachable")
+        };
+
         ctxt.push_instr(Bytecode::JumpBackward(ctxt.get_cur_instr_idx() - idx_before_condition));
         ctxt.backpatch_jump(cond_jump_idx);
         ctxt.push_instr(Bytecode::PushNil);
