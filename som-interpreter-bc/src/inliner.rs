@@ -8,9 +8,8 @@ use crate::compiler::MethodCodegen;
 // TODO some of those should return Result types and throw errors instead, most likely.
 pub trait PrimMessageInliner {
     fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()>;
-    fn inline_block_expr(&self, ctxt: &mut dyn InnerGenCtxt, block: &ast::Expression) -> Option<()>;
+    fn inline_expr(&self, ctxt: &mut dyn InnerGenCtxt, block: &ast::Expression) -> Option<()>;
     fn inline_compiled_block(&self, ctxt: &mut dyn InnerGenCtxt, block: &Block) -> Option<()>;
-    fn patch_inner_block_during_inlining(&self, ctxt: &mut dyn InnerGenCtxt, block: &Block) -> Block;
 
     fn inline_if_true_or_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()>;
     fn inline_if_true_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()>;
@@ -28,15 +27,14 @@ impl PrimMessageInliner for ast::Expression {
         }
     }
 
-    fn inline_block_expr(&self, ctxt: &mut dyn InnerGenCtxt, block_expr: &ast::Expression) -> Option<()> {
+    fn inline_expr(&self, ctxt: &mut dyn InnerGenCtxt, block_expr: &ast::Expression) -> Option<()> {
         match block_expr {
             ast::Expression::Block(block) => {
                 for block_local in &block.locals {
                     ctxt.push_local(String::from(block_local)); // breaks shadowing
                 }
 
-                // TODO i suspect we can reuse the other inline function (inlines a compiled block) when it's done, since turning a block expr into a block is trivial.
-                // also, need remove those POPs somehow.
+                // TODO need remove those POPs somehow.
                 if let Some((last, rest)) = block.body.exprs.split_last() {
                     for expr in rest {
                         expr.codegen(ctxt);
@@ -46,7 +44,7 @@ impl PrimMessageInliner for ast::Expression {
                 }
                 Some(())
             },
-            _ => panic!("Expression was not a block")
+            expr => expr.codegen(ctxt)
         }
     }
 
@@ -85,7 +83,7 @@ impl PrimMessageInliner for ast::Expression {
                     Bytecode::PushBlock(block_idx) => {
                         match block.literals.get(*block_idx as usize)? {
                             Literal::Block(inner_block) => {
-                                let new_block = self.patch_inner_block_during_inlining(ctxt, inner_block.as_ref());
+                                let new_block = compile_block(ctxt.as_gen_ctxt(), &inner_block.ast_body)?;
                                 let idx = ctxt.push_literal(Literal::Block(Rc::new(new_block)));
                                 ctxt.push_instr(Bytecode::PushBlock(idx as u8));
                             },
@@ -132,15 +130,10 @@ impl PrimMessageInliner for ast::Expression {
         Some(())
     }
 
-    fn patch_inner_block_during_inlining(&self, ctxt: &mut dyn InnerGenCtxt, block: &Block) -> Block {
-        compile_block(ctxt.as_gen_ctxt(), &block.ast_body).unwrap() // ...is it really that simple?
-    }
-
     fn inline_if_true_or_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
         let is_if_true = message.signature == "ifTrue:";
 
-        // TODO we can inline more than blocks if we rely on the existing codegen methods.
-        if message.values.len() != 1 || !matches!(message.values.get(0)?, ast::Expression::Block(_)) {
+        if message.values.len() != 1 {
             return None;
         }
 
@@ -150,8 +143,7 @@ impl PrimMessageInliner for ast::Expression {
             false => ctxt.push_instr(Bytecode::JumpOnTrueTopNil(0))
         }
 
-        self.inline_block_expr(ctxt, message.values.get(0)?);
-
+        self.inline_expr(ctxt, message.values.get(0)?);
         ctxt.backpatch_jump(jump_idx);
 
         return Some(());
@@ -160,9 +152,7 @@ impl PrimMessageInliner for ast::Expression {
     fn inline_if_true_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
         let is_if_true_if_false = message.signature == "ifTrue:ifFalse:";
 
-        if message.values.len() != 2
-            || !matches!(message.values.get(0)?, ast::Expression::Block(_))
-            || !matches!(message.values.get(1)?, ast::Expression::Block(_)) {
+        if message.values.len() != 2 {
             return None;
         }
 
@@ -172,13 +162,13 @@ impl PrimMessageInliner for ast::Expression {
             false => ctxt.push_instr(Bytecode::JumpOnTruePop(0)),
         }
 
-        self.inline_block_expr(ctxt, message.values.get(0)?);
+        self.inline_expr(ctxt, message.values.get(0)?);
 
         let middle_jump_idx = ctxt.get_cur_instr_idx();
         ctxt.push_instr(Bytecode::Jump(0));
 
         ctxt.backpatch_jump(start_jump_idx);
-        self.inline_block_expr(ctxt, message.values.get(1)?);
+        self.inline_expr(ctxt, message.values.get(1)?);
         ctxt.backpatch_jump(middle_jump_idx);
 
         return Some(());
@@ -198,7 +188,7 @@ impl PrimMessageInliner for ast::Expression {
             _ => return None
         };
 
-        if message.values.len() != 1 || !matches!(message.values.get(0)?, ast::Expression::Block(_)) {
+        if message.values.len() != 1 {
             return None;
         }
 
@@ -214,7 +204,7 @@ impl PrimMessageInliner for ast::Expression {
             false => ctxt.push_instr(Bytecode::JumpOnTruePop(0))
         }
 
-        self.inline_block_expr(ctxt, message.values.get(0).unwrap());
+        self.inline_expr(ctxt, message.values.get(0).unwrap());
 
         // we push a POP, unless the body of the loop is empty.
         match message.values.get(0).unwrap() {
@@ -223,7 +213,7 @@ impl PrimMessageInliner for ast::Expression {
                     ctxt.push_instr(Bytecode::Pop);
                 }
             },
-            _ => panic!("unreachable")
+            _ => {}
         };
 
         ctxt.push_instr(Bytecode::JumpBackward(ctxt.get_cur_instr_idx() - idx_before_condition));
