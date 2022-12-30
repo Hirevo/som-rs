@@ -4,6 +4,12 @@ use som_core::bytecode::Bytecode;
 use crate::block::Block;
 use crate::compiler::{compile_block, InnerGenCtxt, Literal};
 use crate::compiler::MethodCodegen;
+use crate::inliner::JumpType::{JumpOnFalse, JumpOnTrue};
+
+pub enum JumpType {
+    JumpOnFalse,
+    JumpOnTrue
+}
 
 // TODO some of those should return Result types and throw errors instead, most likely.
 pub trait PrimMessageInliner {
@@ -11,17 +17,20 @@ pub trait PrimMessageInliner {
     fn inline_expr(&self, ctxt: &mut dyn InnerGenCtxt, block: &ast::Expression) -> Option<()>;
     fn inline_compiled_block(&self, ctxt: &mut dyn InnerGenCtxt, block: &Block) -> Option<()>;
 
-    fn inline_if_true_or_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()>;
-    fn inline_if_true_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()>;
-    fn inline_while(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()>;
+    fn inline_if_true_or_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, jump_type: JumpType) -> Option<()>;
+    fn inline_if_true_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, jump_type: JumpType) -> Option<()>;
+    fn inline_while(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, jump_type: JumpType) -> Option<()>;
 }
 
 impl PrimMessageInliner for ast::Expression {
     fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
         match message.signature.as_str() {
-            "ifTrue:" | "ifFalse:" => self.inline_if_true_or_if_false(ctxt, message),
-            "ifTrue:ifFalse:" | "ifFalse:ifTrue:" => self.inline_if_true_if_false(ctxt, message),
-            "whileTrue:" | "whileFalse:" => self.inline_while(ctxt, message),
+            "ifTrue:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnFalse),
+            "ifFalse:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnTrue),
+            "ifTrue:ifFalse:" => self.inline_if_true_if_false(ctxt, message, JumpOnFalse),
+            "ifFalse:ifTrue:" => self.inline_if_true_if_false(ctxt, message, JumpOnTrue),
+            "whileTrue:" => self.inline_while(ctxt, message, JumpOnFalse),
+            "whileFalse:" => self.inline_while(ctxt, message, JumpOnTrue),
             // TODO: [or, and]
             _ => None
         }
@@ -34,7 +43,7 @@ impl PrimMessageInliner for ast::Expression {
                     ctxt.push_local(String::from(block_local)); // breaks shadowing
                 }
 
-                // TODO need remove those POPs somehow.
+                // TODO need to remove those POPs somehow.
                 if let Some((last, rest)) = block.body.exprs.split_last() {
                     for expr in rest {
                         expr.codegen(ctxt);
@@ -130,36 +139,33 @@ impl PrimMessageInliner for ast::Expression {
         Some(())
     }
 
-    fn inline_if_true_or_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
-        let is_if_true = message.signature == "ifTrue:";
-
+    fn inline_if_true_or_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, jump_type: JumpType) -> Option<()> {
         if message.values.len() != 1 {
             return None;
         }
 
         let jump_idx = ctxt.get_cur_instr_idx();
-        match is_if_true {
-            true => ctxt.push_instr(Bytecode::JumpOnFalseTopNil(0)),
-            false => ctxt.push_instr(Bytecode::JumpOnTrueTopNil(0))
+        match jump_type {
+            JumpOnFalse => ctxt.push_instr(Bytecode::JumpOnFalseTopNil(0)),
+            JumpOnTrue => ctxt.push_instr(Bytecode::JumpOnTrueTopNil(0))
         }
 
+        // todo i think Recurse took a big hit when i started inlining any expression instead of just blocks. needs investigating
         self.inline_expr(ctxt, message.values.get(0)?);
         ctxt.backpatch_jump(jump_idx);
 
         return Some(());
     }
 
-    fn inline_if_true_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
-        let is_if_true_if_false = message.signature == "ifTrue:ifFalse:";
-
+    fn inline_if_true_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, jump_type: JumpType) -> Option<()> {
         if message.values.len() != 2 {
             return None;
         }
 
         let start_jump_idx = ctxt.get_cur_instr_idx();
-        match is_if_true_if_false {
-            true => ctxt.push_instr(Bytecode::JumpOnFalsePop(0)),
-            false => ctxt.push_instr(Bytecode::JumpOnTruePop(0)),
+        match jump_type {
+            JumpOnFalse => ctxt.push_instr(Bytecode::JumpOnFalsePop(0)),
+            JumpOnTrue => ctxt.push_instr(Bytecode::JumpOnTruePop(0)),
         }
 
         self.inline_expr(ctxt, message.values.get(0)?);
@@ -174,9 +180,7 @@ impl PrimMessageInliner for ast::Expression {
         return Some(());
     }
 
-    fn inline_while(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
-        let is_while_true = message.signature == "whileTrue:";
-
+    fn inline_while(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, jump_type: JumpType) -> Option<()> {
         let block_idx = match ctxt.get_instructions().last()? {
             Bytecode::PushBlock(val) => val,
             _ => return None
@@ -199,9 +203,9 @@ impl PrimMessageInliner for ast::Expression {
         self.inline_compiled_block(ctxt, cond_block_ref.as_ref());
 
         let cond_jump_idx = ctxt.get_cur_instr_idx();
-        match is_while_true {
-            true => ctxt.push_instr(Bytecode::JumpOnFalsePop(0)),
-            false => ctxt.push_instr(Bytecode::JumpOnTruePop(0))
+        match jump_type {
+            JumpOnFalse => ctxt.push_instr(Bytecode::JumpOnFalsePop(0)),
+            JumpOnTrue => ctxt.push_instr(Bytecode::JumpOnTruePop(0))
         }
 
         self.inline_expr(ctxt, message.values.get(0).unwrap());
