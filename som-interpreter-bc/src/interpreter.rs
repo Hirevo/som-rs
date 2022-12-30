@@ -264,9 +264,6 @@ impl Interpreter {
             // dbg!(&frame.borrow().get_method().signature);
 
             match bytecode {
-                Bytecode::Halt => {
-                    return Some(Value::Nil);
-                }
                 Bytecode::Dup => {
                     let value = self.stack.last().cloned().unwrap();
                     self.stack.push(value);
@@ -342,7 +339,7 @@ impl Interpreter {
                     let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
                     let symbol = match literal {
                         Literal::Symbol(sym) => sym,
-                        _ => return None,
+                        _ => panic!("Global is not a symbol."),
                     };
                     if let Some(value) = universe.lookup_global(symbol) {
                         self.stack.push(value);

@@ -117,7 +117,6 @@ impl fmt::Display for Method {
                     writeln!(f)?;
                     write!(f, "    {}  ", bytecode.padded_name())?;
                     match bytecode {
-                        Bytecode::Halt => {}
                         Bytecode::Dup => {}
                         Bytecode::PushLocal(up_idx, idx) => {
                             write!(f, "local: {}, context: {}", idx, up_idx)?;

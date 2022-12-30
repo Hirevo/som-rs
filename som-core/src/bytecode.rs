@@ -3,7 +3,6 @@ use std::fmt;
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Bytecode {
-    Halt,
     Dup,
     PushLocal(u8, u8),
     PushArgument(u8, u8),
@@ -45,7 +44,6 @@ impl Bytecode {
     pub fn name(self) -> &'static str {
         // NAMES[self as usize]
         match self {
-            Self::Halt               => "HALT",
             Self::Dup                => "DUP",
             Self::PushLocal(_, _)    => "PUSH_LOCAL",
             Self::PushArgument(_, _) => "PUSH_ARGUMENT",
@@ -83,7 +81,6 @@ impl Bytecode {
     pub fn padded_name(self) -> &'static str {
         // PADDED_NAMES[self as usize]
         match self {
-            Self::Halt               => "HALT            ",
             Self::Dup                => "DUP             ",
             Self::PushLocal(_, _)    => "PUSH_LOCAL      ",
             Self::PushArgument(_, _) => "PUSH_ARGUMENT   ",
@@ -121,7 +118,6 @@ impl fmt::Display for Bytecode {
     #[rustfmt::skip]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Halt                      => write!(f, "HALT"),
             Self::Dup                       => write!(f, "DUP"),
             Self::PushLocal(up_idx, idx)    => write!(f, "PUSH_LOCAL {}, {}", up_idx, idx),
             Self::PushArgument(up_idx, idx) => write!(f, "PUSH_ARGUMENT {}, {}", up_idx, idx),
@@ -153,7 +149,8 @@ impl fmt::Display for Bytecode {
             Self::JumpBackward(idx)             => write!(f, "JUMP_BACKWARD {}", idx),
             Self::JumpOnFalseTopNil(idx) => write!(f, "JUMP_ON_FALSE_TOP_NIL {}", idx),
             Self::JumpOnFalsePop(idx) => write!(f, "JUMP_ON_FALSE_POP {}", idx),
-            _ => write!(f, "No display for this bytecode, TODO")
+            Self::JumpOnTrueTopNil(idx) => write!(f, "JUMP_ON_TRUE_TOP_NIL {}", idx),
+            Self::JumpOnTruePop(idx) => write!(f, "JUMP_ON_TRUE_POP {}", idx),
         }
     }
 }
