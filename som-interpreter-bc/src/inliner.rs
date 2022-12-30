@@ -100,6 +100,14 @@ impl PrimMessageInliner for ast::Expression {
                             }
                         };
                     },
+                    Bytecode::PushGlobal(global_idx) => {
+                        match block.literals.get(*global_idx as usize)? {
+                            lit => {
+                                let lit_idx = ctxt.push_literal(lit.clone());
+                                ctxt.push_instr(Bytecode::PushGlobal(lit_idx as u8));
+                            }
+                        };
+                    },
                     Bytecode::PushConstant0 | Bytecode::PushConstant1 | Bytecode::PushConstant2 => {
                         let constant_idx: usize = match block_bc {
                             Bytecode::PushConstant0 => 0,
@@ -115,6 +123,7 @@ impl PrimMessageInliner for ast::Expression {
                             }
                         };
                     },
+                    Bytecode::ReturnNonLocal => panic!("There shouldn't be a return here"),
                     _ => ctxt.push_instr(*block_bc)
                 }
             }
