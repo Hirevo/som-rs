@@ -92,6 +92,29 @@ impl PrimMessageInliner for ast::Expression {
                             _ => panic!("PushBlock not actually pushing a block somehow")
                         };
                     },
+                    Bytecode::PushConstant(constant_idx) => {
+                        match block.literals.get(*constant_idx as usize)? {
+                            lit => {
+                                let lit_idx = ctxt.push_literal(lit.clone());
+                                ctxt.push_instr(Bytecode::PushConstant(lit_idx as u8));
+                            }
+                        };
+                    },
+                    Bytecode::PushConstant0 | Bytecode::PushConstant1 | Bytecode::PushConstant2 => {
+                        let constant_idx: usize = match block_bc {
+                            Bytecode::PushConstant0 => 0,
+                            Bytecode::PushConstant1 => 1,
+                            Bytecode::PushConstant2 => 2,
+                            _ => panic!("Unreachable")
+                        };
+
+                        match block.literals.get(constant_idx)? {
+                            lit => {
+                                let lit_idx = ctxt.push_literal(lit.clone());
+                                ctxt.push_instr(Bytecode::PushConstant(lit_idx as u8));
+                            }
+                        };
+                    },
                     _ => ctxt.push_instr(*block_bc)
                 }
             }
@@ -166,8 +189,7 @@ impl PrimMessageInliner for ast::Expression {
             _ => return None
         };
 
-        if message.values.len() != 1
-            || !matches!(message.values.get(0)?, ast::Expression::Block(_)) {
+        if message.values.len() != 1 || !matches!(message.values.get(0)?, ast::Expression::Block(_)) {
             return None;
         }
 
