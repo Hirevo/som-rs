@@ -22,6 +22,7 @@ pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
     ),
     ("instVarAt:", self::inst_var_at, true),
     ("instVarAt:put:", self::inst_var_at_put, true),
+    ("halt", self::halt, true),
     ("==", self::eq, true),
 ];
 pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
@@ -246,6 +247,11 @@ fn inst_var_at_put(interpreter: &mut Interpreter, _: &mut Universe) {
         .unwrap_or(Value::Nil);
 
     interpreter.stack.push(local);
+}
+
+fn halt(_interpreter: &mut Interpreter, _: &mut Universe) {
+    const _: &'static str = "Object>>#halt";
+    println!("HALT"); // so a breakpoint can be put
 }
 
 /// Search for an instance primitive matching the given signature.
