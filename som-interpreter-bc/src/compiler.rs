@@ -206,31 +206,30 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
     }
 
     fn do_optimizing_pass(&mut self) {
-        if self.body.is_none() || self.body.as_ref().unwrap().len() == 0 {
+        if self.body.is_none() || self.body.as_ref().unwrap().len() < 3 {
             return;
         }
 
-        let mut idx = 0;
-
         // removing DUP POP_X POP combinations
-        while idx < self.body.as_ref().unwrap().len() {
-            let bc = &self.body.as_ref().unwrap()[idx];
-            match bc {
-                Bytecode::PopField(_) | Bytecode::PopLocal(_, _) | Bytecode::PopArgument(_, _) => {
-                    let next_bc = self.body.as_ref().unwrap().get(idx + 1);
-                    let prev_bc = &self.body.as_ref().unwrap()[idx - 1];
+        let mut indices_to_remove: Vec<usize> = vec![];
 
-                    if next_bc.is_some() && matches!(next_bc.unwrap(), Bytecode::Pop) && matches!(prev_bc, Bytecode::Dup) {
-                        self.body.as_mut().unwrap().remove(idx - 1);
-                        self.body.as_mut().unwrap().remove(idx); // so idx + 1 but we removed an elem
-                        idx -= 1;
-                    } else {
-                        idx += 1;
-                    }
-                },
-                _ => idx += 1
+        for (idx, bytecode_win) in self.body.as_ref().unwrap().windows(3).enumerate() {
+            if matches!(bytecode_win[0], Bytecode::Dup) &&
+                matches!(bytecode_win[1], Bytecode::PopField(..) | Bytecode::PopLocal(..) | Bytecode::PopArgument(..)) &&
+                matches!(bytecode_win[2], Bytecode::Pop) {
+                indices_to_remove.push(idx);
+                indices_to_remove.push(idx + 2);
             }
         }
+
+        self.body = Some(self.body.as_ref().unwrap().iter().enumerate()
+            .filter_map(|(idx, bc)|
+                if indices_to_remove.contains(&idx) {
+                    None
+                } else {
+                    Some(bc.clone())
+                }
+            ).collect::<Vec<Bytecode>>());
     }
 }
 
@@ -548,9 +547,18 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
             ctxt.push_instr(Bytecode::ReturnLocal); // TODO that returnlocal isn't necessary if there's already a return before
         }
     }
+
+    // println!("BYTECODES BEFORE:");
+    // if ctxt.inner.body.is_some() {
+    //     for bc in ctxt.inner.body.as_ref().unwrap() {
+    //         println!("{}", bc);
+    //     }
+    // }
+    // println!();
+
     ctxt.do_optimizing_pass();
 
-    // println!("BYTECODES:");
+    // println!("BYTECODES AFTER:");
     // if ctxt.inner.body.is_some() {
     //     for bc in ctxt.inner.body.as_ref().unwrap() {
     //         println!("{}", bc);
@@ -596,7 +604,7 @@ pub fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block
         last.codegen(&mut ctxt)?;
         ctxt.push_instr(Bytecode::ReturnLocal);
     }
-    ctxt.do_optimizing_pass();
+    // ctxt.do_optimizing_pass();
 
     let block = Block {
         frame: None,
