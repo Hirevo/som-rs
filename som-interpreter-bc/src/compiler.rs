@@ -107,8 +107,7 @@ pub trait InnerGenCtxt: GenCtxt {
     fn remove_literal(&mut self, idx: usize) -> Option<Literal>;
     fn get_cur_instr_idx(&self) -> usize;
     fn backpatch_jump(&mut self, idx_to_backpatch: usize);
-    fn get_body_debug(&self) -> Option<&Vec<Bytecode>>;
-    fn get_literals_debug(&self) -> IndexSet<Literal>;
+    fn do_optimizing_pass(&mut self);
 }
 
 struct BlockGenCtxt<'a> {
@@ -147,14 +146,6 @@ impl GenCtxt for BlockGenCtxt<'_> {
 }
 
 impl InnerGenCtxt for BlockGenCtxt<'_> {
-    fn get_body_debug(&self) -> Option<&Vec<Bytecode>> {
-        self.body.as_ref()
-    }
-
-    fn get_literals_debug(&self) -> IndexSet<Literal> {
-        self.literals.clone()
-    }
-
     fn as_gen_ctxt(&mut self) -> &mut dyn GenCtxt {
         self
     }
@@ -212,6 +203,34 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
                 Bytecode::JumpOnFalsePop(_) => Bytecode::JumpOnFalsePop(jump_offset),
                 _ => panic!("Attempting to backpatch a bytecode non jump")
         };
+    }
+
+    fn do_optimizing_pass(&mut self) {
+        if self.body.is_none() || self.body.as_ref().unwrap().len() == 0 {
+            return;
+        }
+
+        let mut idx = 0;
+
+        // removing DUP POP_X POP combinations
+        while idx < self.body.as_ref().unwrap().len() {
+            let bc = &self.body.as_ref().unwrap()[idx];
+            match bc {
+                Bytecode::PopField(_) | Bytecode::PopLocal(_, _) | Bytecode::PopArgument(_, _) => {
+                    let next_bc = self.body.as_ref().unwrap().get(idx + 1);
+                    let prev_bc = &self.body.as_ref().unwrap()[idx - 1];
+
+                    if next_bc.is_some() && matches!(next_bc.unwrap(), Bytecode::Pop) && matches!(prev_bc, Bytecode::Dup) {
+                        self.body.as_mut().unwrap().remove(idx - 1);
+                        self.body.as_mut().unwrap().remove(idx); // so idx + 1 but we removed an elem
+                        idx -= 1;
+                    } else {
+                        idx += 1;
+                    }
+                },
+                _ => idx += 1
+            }
+        }
     }
 }
 
@@ -282,12 +301,8 @@ impl InnerGenCtxt for MethodGenCtxt<'_> {
         self.inner.backpatch_jump(idx_to_backpatch);
     }
 
-    fn get_body_debug(&self) -> Option<&Vec<Bytecode>> {
-        self.inner.get_body_debug()
-    }
-
-    fn get_literals_debug(&self) -> IndexSet<Literal> {
-        self.inner.get_literals_debug()
+    fn do_optimizing_pass(&mut self) {
+        self.inner.do_optimizing_pass();
     }
 }
 
@@ -530,9 +545,18 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
                 ctxt.push_instr(Bytecode::Pop);
             }
             ctxt.push_instr(Bytecode::PushArgument(0, 0));
-            ctxt.push_instr(Bytecode::ReturnLocal);
+            ctxt.push_instr(Bytecode::ReturnLocal); // TODO that returnlocal isn't necessary if there's already a return before
         }
     }
+    ctxt.do_optimizing_pass();
+
+    // println!("BYTECODES:");
+    // if ctxt.inner.body.is_some() {
+    //     for bc in ctxt.inner.body.as_ref().unwrap() {
+    //         println!("{}", bc);
+    //     }
+    // }
+    // println!();
 
     let method = Method {
         kind: match &defn.body {
@@ -572,6 +596,7 @@ pub fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block
         last.codegen(&mut ctxt)?;
         ctxt.push_instr(Bytecode::ReturnLocal);
     }
+    ctxt.do_optimizing_pass();
 
     let block = Block {
         frame: None,
