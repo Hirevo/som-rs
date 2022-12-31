@@ -99,19 +99,24 @@ impl PrimMessageInliner for ast::Expression {
                             _ => panic!("PushBlock not actually pushing a block somehow")
                         };
                     },
-                    Bytecode::PushConstant(constant_idx) => {
-                        match block.literals.get(*constant_idx as usize)? {
-                            lit => {
-                                let lit_idx = ctxt.push_literal(lit.clone());
-                                ctxt.push_instr(Bytecode::PushConstant(lit_idx as u8));
-                            }
-                        };
-                    },
                     Bytecode::PushGlobal(global_idx) => {
                         match block.literals.get(*global_idx as usize)? {
                             lit => {
                                 let lit_idx = ctxt.push_literal(lit.clone());
                                 ctxt.push_instr(Bytecode::PushGlobal(lit_idx as u8));
+                            }
+                        };
+                    },
+                    Bytecode::PushConstant(constant_idx) => {
+                        match block.literals.get(*constant_idx as usize)? {
+                            lit => {
+                                let lit_idx = ctxt.push_literal(lit.clone());
+                                match lit_idx {
+                                    0 => ctxt.push_instr(Bytecode::PushConstant0),
+                                    1 => ctxt.push_instr(Bytecode::PushConstant1),
+                                    2 => ctxt.push_instr(Bytecode::PushConstant2),
+                                    _ => ctxt.push_instr(Bytecode::PushConstant(lit_idx as u8))
+                                }
                             }
                         };
                     },
@@ -126,7 +131,12 @@ impl PrimMessageInliner for ast::Expression {
                         match block.literals.get(constant_idx)? {
                             lit => {
                                 let lit_idx = ctxt.push_literal(lit.clone());
-                                ctxt.push_instr(Bytecode::PushConstant(lit_idx as u8));
+                                match lit_idx {
+                                    0 => ctxt.push_instr(Bytecode::PushConstant0),
+                                    1 => ctxt.push_instr(Bytecode::PushConstant1),
+                                    2 => ctxt.push_instr(Bytecode::PushConstant2),
+                                    _ => ctxt.push_instr(Bytecode::PushConstant(lit_idx as u8))
+                                }
                             }
                         };
                     },
