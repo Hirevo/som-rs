@@ -25,8 +25,8 @@ pub trait PrimMessageInliner {
 impl PrimMessageInliner for ast::Expression {
     fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
         match message.signature.as_str() {
-            "ifTrue:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnFalse),
-            "ifFalse:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnTrue),
+            // "ifTrue:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnFalse),
+            // "ifFalse:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnTrue),
             "ifTrue:ifFalse:" => self.inline_if_true_if_false(ctxt, message, JumpOnFalse),
             "ifFalse:ifTrue:" => self.inline_if_true_if_false(ctxt, message, JumpOnTrue),
             "whileTrue:" => self.inline_while(ctxt, message, JumpOnFalse),
@@ -162,7 +162,7 @@ impl PrimMessageInliner for ast::Expression {
 
         // todo i think Recurse took a big hit when i started inlining any expression instead of just blocks. needs investigating
         self.inline_expr(ctxt, message.values.get(0)?);
-        ctxt.backpatch_jump(jump_idx);
+        ctxt.backpatch_jump_to_current(jump_idx);
 
         return Some(());
     }
@@ -183,9 +183,9 @@ impl PrimMessageInliner for ast::Expression {
         let middle_jump_idx = ctxt.get_cur_instr_idx();
         ctxt.push_instr(Bytecode::Jump(0));
 
-        ctxt.backpatch_jump(start_jump_idx);
+        ctxt.backpatch_jump_to_current(start_jump_idx);
         self.inline_expr(ctxt, message.values.get(1)?);
-        ctxt.backpatch_jump(middle_jump_idx);
+        ctxt.backpatch_jump_to_current(middle_jump_idx);
 
         return Some(());
     }
@@ -231,7 +231,7 @@ impl PrimMessageInliner for ast::Expression {
         };
 
         ctxt.push_instr(Bytecode::JumpBackward(ctxt.get_cur_instr_idx() - idx_before_condition));
-        ctxt.backpatch_jump(cond_jump_idx);
+        ctxt.backpatch_jump_to_current(cond_jump_idx);
         ctxt.push_instr(Bytecode::PushNil);
 
         return Some(());

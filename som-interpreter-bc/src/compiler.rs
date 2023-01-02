@@ -106,8 +106,9 @@ pub trait InnerGenCtxt: GenCtxt {
     fn push_literal(&mut self, literal: Literal) -> usize;
     fn remove_literal(&mut self, idx: usize) -> Option<Literal>;
     fn get_cur_instr_idx(&self) -> usize;
-    fn backpatch_jump(&mut self, idx_to_backpatch: usize);
-    fn do_optimizing_pass(&mut self);
+    fn patch_jump(&mut self, idx_to_backpatch: usize, new_val: usize);
+    fn backpatch_jump_to_current(&mut self, idx_to_backpatch: usize);
+    fn remove_dup_popx_pop_sequences(&mut self);
 }
 
 struct BlockGenCtxt<'a> {
@@ -190,7 +191,7 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
         return self.body.as_ref().unwrap().iter().len();
     }
 
-    fn backpatch_jump(&mut self, idx_to_backpatch: usize) {
+    fn backpatch_jump_to_current(&mut self, idx_to_backpatch: usize) {
         let jump_offset = self.get_cur_instr_idx() - idx_to_backpatch;
 
         self.body.as_mut().unwrap()[idx_to_backpatch] =
@@ -205,7 +206,20 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
         };
     }
 
-    fn do_optimizing_pass(&mut self) {
+    fn patch_jump(&mut self, idx_to_backpatch: usize, new_val: usize) {
+        self.body.as_mut().unwrap()[idx_to_backpatch] =
+            match self.body.as_ref().unwrap()[idx_to_backpatch] {
+                Bytecode::Jump(_) => Bytecode::Jump(new_val),
+                Bytecode::JumpBackward(_) => Bytecode::JumpBackward(new_val),
+                Bytecode::JumpOnTrueTopNil(_) => Bytecode::JumpOnTrueTopNil(new_val),
+                Bytecode::JumpOnFalseTopNil(_) => Bytecode::JumpOnFalseTopNil(new_val),
+                Bytecode::JumpOnTruePop(_) => Bytecode::JumpOnTruePop(new_val),
+                Bytecode::JumpOnFalsePop(_) => Bytecode::JumpOnFalsePop(new_val),
+                _ => panic!("Attempting to patch a bytecode non jump")
+            };
+    }
+
+    fn remove_dup_popx_pop_sequences(&mut self) {
         if self.body.is_none() || self.body.as_ref().unwrap().len() < 3 {
             return;
         }
@@ -222,6 +236,34 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
             }
         }
 
+        if indices_to_remove.is_empty() {
+            return;
+        }
+
+        let mut jumps_to_patch: Vec<(usize, usize)> = vec![];
+        for (cur_idx, bc) in self.body.as_ref().unwrap().iter().enumerate() {
+            match bc {
+                Bytecode::Jump(jump_offset) | Bytecode::JumpOnTrueTopNil(jump_offset) | Bytecode::JumpOnFalseTopNil(jump_offset)
+                | Bytecode::JumpOnFalsePop(jump_offset) | Bytecode::JumpOnTruePop(jump_offset) => {
+                    let nbr_offset_adjust = indices_to_remove.iter().filter(|&&idx_to_remove| cur_idx < idx_to_remove && idx_to_remove < cur_idx + jump_offset).count();
+                    if nbr_offset_adjust != 0 {
+                        jumps_to_patch.push((cur_idx, jump_offset - nbr_offset_adjust));
+                    }
+                },
+                Bytecode::JumpBackward(jump_offset) => {
+                    let nbr_offset_adjust = indices_to_remove.iter().filter(|&&idx_to_remove| cur_idx - jump_offset < idx_to_remove && idx_to_remove < cur_idx).count();
+                    if nbr_offset_adjust != 0 {
+                        jumps_to_patch.push((cur_idx, jump_offset - nbr_offset_adjust));
+                    }
+                },
+                _ => {}
+            }
+        }
+
+        for (jump_idx, new_val) in jumps_to_patch {
+            self.patch_jump(jump_idx, new_val)
+        }
+
         self.body = Some(self.body.as_ref().unwrap().iter().enumerate()
             .filter_map(|(idx, bc)|
                 if indices_to_remove.contains(&idx) {
@@ -230,6 +272,12 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
                     Some(bc.clone())
                 }
             ).collect::<Vec<Bytecode>>());
+
+        // eprintln!("BYTECODES AFTER:");
+        // for bc in self.body.as_ref().unwrap() {
+        //     eprintln!("{}", bc);
+        // }
+        // eprintln!();
     }
 }
 
@@ -296,12 +344,16 @@ impl InnerGenCtxt for MethodGenCtxt<'_> {
         return self.inner.get_cur_instr_idx();
     }
 
-    fn backpatch_jump(&mut self, idx_to_backpatch: usize) {
-        self.inner.backpatch_jump(idx_to_backpatch);
+    fn patch_jump(&mut self, idx_to_backpatch: usize, new_val: usize) {
+        self.inner.patch_jump(idx_to_backpatch, new_val)
     }
 
-    fn do_optimizing_pass(&mut self) {
-        self.inner.do_optimizing_pass();
+    fn backpatch_jump_to_current(&mut self, idx_to_backpatch: usize) {
+        self.inner.backpatch_jump_to_current(idx_to_backpatch);
+    }
+
+    fn remove_dup_popx_pop_sequences(&mut self) {
+        self.inner.remove_dup_popx_pop_sequences();
     }
 }
 
@@ -547,24 +599,7 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
             ctxt.push_instr(Bytecode::ReturnLocal); // TODO that returnlocal isn't necessary if there's already a return before
         }
     }
-
-    // println!("BYTECODES BEFORE:");
-    // if ctxt.inner.body.is_some() {
-    //     for bc in ctxt.inner.body.as_ref().unwrap() {
-    //         println!("{}", bc);
-    //     }
-    // }
-    // println!();
-
-    ctxt.do_optimizing_pass();
-
-    // println!("BYTECODES AFTER:");
-    // if ctxt.inner.body.is_some() {
-    //     for bc in ctxt.inner.body.as_ref().unwrap() {
-    //         println!("{}", bc);
-    //     }
-    // }
-    // println!();
+    ctxt.remove_dup_popx_pop_sequences();
 
     let method = Method {
         kind: match &defn.body {
@@ -604,7 +639,7 @@ pub fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block
         last.codegen(&mut ctxt)?;
         ctxt.push_instr(Bytecode::ReturnLocal);
     }
-    // ctxt.do_optimizing_pass();
+    ctxt.remove_dup_popx_pop_sequences();
 
     let block = Block {
         frame: None,
