@@ -592,7 +592,7 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
             ctxt.push_instr(Bytecode::ReturnLocal); // TODO that returnlocal isn't necessary if there's already a return before
         }
     }
-    ctxt.remove_dup_popx_pop_sequences();
+    // ctxt.remove_dup_popx_pop_sequences();
 
     let method = Method {
         kind: match &defn.body {
@@ -632,7 +632,7 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
         last.codegen(&mut ctxt)?;
         ctxt.push_instr(Bytecode::ReturnLocal);
     }
-    ctxt.remove_dup_popx_pop_sequences();
+    // ctxt.remove_dup_popx_pop_sequences();
 
     let block = Block {
         frame: None,
