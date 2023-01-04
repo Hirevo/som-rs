@@ -224,19 +224,55 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
             return;
         }
 
-        let body = self.body.as_mut().unwrap();
+        let mut indices_to_remove: Vec<usize> = vec![];
 
-        if matches!(body[body.len() - 3], Bytecode::Dup) &&
-            matches!(body[body.len() - 2], Bytecode::PopField(..) | Bytecode::PopLocal(..) | Bytecode::PopArgument(..)) &&
-            matches!(body.last().unwrap(), Bytecode::Pop)
-        {
-            dbg!(&body);
-            let (_, tokeep, _) = (body.pop(), body.pop().unwrap(), body.pop());
-            println!("lol.lmao.");
-            dbg!(&tokeep);
-            self.body.as_mut().unwrap().push(tokeep);
-            dbg!(self.body.as_ref().unwrap());
+        for (idx, bytecode_win) in self.body.as_ref().unwrap().windows(3).enumerate() {
+            if matches!(bytecode_win[0], Bytecode::Dup) &&
+                matches!(bytecode_win[1], Bytecode::PopField(..) | Bytecode::PopLocal(..) | Bytecode::PopArgument(..)) &&
+                matches!(bytecode_win[2], Bytecode::Pop) {
+                indices_to_remove.push(idx);
+                indices_to_remove.push(idx + 2);
+            }
         }
+
+        if indices_to_remove.is_empty() {
+            return;
+        }
+
+        let mut jumps_to_patch = vec![];
+        for (cur_idx, bc) in self.body.as_ref().unwrap().iter().enumerate() {
+            match bc {
+                Bytecode::Jump(jump_offset) | Bytecode::JumpOnTrueTopNil(jump_offset) | Bytecode::JumpOnFalseTopNil(jump_offset) |
+                Bytecode::JumpOnTruePop(jump_offset) | Bytecode::JumpOnFalsePop(jump_offset) => {
+                    if indices_to_remove.contains(&(cur_idx + jump_offset)) {
+                        let lol = indices_to_remove.iter().position(|&v| v == cur_idx + jump_offset).unwrap();
+                        indices_to_remove.remove(lol);
+                        indices_to_remove.remove(lol - 1);
+                    }
+
+                    let nbr_to_adjust = indices_to_remove.iter().filter(|&&v| cur_idx < v && v <= cur_idx + jump_offset).count();
+                    jumps_to_patch.push((cur_idx, jump_offset - nbr_to_adjust));
+                },
+                Bytecode::JumpBackward(jump_offset) => {
+                    let nbr_to_adjust = indices_to_remove.iter().filter(|&&v| cur_idx > v && v > cur_idx - jump_offset).count();
+                    jumps_to_patch.push((cur_idx, jump_offset - nbr_to_adjust));
+                },
+                _ => {}
+            }
+        }
+
+        for (jump_idx, jump_val) in jumps_to_patch {
+            self.patch_jump(jump_idx, jump_val);
+        }
+
+        self.body = Some(self.body.as_ref().unwrap().iter().enumerate()
+            .filter_map(|(idx, bc)|
+                if indices_to_remove.contains(&idx) {
+                    None
+                } else {
+                    Some(bc.clone())
+                }
+            ).collect::<Vec<Bytecode>>());
     }
 }
 
@@ -515,8 +551,6 @@ impl GenCtxt for ClassGenCtxt<'_> {
 }
 
 fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Method> {
-    // println!("(method) compiling '{}' ...", defn.signature);
-
     let mut ctxt = MethodGenCtxt {
         signature: defn.signature.clone(),
         inner: BlockGenCtxt {
@@ -558,7 +592,7 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
             ctxt.push_instr(Bytecode::ReturnLocal); // TODO that returnlocal isn't necessary if there's already a return before
         }
     }
-    // ctxt.remove_dup_popx_pop_sequences();
+    ctxt.remove_dup_popx_pop_sequences();
 
     let method = Method {
         kind: match &defn.body {
@@ -594,12 +628,11 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
         for expr in rest {
             expr.codegen(&mut ctxt)?;
             ctxt.push_instr(Bytecode::Pop);
-            // ctxt.remove_dup_popx_pop_sequences();
         }
         last.codegen(&mut ctxt)?;
         ctxt.push_instr(Bytecode::ReturnLocal);
     }
-    // ctxt.remove_dup_popx_pop_sequences();
+    ctxt.remove_dup_popx_pop_sequences();
 
     let block = Block {
         frame: None,
