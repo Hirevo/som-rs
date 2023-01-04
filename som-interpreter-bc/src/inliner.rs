@@ -1,8 +1,7 @@
-use std::rc::Rc;
 use som_core::ast;
 use som_core::bytecode::Bytecode;
 use crate::block::Block;
-use crate::compiler::{compile_block, InnerGenCtxt, Literal};
+use crate::compiler::{InnerGenCtxt, Literal};
 use crate::compiler::MethodCodegen;
 use crate::inliner::JumpType::{JumpOnFalse, JumpOnTrue};
 
@@ -25,8 +24,8 @@ pub trait PrimMessageInliner {
 impl PrimMessageInliner for ast::Expression {
     fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
         match message.signature.as_str() {
-            // "ifTrue:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnFalse),
-            // "ifFalse:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnTrue),
+            "ifTrue:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnFalse),
+            "ifFalse:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnTrue),
             "ifTrue:ifFalse:" => self.inline_if_true_if_false(ctxt, message, JumpOnFalse),
             "ifFalse:ifTrue:" => self.inline_if_true_if_false(ctxt, message, JumpOnTrue),
             "whileTrue:" => self.inline_while(ctxt, message, JumpOnFalse),
@@ -57,6 +56,7 @@ impl PrimMessageInliner for ast::Expression {
         }
     }
 
+    #[allow(dead_code)] // Unused for now, I implemented it but it was unnecessary oops
     fn inline_compiled_block(&self, ctxt: &mut dyn InnerGenCtxt, block: &Block) -> Option<()> {
         for block_local in &block.locals {
             dbg!(block_local);
@@ -89,16 +89,16 @@ impl PrimMessageInliner for ast::Expression {
                             _ => panic!("Unexpected block literal type, not yet implemented")
                         }
                     },
-                    Bytecode::PushBlock(block_idx) => {
-                        match block.literals.get(*block_idx as usize)? {
-                            Literal::Block(inner_block) => {
-                                let new_block = compile_block(ctxt.as_gen_ctxt(), &inner_block.ast_body)?;
-                                let idx = ctxt.push_literal(Literal::Block(Rc::new(new_block)));
-                                ctxt.push_instr(Bytecode::PushBlock(idx as u8));
-                            },
-                            _ => panic!("PushBlock not actually pushing a block somehow")
-                        };
-                    },
+                    // Bytecode::PushBlock(block_idx) => {
+                        // match block.literals.get(*block_idx as usize)? {
+                        //     Literal::Block(inner_block) => {
+                        //         let new_block = compile_block(ctxt.as_gen_ctxt(), &inner_block.ast_body)?;
+                        //         let idx = ctxt.push_literal(Literal::Block(Rc::new(new_block)));
+                        //         ctxt.push_instr(Bytecode::PushBlock(idx as u8));
+                        //     },
+                        //     _ => panic!("PushBlock not actually pushing a block somehow")
+                        // };
+                    // },
                     Bytecode::PushGlobal(global_idx) => {
                         match block.literals.get(*global_idx as usize)? {
                             lit => {
@@ -191,18 +191,11 @@ impl PrimMessageInliner for ast::Expression {
     }
 
     fn inline_while(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, jump_type: JumpType) -> Option<()> {
-        let block_idx = match ctxt.get_instructions().last()? {
-            Bytecode::PushBlock(val) => val,
-            _ => return None
-        };
-
-        // todo pop the literal
-        let cond_block_ref = match ctxt.get_literal(*block_idx as usize)? {
-            Literal::Block(val) => val.clone(),
-            _ => return None
-        };
-
         if message.values.len() != 1 {
+            return None;
+        }
+
+        if matches!(message.receiver.as_ref(), ast::Expression::Block(_)) {
             return None;
         }
 
@@ -210,7 +203,7 @@ impl PrimMessageInliner for ast::Expression {
 
         let idx_before_condition = ctxt.get_cur_instr_idx();
 
-        self.inline_compiled_block(ctxt, cond_block_ref.as_ref());
+        self.inline_expr(ctxt, message.receiver.as_ref());
 
         let cond_jump_idx = ctxt.get_cur_instr_idx();
         match jump_type {

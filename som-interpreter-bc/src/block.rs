@@ -1,5 +1,4 @@
 use std::fmt;
-use som_core::ast;
 
 use som_core::bytecode::Bytecode;
 
@@ -18,8 +17,7 @@ pub struct Block {
     pub locals: Vec<Value>,
     pub literals: Vec<Literal>,
     pub body: Vec<Bytecode>,
-    pub nb_params: usize,
-    pub ast_body: ast::Block // TODO really not a fan of this, it's only needed during parsing...
+    pub nb_params: usize
 }
 
 impl Block {

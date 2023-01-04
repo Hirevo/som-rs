@@ -1,6 +1,6 @@
 #!/bin/bash
 
-BENCHMARKS=("Bounce" "Mandelbrot" "List" "Permute" "Queens" "QuickSort" "Sieve" "Fannkuch" "JsonSmall" "Richards" "DeltaBlue")
+BENCHMARKS=("Bounce" "Mandelbrot" "List" "Permute" "Queens" "QuickSort" "Sieve" "Fannkuch" "JsonSmall" "DeltaBlue" "Richards")
 
 for bench in "${BENCHMARKS[@]}"
 do
