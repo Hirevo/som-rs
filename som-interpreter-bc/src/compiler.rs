@@ -219,6 +219,7 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
             };
     }
 
+    /// NEVER CALLED. TODO should be made faster and actually invoked, most likely by storing the last four bytecodes for faster checking.
     fn remove_dup_popx_pop_sequences(&mut self) {
         if self.body.is_none() || self.body.as_ref().unwrap().len() < 3 {
             return;
