@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::collections::hash_map::Entry;
 use std::rc::Rc;
 use std::time::Instant;
 
@@ -200,30 +199,37 @@ impl Interpreter {
                     let method = {
                         let receiver = self.stack.iter().nth_back(nb_params)?;
                         let receiver_class = receiver.class(universe);
-                        let cache_key = (receiver_class.as_ptr() as *const _, bytecode_idx);
                         match frame.borrow().kind() {
                             FrameKind::Block { block } => {
-                                match block.inline_cache.borrow_mut().entry(cache_key) {
-                                    Entry::Occupied(entry) => Some(Rc::clone(entry.get())),
-                                    Entry::Vacant(entry) => {
+                                let mut inline_cache = block.inline_cache.borrow_mut();
+                                // SAFETY: this access is actually safe because the bytecode compiler
+                                // makes sure the cache has as many entries as there are bytecode instructions,
+                                // therefore we can avoid doing any redundant bounds checks here.
+                                let maybe_found =
+                                    unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
+                                match maybe_found {
+                                    Some(method) => Some(Rc::clone(method)),
+                                    place @ None => {
                                         let method = receiver_class.borrow().lookup_method(symbol);
-                                        if let Some(method) = method.as_ref() {
-                                            entry.insert(Rc::clone(&method));
-                                        }
+                                        *place = method.clone();
                                         method
                                     }
                                 }
                             }
                             FrameKind::Method { method, .. } => {
                                 if let MethodKind::Defined(env) = method.kind() {
-                                    match env.inline_cache.borrow_mut().entry(cache_key) {
-                                        Entry::Occupied(entry) => Some(Rc::clone(entry.get())),
-                                        Entry::Vacant(entry) => {
+                                    let mut inline_cache = env.inline_cache.borrow_mut();
+                                    // SAFETY: this access is actually safe because the bytecode compiler
+                                    // makes sure the cache has as many entries as there are bytecode instructions,
+                                    // therefore we can avoid doing any redundant bounds checks here.
+                                    let maybe_found =
+                                        unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
+                                    match maybe_found {
+                                        Some(method) => Some(Rc::clone(method)),
+                                        place @ None => {
                                             let method =
                                                 receiver_class.borrow().lookup_method(symbol);
-                                            if let Some(method) = method.as_ref() {
-                                                entry.insert(Rc::clone(&method));
-                                            }
+                                            *place = method.clone();
                                             method
                                         }
                                     }
@@ -299,30 +305,36 @@ impl Interpreter {
                     let holder = frame.borrow().get_method_holder();
                     let method = {
                         let super_class = holder.borrow().super_class()?;
-                        let cache_key = (super_class.as_ptr() as *const _, bytecode_idx);
-
                         match frame.borrow().kind() {
                             FrameKind::Block { block } => {
-                                match block.inline_cache.borrow_mut().entry(cache_key) {
-                                    Entry::Occupied(entry) => Some(Rc::clone(entry.get())),
-                                    Entry::Vacant(entry) => {
+                                let mut inline_cache = block.inline_cache.borrow_mut();
+                                // SAFETY: this access is actually safe because the bytecode compiler
+                                // makes sure the cache has as many entries as there are bytecode instructions,
+                                // therefore we can avoid doing any redundant bounds checks here.
+                                let maybe_found =
+                                    unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
+                                match maybe_found {
+                                    Some(method) => Some(Rc::clone(method)),
+                                    place @ None => {
                                         let method = super_class.borrow().lookup_method(symbol);
-                                        if let Some(method) = method.as_ref() {
-                                            entry.insert(Rc::clone(&method));
-                                        }
+                                        *place = method.clone();
                                         method
                                     }
                                 }
                             }
                             FrameKind::Method { method, .. } => {
                                 if let MethodKind::Defined(env) = method.kind() {
-                                    match env.inline_cache.borrow_mut().entry(cache_key) {
-                                        Entry::Occupied(entry) => Some(Rc::clone(entry.get())),
-                                        Entry::Vacant(entry) => {
+                                    let mut inline_cache = env.inline_cache.borrow_mut();
+                                    // SAFETY: this access is actually safe because the bytecode compiler
+                                    // makes sure the cache has as many entries as there are bytecode instructions,
+                                    // therefore we can avoid doing any redundant bounds checks here.
+                                    let maybe_found =
+                                        unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
+                                    match maybe_found {
+                                        Some(method) => Some(Rc::clone(method)),
+                                        place @ None => {
                                             let method = super_class.borrow().lookup_method(symbol);
-                                            if let Some(method) = method.as_ref() {
-                                                entry.insert(Rc::clone(&method));
-                                            }
+                                            *place = method.clone();
                                             method
                                         }
                                     }

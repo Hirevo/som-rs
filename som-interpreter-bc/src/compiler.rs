@@ -2,7 +2,6 @@
 //! This is the bytecode compiler for the Simple Object Machine.
 //!
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::rc::{Rc, Weak};
 
@@ -412,13 +411,17 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
         kind: match &defn.body {
             ast::MethodBody::Primitive => MethodKind::NotImplemented(defn.signature.clone()),
             ast::MethodBody::Body { .. } => {
-                let env = MethodEnv {
-                    locals: ctxt.inner.locals.iter().map(|_| Value::Nil).collect(),
-                    literals: ctxt.inner.literals.into_iter().collect(),
-                    body: ctxt.inner.body.unwrap_or_default(),
-                    inline_cache: RefCell::new(HashMap::new()),
-                };
-                MethodKind::Defined(env)
+                let body = ctxt.inner.body.unwrap_or_default();
+                let locals = ctxt.inner.locals.iter().map(|_| Value::Nil).collect();
+                let literals = ctxt.inner.literals.into_iter().collect();
+                let inline_cache = RefCell::new(vec![None; body.len()]);
+
+                MethodKind::Defined(MethodEnv {
+                    body,
+                    locals,
+                    literals,
+                    inline_cache,
+                })
             }
         },
         holder: Weak::new(),
@@ -451,13 +454,20 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
         ctxt.push_instr(Bytecode::ReturnLocal);
     }
 
+    let frame = None;
+    let locals = ctxt.locals.into_iter().map(|_| Value::Nil).collect();
+    let literals = ctxt.literals.into_iter().collect();
+    let body = ctxt.body.unwrap_or_default();
+    let nb_params = ctxt.args.len();
+    let inline_cache = Rc::new(RefCell::new(vec![None; body.len()]));
+
     let block = Block {
-        frame: None,
-        locals: ctxt.locals.into_iter().map(|_| Value::Nil).collect(),
-        literals: ctxt.literals.into_iter().collect(),
-        body: ctxt.body.unwrap_or_default(),
-        nb_params: ctxt.args.len(),
-        inline_cache: Rc::new(RefCell::new(HashMap::new())),
+        frame,
+        locals,
+        literals,
+        body,
+        nb_params,
+        inline_cache,
     };
 
     // println!("(system) compiled block !");
