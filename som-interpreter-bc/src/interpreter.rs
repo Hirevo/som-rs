@@ -201,62 +201,51 @@ impl Interpreter {
                         let receiver_class = receiver.class(universe);
                         match frame.borrow().kind() {
                             FrameKind::Block { block } => {
-                                let mut inline_cache_receiver =
-                                    block.inline_cache_receiver.borrow_mut();
-                                let mut inline_cache_invocable =
-                                    block.inline_cache_invocable.borrow_mut();
+                                let mut inline_cache = block.inline_cache.borrow_mut();
+
                                 // SAFETY: this access is actually safe because the bytecode compiler
                                 // makes sure the cache has as many entries as there are bytecode instructions,
                                 // therefore we can avoid doing any redundant bounds checks here.
-                                let maybe_found_receiver = unsafe {
-                                    inline_cache_receiver.get_unchecked_mut(bytecode_idx)
-                                };
-                                let maybe_found_invocable = unsafe {
-                                    inline_cache_invocable.get_unchecked_mut(bytecode_idx)
-                                };
+                                let maybe_found =
+                                    unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
 
-                                match (maybe_found_receiver, maybe_found_invocable) {
-                                    (receiver, Some(method))
+                                match maybe_found {
+                                    Some((receiver, method))
                                         if *receiver == receiver_class.as_ptr() =>
                                     {
                                         Some(Rc::clone(method))
                                     }
-                                    (receiver, method) => {
+                                    place => {
                                         let found = receiver_class.borrow().lookup_method(symbol);
-                                        *receiver = receiver_class.as_ptr();
-                                        *method = found.clone();
+                                        *place = found.clone().map(|method| {
+                                            (receiver_class.as_ptr() as *const _, method)
+                                        });
                                         found
                                     }
                                 }
                             }
                             FrameKind::Method { method, .. } => {
                                 if let MethodKind::Defined(env) = method.kind() {
-                                    let mut inline_cache_receiver =
-                                        env.inline_cache_receiver.borrow_mut();
-                                    let mut inline_cache_invocable =
-                                        env.inline_cache_invocable.borrow_mut();
+                                    let mut inline_cache = env.inline_cache.borrow_mut();
 
                                     // SAFETY: this access is actually safe because the bytecode compiler
                                     // makes sure the cache has as many entries as there are bytecode instructions,
                                     // therefore we can avoid doing any redundant bounds checks here.
-                                    let maybe_found_receiver = unsafe {
-                                        inline_cache_receiver.get_unchecked_mut(bytecode_idx)
-                                    };
-                                    let maybe_found_invocable = unsafe {
-                                        inline_cache_invocable.get_unchecked_mut(bytecode_idx)
-                                    };
+                                    let maybe_found =
+                                        unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
 
-                                    match (maybe_found_receiver, maybe_found_invocable) {
-                                        (receiver, Some(method))
+                                    match maybe_found {
+                                        Some((receiver, method))
                                             if *receiver == receiver_class.as_ptr() =>
                                         {
                                             Some(Rc::clone(method))
                                         }
-                                        (receiver, method) => {
+                                        place => {
                                             let found =
                                                 receiver_class.borrow().lookup_method(symbol);
-                                            *receiver = receiver_class.as_ptr();
-                                            *method = found.clone();
+                                            *place = found.clone().map(|method| {
+                                                (receiver_class.as_ptr() as *const _, method)
+                                            });
                                             found
                                         }
                                     }
@@ -334,62 +323,50 @@ impl Interpreter {
                         let super_class = holder.borrow().super_class()?;
                         match frame.borrow().kind() {
                             FrameKind::Block { block } => {
-                                let mut inline_cache_receiver =
-                                    block.inline_cache_receiver.borrow_mut();
-                                let mut inline_cache_invocable =
-                                    block.inline_cache_invocable.borrow_mut();
+                                let mut inline_cache = block.inline_cache.borrow_mut();
 
                                 // SAFETY: this access is actually safe because the bytecode compiler
                                 // makes sure the cache has as many entries as there are bytecode instructions,
                                 // therefore we can avoid doing any redundant bounds checks here.
-                                let maybe_found_receiver = unsafe {
-                                    inline_cache_receiver.get_unchecked_mut(bytecode_idx)
-                                };
-                                let maybe_found_invocable = unsafe {
-                                    inline_cache_invocable.get_unchecked_mut(bytecode_idx)
-                                };
+                                let maybe_found =
+                                    unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
 
-                                match (maybe_found_receiver, maybe_found_invocable) {
-                                    (receiver, Some(method))
+                                match maybe_found {
+                                    Some((receiver, method))
                                         if *receiver == super_class.as_ptr() =>
                                     {
                                         Some(Rc::clone(method))
                                     }
-                                    (receiver, method) => {
+                                    place => {
                                         let found = super_class.borrow().lookup_method(symbol);
-                                        *receiver = super_class.as_ptr();
-                                        *method = found.clone();
+                                        *place = found.clone().map(|method| {
+                                            (super_class.as_ptr() as *const _, method)
+                                        });
                                         found
                                     }
                                 }
                             }
                             FrameKind::Method { method, .. } => {
                                 if let MethodKind::Defined(env) = method.kind() {
-                                    let mut inline_cache_receiver =
-                                        env.inline_cache_receiver.borrow_mut();
-                                    let mut inline_cache_invocable =
-                                        env.inline_cache_invocable.borrow_mut();
+                                    let mut inline_cache = env.inline_cache.borrow_mut();
 
                                     // SAFETY: this access is actually safe because the bytecode compiler
                                     // makes sure the cache has as many entries as there are bytecode instructions,
                                     // therefore we can avoid doing any redundant bounds checks here.
-                                    let maybe_found_receiver = unsafe {
-                                        inline_cache_receiver.get_unchecked_mut(bytecode_idx)
-                                    };
-                                    let maybe_found_invocable = unsafe {
-                                        inline_cache_invocable.get_unchecked_mut(bytecode_idx)
-                                    };
+                                    let maybe_found =
+                                        unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
 
-                                    match (maybe_found_receiver, maybe_found_invocable) {
-                                        (receiver, Some(method))
+                                    match maybe_found {
+                                        Some((receiver, method))
                                             if *receiver == super_class.as_ptr() =>
                                         {
                                             Some(Rc::clone(method))
                                         }
-                                        (receiver, method) => {
+                                        place => {
                                             let found = super_class.borrow().lookup_method(symbol);
-                                            *receiver = super_class.as_ptr();
-                                            *method = found.clone();
+                                            *place = found.clone().map(|method| {
+                                                (super_class.as_ptr() as *const _, method)
+                                            });
                                             found
                                         }
                                     }

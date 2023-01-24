@@ -414,15 +414,13 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
                 let body = ctxt.inner.body.unwrap_or_default();
                 let locals = ctxt.inner.locals.iter().map(|_| Value::Nil).collect();
                 let literals = ctxt.inner.literals.into_iter().collect();
-                let inline_cache_receiver = RefCell::new(vec![std::ptr::null(); body.len()]);
-                let inline_cache_invocable = RefCell::new(vec![None; body.len()]);
+                let inline_cache = RefCell::new(vec![None; body.len()]);
 
                 MethodKind::Defined(MethodEnv {
                     body,
                     locals,
                     literals,
-                    inline_cache_receiver,
-                    inline_cache_invocable,
+                    inline_cache,
                 })
             }
         },
@@ -461,8 +459,7 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
     let literals = ctxt.literals.into_iter().collect();
     let body = ctxt.body.unwrap_or_default();
     let nb_params = ctxt.args.len();
-    let inline_cache_receiver = Rc::new(RefCell::new(vec![std::ptr::null(); body.len()]));
-    let inline_cache_invocable = Rc::new(RefCell::new(vec![None; body.len()]));
+    let inline_cache = Rc::new(RefCell::new(vec![None; body.len()]));
 
     let block = Block {
         frame,
@@ -470,8 +467,7 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
         literals,
         body,
         nb_params,
-        inline_cache_receiver,
-        inline_cache_invocable,
+        inline_cache,
     };
 
     // println!("(system) compiled block !");
