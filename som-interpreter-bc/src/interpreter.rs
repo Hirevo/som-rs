@@ -5,9 +5,11 @@ use std::time::Instant;
 use som_core::bytecode::Bytecode;
 
 use crate::block::Block;
+use crate::class::Class;
 use crate::compiler::Literal;
 use crate::frame::{Frame, FrameKind};
-use crate::method::MethodKind;
+use crate::interner::Interned;
+use crate::method::{Method, MethodKind};
 use crate::universe::Universe;
 use crate::value::Value;
 use crate::SOMRef;
@@ -188,240 +190,33 @@ impl Interpreter {
                 }
                 Bytecode::Send(idx) => {
                     let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
-                    let symbol = match literal {
-                        Literal::Symbol(sym) => sym,
-                        _ => {
-                            return None;
-                        }
+                    let Literal::Symbol(symbol) = literal else {
+                        return None;
                     };
                     let signature = universe.lookup_symbol(symbol);
                     let nb_params = nb_params(signature);
                     let method = {
                         let receiver = self.stack.iter().nth_back(nb_params)?;
                         let receiver_class = receiver.class(universe);
-                        match frame.borrow().kind() {
-                            FrameKind::Block { block } => {
-                                let mut inline_cache = block.inline_cache.borrow_mut();
-
-                                // SAFETY: this access is actually safe because the bytecode compiler
-                                // makes sure the cache has as many entries as there are bytecode instructions,
-                                // therefore we can avoid doing any redundant bounds checks here.
-                                let maybe_found =
-                                    unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
-
-                                match maybe_found {
-                                    Some((receiver, method))
-                                        if *receiver == receiver_class.as_ptr() =>
-                                    {
-                                        Some(Rc::clone(method))
-                                    }
-                                    place => {
-                                        let found = receiver_class.borrow().lookup_method(symbol);
-                                        *place = found.clone().map(|method| {
-                                            (receiver_class.as_ptr() as *const _, method)
-                                        });
-                                        found
-                                    }
-                                }
-                            }
-                            FrameKind::Method { method, .. } => {
-                                if let MethodKind::Defined(env) = method.kind() {
-                                    let mut inline_cache = env.inline_cache.borrow_mut();
-
-                                    // SAFETY: this access is actually safe because the bytecode compiler
-                                    // makes sure the cache has as many entries as there are bytecode instructions,
-                                    // therefore we can avoid doing any redundant bounds checks here.
-                                    let maybe_found =
-                                        unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
-
-                                    match maybe_found {
-                                        Some((receiver, method))
-                                            if *receiver == receiver_class.as_ptr() =>
-                                        {
-                                            Some(Rc::clone(method))
-                                        }
-                                        place => {
-                                            let found =
-                                                receiver_class.borrow().lookup_method(symbol);
-                                            *place = found.clone().map(|method| {
-                                                (receiver_class.as_ptr() as *const _, method)
-                                            });
-                                            found
-                                        }
-                                    }
-                                } else {
-                                    receiver_class.borrow().lookup_method(symbol)
-                                }
-                            }
-                        }
+                        resolve_method(frame, &receiver_class, symbol, bytecode_idx)
                     };
 
-                    if let Some(method) = method {
-                        match method.kind() {
-                            MethodKind::Defined(_) => {
-                                let mut args = Vec::with_capacity(nb_params + 1);
-
-                                for _ in 0..nb_params {
-                                    let arg = self.stack.pop().unwrap();
-                                    args.push(arg);
-                                }
-                                let self_value = self.stack.pop().unwrap();
-                                args.push(self_value.clone());
-
-                                args.reverse();
-
-                                let holder = method.holder.upgrade().unwrap();
-                                let frame = self.push_frame(FrameKind::Method {
-                                    self_value,
-                                    method,
-                                    holder,
-                                });
-                                frame.borrow_mut().args = args;
-                            }
-                            MethodKind::Primitive(func) => {
-                                func(self, universe);
-                            }
-                            MethodKind::NotImplemented(err) => {
-                                let self_value = self.stack.iter().nth_back(nb_params).unwrap();
-                                println!(
-                                    "{}>>#{}",
-                                    self_value.class(&universe).borrow().name(),
-                                    method.signature()
-                                );
-                                panic!("Primitive `#{}` not implemented", err)
-                            }
-                        }
-                    } else {
-                        let mut args = Vec::with_capacity(nb_params + 1);
-
-                        for _ in 0..nb_params {
-                            let arg = self.stack.pop().unwrap();
-                            args.push(arg);
-                        }
-                        let self_value = self.stack.pop().unwrap();
-
-                        args.reverse();
-
-                        universe.does_not_understand(self, self_value, symbol, args)
-                            .expect(
-                                "A message cannot be handled and `doesNotUnderstand:arguments:` is not defined on receiver"
-                            );
-                    }
+                    do_send(self, universe, method, symbol, nb_params);
                 }
                 Bytecode::SuperSend(idx) => {
                     let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
-                    let symbol = match literal {
-                        Literal::Symbol(sym) => sym,
-                        _ => {
-                            return None;
-                        }
+                    let Literal::Symbol(symbol) = literal else {
+                        return None;
                     };
                     let signature = universe.lookup_symbol(symbol);
                     let nb_params = nb_params(signature);
-                    let holder = frame.borrow().get_method_holder();
                     let method = {
+                        let holder = frame.borrow().get_method_holder();
                         let super_class = holder.borrow().super_class()?;
-                        match frame.borrow().kind() {
-                            FrameKind::Block { block } => {
-                                let mut inline_cache = block.inline_cache.borrow_mut();
-
-                                // SAFETY: this access is actually safe because the bytecode compiler
-                                // makes sure the cache has as many entries as there are bytecode instructions,
-                                // therefore we can avoid doing any redundant bounds checks here.
-                                let maybe_found =
-                                    unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
-
-                                match maybe_found {
-                                    Some((receiver, method))
-                                        if *receiver == super_class.as_ptr() =>
-                                    {
-                                        Some(Rc::clone(method))
-                                    }
-                                    place => {
-                                        let found = super_class.borrow().lookup_method(symbol);
-                                        *place = found.clone().map(|method| {
-                                            (super_class.as_ptr() as *const _, method)
-                                        });
-                                        found
-                                    }
-                                }
-                            }
-                            FrameKind::Method { method, .. } => {
-                                if let MethodKind::Defined(env) = method.kind() {
-                                    let mut inline_cache = env.inline_cache.borrow_mut();
-
-                                    // SAFETY: this access is actually safe because the bytecode compiler
-                                    // makes sure the cache has as many entries as there are bytecode instructions,
-                                    // therefore we can avoid doing any redundant bounds checks here.
-                                    let maybe_found =
-                                        unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
-
-                                    match maybe_found {
-                                        Some((receiver, method))
-                                            if *receiver == super_class.as_ptr() =>
-                                        {
-                                            Some(Rc::clone(method))
-                                        }
-                                        place => {
-                                            let found = super_class.borrow().lookup_method(symbol);
-                                            *place = found.clone().map(|method| {
-                                                (super_class.as_ptr() as *const _, method)
-                                            });
-                                            found
-                                        }
-                                    }
-                                } else {
-                                    super_class.borrow().lookup_method(symbol)
-                                }
-                            }
-                        }
+                        resolve_method(frame, &super_class, symbol, bytecode_idx)
                     };
 
-                    if let Some(method) = method {
-                        match method.kind() {
-                            MethodKind::Defined(_) => {
-                                let mut args = Vec::with_capacity(nb_params + 1);
-
-                                for _ in 0..nb_params {
-                                    let arg = self.stack.pop().unwrap();
-                                    args.push(arg);
-                                }
-                                let self_value = self.stack.pop().unwrap();
-                                args.push(self_value.clone());
-
-                                args.reverse();
-
-                                let holder = method.holder.upgrade().unwrap();
-                                let frame = self.push_frame(FrameKind::Method {
-                                    self_value,
-                                    method,
-                                    holder,
-                                });
-                                frame.borrow_mut().args = args;
-                            }
-                            MethodKind::Primitive(func) => {
-                                func(self, universe);
-                            }
-                            MethodKind::NotImplemented(err) => {
-                                panic!("Primitive `#{}` not implemented", err)
-                            }
-                        }
-                    } else {
-                        let mut args = Vec::with_capacity(nb_params + 1);
-
-                        for _ in 0..nb_params {
-                            let arg = self.stack.pop().unwrap();
-                            args.push(arg);
-                        }
-                        let self_value = self.stack.pop().unwrap();
-
-                        args.reverse();
-
-                        universe.does_not_understand(self, self_value, symbol, args)
-                            .expect(
-                                "A message cannot be handled and `doesNotUnderstand:arguments:` is not defined on receiver"
-                            );
-                    }
+                    do_send(self, universe, method, symbol, nb_params);
                 }
                 Bytecode::ReturnLocal => {
                     let value = self.stack.pop().unwrap();
@@ -457,6 +252,126 @@ impl Interpreter {
                         universe.escaped_block(self, instance, block).expect(
                             "A block has escaped and `escapedBlock:` is not defined on receiver",
                         );
+                    }
+                }
+            }
+        }
+
+        fn do_send(
+            interpreter: &mut Interpreter,
+            universe: &mut Universe,
+            method: Option<Rc<Method>>,
+            symbol: Interned,
+            nb_params: usize,
+        ) {
+            let Some(method) = method else {
+                let mut args = Vec::with_capacity(nb_params + 1);
+
+                for _ in 0..nb_params {
+                    let arg = interpreter.stack.pop().unwrap();
+                    args.push(arg);
+                }
+                let self_value = interpreter.stack.pop().unwrap();
+
+                args.reverse();
+
+                universe.does_not_understand(interpreter, self_value, symbol, args)
+                    .expect(
+                        "A message cannot be handled and `doesNotUnderstand:arguments:` is not defined on receiver"
+                    );
+                
+                return;
+            };
+    
+                match method.kind() {
+                    MethodKind::Defined(_) => {
+                        let mut args = Vec::with_capacity(nb_params + 1);
+
+                        for _ in 0..nb_params {
+                            let arg = interpreter.stack.pop().unwrap();
+                            args.push(arg);
+                        }
+                        let self_value = interpreter.stack.pop().unwrap();
+                        args.push(self_value.clone());
+
+                        args.reverse();
+
+                        let holder = method.holder.upgrade().unwrap();
+                        let frame = interpreter.push_frame(FrameKind::Method {
+                            self_value,
+                            method,
+                            holder,
+                        });
+                        frame.borrow_mut().args = args;
+                    }
+                    MethodKind::Primitive(func) => {
+                        func(interpreter, universe);
+                    }
+                    MethodKind::NotImplemented(err) => {
+                        let self_value = interpreter.stack.iter().nth_back(nb_params).unwrap();
+                        println!(
+                            "{}>>#{}",
+                            self_value.class(&universe).borrow().name(),
+                            method.signature(),
+                        );
+                        panic!("Primitive `#{}` not implemented", err)
+                    }
+                }
+        }
+
+        fn resolve_method(
+            frame: &SOMRef<Frame>,
+            class: &SOMRef<Class>,
+            signature: Interned,
+            bytecode_idx: usize,
+        ) -> Option<Rc<Method>> {
+            match frame.borrow().kind() {
+                FrameKind::Block { block } => {
+                    let mut inline_cache = block.inline_cache.borrow_mut();
+
+                    // SAFETY: this access is actually safe because the bytecode compiler
+                    // makes sure the cache has as many entries as there are bytecode instructions,
+                    // therefore we can avoid doing any redundant bounds checks here.
+                    let maybe_found = unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
+
+                    match maybe_found {
+                        Some((receiver, method)) if *receiver == class.as_ptr() => {
+                            Some(Rc::clone(method))
+                        }
+                        place @ None => {
+                            let found = class.borrow().lookup_method(signature);
+                            *place = found
+                                .clone()
+                                .map(|method| (class.as_ptr() as *const _, method));
+                            found
+                        }
+                        _ => class.borrow().lookup_method(signature),
+                    }
+                }
+                FrameKind::Method { method, .. } => {
+                    if let MethodKind::Defined(env) = method.kind() {
+                        let mut inline_cache = env.inline_cache.borrow_mut();
+
+                        // SAFETY: this access is actually safe because the bytecode compiler
+                        // makes sure the cache has as many entries as there are bytecode instructions,
+                        // therefore we can avoid doing any redundant bounds checks here.
+                        let maybe_found = unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
+
+                        match maybe_found {
+                            Some((receiver, method)) if *receiver == class.as_ptr() => {
+                                Some(Rc::clone(method))
+                            }
+                            place @ None => {
+                                let found = class.borrow().lookup_method(signature);
+                                *place = found
+                                    .clone()
+                                    .map(|method| (class.as_ptr() as *const _, method));
+                                found
+                            }
+                            _ => class.borrow().lookup_method(signature),
+                        }
+                    } else {
+                        class.borrow().lookup_method(signature)
                     }
                 }
             }
