@@ -335,10 +335,16 @@ impl Interpreter {
                     let maybe_found = unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
 
                     match maybe_found {
-                        Some((receiver, method)) if *receiver == class.as_ptr() => {
+                        [Some((receiver, method)), _, _] if *receiver == class.as_ptr() => {
                             Some(Rc::clone(method))
                         }
-                        place @ None => {
+                        [_, Some((receiver, method)), _] if *receiver == class.as_ptr() => {
+                            Some(Rc::clone(method))
+                        }
+                        [_, _, Some((receiver, method))] if *receiver == class.as_ptr() => {
+                            Some(Rc::clone(method))
+                        }
+                        [place @ None, _, _] | [_, place @ None, _] | [_, _, place @ None] => {
                             let found = class.borrow().lookup_method(signature);
                             *place = found
                                 .clone()
@@ -358,10 +364,16 @@ impl Interpreter {
                         let maybe_found = unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
 
                         match maybe_found {
-                            Some((receiver, method)) if *receiver == class.as_ptr() => {
+                            [Some((receiver, method)), _, _] if *receiver == class.as_ptr() => {
                                 Some(Rc::clone(method))
                             }
-                            place @ None => {
+                            [_, Some((receiver, method)), _] if *receiver == class.as_ptr() => {
+                                Some(Rc::clone(method))
+                            }
+                            [_, _, Some((receiver, method))] if *receiver == class.as_ptr() => {
+                                Some(Rc::clone(method))
+                            }
+                            [place @ None, _, _] | [_, place @ None, _] | [_, _, place @ None] => {
                                 let found = class.borrow().lookup_method(signature);
                                 *place = found
                                     .clone()

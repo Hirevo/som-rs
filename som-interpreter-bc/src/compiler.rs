@@ -414,7 +414,11 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
                 let body = ctxt.inner.body.unwrap_or_default();
                 let locals = ctxt.inner.locals.iter().map(|_| Value::Nil).collect();
                 let literals = ctxt.inner.literals.into_iter().collect();
-                let inline_cache = RefCell::new(vec![None; body.len()]);
+                let inline_cache = RefCell::new(
+                    std::iter::repeat_with(|| Default::default())
+                        .take(body.len())
+                        .collect(),
+                );
 
                 MethodKind::Defined(MethodEnv {
                     body,
@@ -459,7 +463,11 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
     let literals = ctxt.literals.into_iter().collect();
     let body = ctxt.body.unwrap_or_default();
     let nb_params = ctxt.args.len();
-    let inline_cache = Rc::new(RefCell::new(vec![None; body.len()]));
+    let inline_cache = Rc::new(RefCell::new(
+        std::iter::repeat_with(|| Default::default())
+            .take(body.len())
+            .collect(),
+    ));
 
     let block = Block {
         frame,
