@@ -177,7 +177,7 @@ impl Iterator for Lexer {
                     }
                     Some(ch) if ch.is_alphabetic() => {
                         let len = iter
-                            .take_while(|ch| ch.is_alphabetic() || matches!(*ch, ':' | '_'))
+                            .take_while(|ch| ch.is_alphanumeric() || matches!(*ch, ':' | '_'))
                             .count();
                         let mut symbol = String::with_capacity(len);
                         self.chars.pop()?;
