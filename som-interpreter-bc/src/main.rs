@@ -7,6 +7,8 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use anyhow::anyhow;
+#[cfg(feature = "jemalloc")]
+use jemallocator::Jemalloc;
 use structopt::StructOpt;
 
 mod shell;
@@ -14,6 +16,10 @@ mod shell;
 use som_interpreter_bc::interpreter::Interpreter;
 use som_interpreter_bc::universe::Universe;
 use som_interpreter_bc::value::Value;
+
+#[cfg(feature = "jemalloc")]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
 #[derive(Debug, Clone, PartialEq, StructOpt)]
 #[structopt(about, author)]
