@@ -279,44 +279,44 @@ impl Interpreter {
                     .expect(
                         "A message cannot be handled and `doesNotUnderstand:arguments:` is not defined on receiver"
                     );
-                
+
                 return;
             };
-    
-                match method.kind() {
-                    MethodKind::Defined(_) => {
-                        let mut args = Vec::with_capacity(nb_params + 1);
 
-                        for _ in 0..nb_params {
-                            let arg = interpreter.stack.pop().unwrap();
-                            args.push(arg);
-                        }
-                        let self_value = interpreter.stack.pop().unwrap();
-                        args.push(self_value.clone());
+            match method.kind() {
+                MethodKind::Defined(_) => {
+                    let mut args = Vec::with_capacity(nb_params + 1);
 
-                        args.reverse();
+                    for _ in 0..nb_params {
+                        let arg = interpreter.stack.pop().unwrap();
+                        args.push(arg);
+                    }
+                    let self_value = interpreter.stack.pop().unwrap();
+                    args.push(self_value.clone());
 
-                        let holder = method.holder.upgrade().unwrap();
-                        let frame = interpreter.push_frame(FrameKind::Method {
-                            self_value,
-                            method,
-                            holder,
-                        });
-                        frame.borrow_mut().args = args;
-                    }
-                    MethodKind::Primitive(func) => {
-                        func(interpreter, universe);
-                    }
-                    MethodKind::NotImplemented(err) => {
-                        let self_value = interpreter.stack.iter().nth_back(nb_params).unwrap();
-                        println!(
-                            "{}>>#{}",
-                            self_value.class(&universe).borrow().name(),
-                            method.signature(),
-                        );
-                        panic!("Primitive `#{}` not implemented", err)
-                    }
+                    args.reverse();
+
+                    let holder = method.holder.upgrade().unwrap();
+                    let frame = interpreter.push_frame(FrameKind::Method {
+                        self_value,
+                        method,
+                        holder,
+                    });
+                    frame.borrow_mut().args = args;
                 }
+                MethodKind::Primitive(func) => {
+                    func(interpreter, universe);
+                }
+                MethodKind::NotImplemented(err) => {
+                    let self_value = interpreter.stack.iter().nth_back(nb_params).unwrap();
+                    println!(
+                        "{}>>#{}",
+                        self_value.class(&universe).borrow().name(),
+                        method.signature(),
+                    );
+                    panic!("Primitive `#{}` not implemented", err)
+                }
+            }
         }
 
         fn resolve_method(
