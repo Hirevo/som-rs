@@ -55,7 +55,7 @@ impl Lexer {
                     '\'' => output.push('\''),
                     '\\' => output.push('\\'),
                     '0' => output.push('\0'),
-                    _ => {},
+                    _ => {}
                 },
                 ch => output.push(ch),
             }
