@@ -21,7 +21,7 @@ pub struct Block {
     pub literals: Vec<Literal>,
     pub body: Vec<Bytecode>,
     pub nb_params: usize,
-    pub inline_cache: Rc<RefCell<Vec<Option<(*const Class, Rc<Method>)>>>>,
+    pub inline_cache: Rc<RefCell<Vec<[Option<(*const Class, Rc<Method>)>; 3]>>>,
 }
 
 impl Block {
