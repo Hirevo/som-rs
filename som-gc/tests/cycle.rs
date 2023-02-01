@@ -21,7 +21,8 @@ impl Drop for Node {
     }
 }
 
-fn main() {
+#[test]
+fn cycle_test() {
     let mut heap = GcHeap::new();
 
     let a = heap.allocate(RefCell::new(Node { id: 1, edge: None }));

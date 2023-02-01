@@ -24,7 +24,8 @@ impl Trace for Test {
     fn trace(&self) {}
 }
 
-fn main() {
+#[test]
+fn simple_test() {
     let mut heap = GcHeap::new();
 
     let mut stack = Vec::new();
