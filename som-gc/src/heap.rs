@@ -8,49 +8,40 @@ use crate::gc::Gc;
 use crate::trace::Trace;
 
 /// The GC heap itself, which is the storage for all GC-ed objects.
-pub struct GcHeap<T>
-where
-    T: Trace + 'static,
-{
-    head: *mut GcBox<T>,
+pub struct GcHeap {
+    head: Option<NonNull<GcBox<dyn Trace + 'static>>>,
 }
 
-impl<T> Drop for GcHeap<T>
-where
-    T: Trace + 'static,
-{
+impl Drop for GcHeap {
     // We properly drop all objects in the heap.
     fn drop(&mut self) {
-        let mut head: *mut GcBox<T> = self.head;
-        while !head.is_null() {
+        let mut head = self.head;
+        while let Some(cur) = head {
             // SAFETY: we don't access that reference again after we drop it.
-            let next = unsafe { &*head }.next();
-            drop(unsafe { Box::from_raw(head) });
-            head = next;
+            head = unsafe { cur.as_ref() }.next;
+            drop(unsafe { Box::from_raw(cur.as_ptr()) });
         }
     }
 }
 
-impl<T> GcHeap<T>
-where
-    T: Trace + 'static,
-{
+impl GcHeap {
     /// Creates a new empty GC heap.
     pub fn new() -> Self {
         Self {
-            head: std::ptr::null_mut(),
+            head: None,
         }
     }
 
     /// Allocates an object on the GC heap, returning its handle.
-    pub fn allocate(&mut self, value: T) -> Gc<T> {
+    pub fn allocate<T: Trace + 'static>(&mut self, value: T) -> Gc<T> {
         // TODO: trigger `collect_garbage`
         let mut allocated = Box::new(GcBox::new(value));
-        allocated.set_next(self.head);
-        self.head = Box::into_raw(allocated);
+        allocated.next = self.head;
+        let ptr = unsafe { NonNull::new_unchecked(Box::into_raw(allocated)) };
+        self.head = Some(ptr as NonNull<GcBox<dyn Trace + 'static>>);
         Gc {
             // SAFETY: `self.head` is guaranteed to be properly aligned and non-null by `Box::into_raw`.
-            ptr: Cell::new(unsafe { NonNull::new_unchecked(self.head) }),
+            ptr: Cell::new(ptr),
             marker: PhantomData,
         }
     }
@@ -58,30 +49,30 @@ where
     /// Clears the `mark` bits on every GC object.
     fn clear_marks(&mut self) {
         let mut head = self.head;
-        while !head.is_null() {
-            let head_ref = unsafe { &mut *head };
-            head_ref.clear_mark();
-            head = head_ref.next();
+        while let Some(mut cur) = head {
+            let cur = unsafe { cur.as_mut() };
+            cur.clear_mark();
+            head = cur.next;
         }
     }
 
     /// Performs a sweep on the GC heap (drops all unmarked objects).
     fn sweep(&mut self) {
-        let mut head: *mut GcBox<T> = self.head;
-        let mut prev: *mut GcBox<T> = std::ptr::null_mut();
-        while !head.is_null() {
+        let mut head = self.head;
+        let mut prev = None::<NonNull<GcBox<dyn Trace + 'static>>>;
+        while let Some(cur) = head {
             // SAFETY: we don't access that reference again after we drop it.
-            let head_ref = unsafe { &*head };
-            let next = head_ref.next();
-            if !head_ref.is_marked() {
-                if !prev.is_null() {
-                    unsafe { &mut *prev }.set_next(next);
+            let cur_ref = unsafe { cur.as_ref() };
+            let next = cur_ref.next;
+            if !cur_ref.is_marked() {
+                if let Some(mut prev_cur) = prev {
+                    unsafe { prev_cur.as_mut() }.next = next;
                 } else {
                     self.head = next;
                 }
                 // TODO: introduce a `Finalize`-like mechanism.
                 // TODO: maybe perform the drops in a separate thread.
-                drop(unsafe { Box::from_raw(head) });
+                drop(unsafe { Box::from_raw(cur.as_ptr()) });
             } else {
                 prev = head;
             }
