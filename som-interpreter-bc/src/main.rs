@@ -4,7 +4,6 @@
 #![warn(missing_docs)]
 
 use std::path::PathBuf;
-use std::rc::Rc;
 
 use anyhow::{bail, Context};
 use clap::Parser;
@@ -12,6 +11,8 @@ use clap::Parser;
 use jemallocator::Jemalloc;
 
 mod shell;
+
+use som_gc::{GcHeap, GcParams};
 
 use som_interpreter_bc::disassembler::disassemble_method_body;
 use som_interpreter_bc::interpreter::Interpreter;
@@ -22,6 +23,31 @@ use som_interpreter_bc::value::Value;
 #[cfg(feature = "jemalloc")]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
+
+#[derive(Debug, Clone, PartialEq, clap::StructOpt)]
+struct GcOptions {
+    /// Minimum amount of bytes allocated to trigger garbage collection.
+    #[structopt(long, default_value = "10000000")]
+    gc_initial_threshold: usize,
+
+    /// How much heap should grow after unsuccessful garbage collection.
+    #[structopt(long, default_value = "0.7")]
+    gc_used_space_ratio: f64,
+
+    /// Whether to collect on exit, to avoid leaking memory.
+    #[structopt(long)]
+    gc_collect_on_exit: bool,
+
+    /// Print GC stats before exiting.
+    #[structopt(long)]
+    gc_print_stats: bool,
+
+    /// Force garbage collection before printing stats.
+    /// Useful for checking for memory leaks.
+    /// Does nothing unless --gc-print-stats is specified.
+    #[structopt(long)]
+    gc_collect_before_stats: bool,
+}
 
 #[derive(Debug, Clone, PartialEq, clap::StructOpt)]
 #[clap(about, author)]
@@ -43,20 +69,28 @@ struct Options {
     /// Enable verbose output (with timing information).
     #[clap(short = 'v')]
     verbose: bool,
+
+    #[structopt(flatten)]
+    gc: GcOptions,
 }
 
 fn main() -> anyhow::Result<()> {
-    let opts: Options = Options::from_args();
+    let opts: Options = Options::parse();
 
+    let mut params = GcParams::default();
+    params.threshold = opts.gc.gc_initial_threshold;
+    params.used_space_ratio = opts.gc.gc_used_space_ratio;
+
+    let mut heap = GcHeap::with_params(params);
     let mut interpreter = Interpreter::new();
 
     if opts.disassemble {
-        return disassemble_class(opts);
+        return disassemble_class(&mut heap, opts);
     }
 
     let Some(file) = opts.file else {
-        let mut universe = Universe::with_classpath(opts.classpath)?;
-        return shell::interactive(&mut interpreter, &mut universe, opts.verbose);
+        let mut universe = Universe::with_classpath(&mut heap, opts.classpath)?;
+        return shell::interactive(&mut heap, &mut interpreter, &mut universe, opts.verbose);
     };
 
     let file_stem = file
@@ -70,7 +104,7 @@ fn main() -> anyhow::Result<()> {
         classpath.push(directory.to_path_buf());
     }
 
-    let mut universe = Universe::with_classpath(classpath)?;
+    let mut universe = Universe::with_classpath(&mut heap, classpath)?;
 
     let args = std::iter::once(String::from(file_stem))
         .chain(opts.args.iter().cloned())
@@ -79,10 +113,10 @@ fn main() -> anyhow::Result<()> {
         .collect();
 
     universe
-        .initialize(&mut interpreter, args)
+        .initialize(&mut heap, &mut interpreter, args)
         .expect("issue running program");
 
-    interpreter.run(&mut universe);
+    interpreter.run(&mut heap, &mut universe);
 
     // let class = universe.load_class_from_path(file)?;
     // let instance = som_interpreter::instance::Instance::from_class(class);
@@ -97,10 +131,31 @@ fn main() -> anyhow::Result<()> {
     //     _ => {}
     // }
 
+    if opts.gc.gc_print_stats {
+        if opts.gc.gc_collect_before_stats {
+            heap.collect_garbage(|| {});
+        }
+
+        let stats = heap.stats();
+        let params = heap.params();
+
+        println!();
+        println!("total GC runs: {}", stats.collections_performed);
+        println!("total bytes swept: {}", stats.bytes_swept);
+        println!("total bytes still allocated: {}", stats.bytes_allocated);
+        println!("total GC time: {:?}", stats.total_time_spent);
+        println!("final GC threshold: {}", params.threshold);
+        println!();
+    }
+
+    if opts.gc.gc_collect_on_exit {
+        heap.collect_garbage(|| {});
+    }
+
     Ok(())
 }
 
-fn disassemble_class(opts: Options) -> anyhow::Result<()> {
+fn disassemble_class(heap: &mut GcHeap, opts: Options) -> anyhow::Result<()> {
     let Some(file) = opts.file else {
         bail!("no class specified for disassembly");
     };
@@ -115,9 +170,9 @@ fn disassemble_class(opts: Options) -> anyhow::Result<()> {
     if let Some(directory) = file.parent() {
         classpath.push(directory.to_path_buf());
     }
-    let mut universe = Universe::with_classpath(classpath)?;
+    let mut universe = Universe::with_classpath(heap, classpath)?;
 
-    let class = universe.load_class(file_stem)?;
+    let class = universe.load_class(heap, file_stem)?;
 
     let methods: Vec<Rc<Method>> = if opts.args.is_empty() {
         class.borrow().methods.values().cloned().collect()

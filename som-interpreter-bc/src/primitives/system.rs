@@ -1,6 +1,10 @@
+use std::cell::RefCell;
 use std::convert::TryFrom;
 use std::fs;
-use std::rc::Rc;
+
+use num_bigint::ToBigInt;
+
+use som_gc::{GcHeap, Trace};
 
 use crate::frame::FrameKind;
 use crate::interpreter::Interpreter;
@@ -19,6 +23,7 @@ pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
     ("ticks", self::ticks, true),
     ("time", self::time, true),
     ("fullGC", self::full_gc, true),
+    ("gcStats", self::gc_stats, true),
     ("exit:", self::exit, true),
     ("global:", self::global, true),
     ("global:put:", self::global_put, true),
@@ -27,8 +32,8 @@ pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
 ];
 pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
 
-fn load_file(interpreter: &mut Interpreter, universe: &mut Universe) {
-    const SIGNATURE: &str = "System>>#loadFile:";
+fn load_file(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Universe) {
+    const SIGNATURE: &str = "System>>#loadFie:";
 
     expect_args!(SIGNATURE, interpreter, [
         Value::System,
@@ -42,14 +47,14 @@ fn load_file(interpreter: &mut Interpreter, universe: &mut Universe) {
     };
 
     let value = match fs::read_to_string(path) {
-        Ok(value) => Value::String(Rc::new(value)),
+        Ok(value) => Value::String(heap.allocate(value)),
         Err(_) => Value::Nil,
     };
 
     interpreter.stack.push(value);
 }
 
-fn print_string(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn print_string(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "System>>#printString:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -69,7 +74,7 @@ fn print_string(interpreter: &mut Interpreter, universe: &mut Universe) {
     interpreter.stack.push(Value::System)
 }
 
-fn print_newline(interpreter: &mut Interpreter, _: &mut Universe) {
+fn print_newline(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &'static str = "System>>#printNewline";
 
     expect_args!(SIGNATURE, interpreter, [Value::System]);
@@ -78,7 +83,7 @@ fn print_newline(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Nil);
 }
 
-fn error_print(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn error_print(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "System>>#errorPrint:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -96,7 +101,7 @@ fn error_print(interpreter: &mut Interpreter, universe: &mut Universe) {
     interpreter.stack.push(Value::System);
 }
 
-fn error_println(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn error_println(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "System>>#errorPrintln:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -114,7 +119,7 @@ fn error_println(interpreter: &mut Interpreter, universe: &mut Universe) {
     interpreter.stack.push(Value::System);
 }
 
-fn load(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn load(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "System>>#load:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -123,13 +128,13 @@ fn load(interpreter: &mut Interpreter, universe: &mut Universe) {
     ]);
 
     let name = universe.lookup_symbol(sym).to_string();
-    match universe.load_class(name) {
+    match universe.load_class(heap, name) {
         Ok(class) => interpreter.stack.push(Value::Class(class)),
         Err(err) => panic!("'{}': {}", SIGNATURE, err),
     }
 }
 
-fn has_global(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn has_global(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "System>>#hasGlobal:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -142,7 +147,7 @@ fn has_global(interpreter: &mut Interpreter, universe: &mut Universe) {
     interpreter.stack.push(value);
 }
 
-fn global(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn global(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "System>>#global:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -155,7 +160,7 @@ fn global(interpreter: &mut Interpreter, universe: &mut Universe) {
     interpreter.stack.push(value);
 }
 
-fn global_put(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn global_put(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "System>>#global:put:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -168,7 +173,7 @@ fn global_put(interpreter: &mut Interpreter, universe: &mut Universe) {
     interpreter.stack.push(value);
 }
 
-fn exit(interpreter: &mut Interpreter, _: &mut Universe) {
+fn exit(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "System>>#exit:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -182,7 +187,7 @@ fn exit(interpreter: &mut Interpreter, _: &mut Universe) {
     }
 }
 
-fn ticks(interpreter: &mut Interpreter, _: &mut Universe) {
+fn ticks(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "System>>#ticks";
 
     expect_args!(SIGNATURE, interpreter, [Value::System]);
@@ -193,7 +198,7 @@ fn ticks(interpreter: &mut Interpreter, _: &mut Universe) {
     }
 }
 
-fn time(interpreter: &mut Interpreter, _: &mut Universe) {
+fn time(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "System>>#time";
 
     expect_args!(SIGNATURE, interpreter, [Value::System]);
@@ -204,7 +209,7 @@ fn time(interpreter: &mut Interpreter, _: &mut Universe) {
     }
 }
 
-fn print_stack_trace(interpreter: &mut Interpreter, _: &mut Universe) {
+fn print_stack_trace(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "System>>#printStackTrace";
 
     expect_args!(SIGNATURE, interpreter, [Value::System]);
@@ -229,13 +234,31 @@ fn print_stack_trace(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Boolean(true));
 }
 
-fn full_gc(interpreter: &mut Interpreter, _: &mut Universe) {
+fn full_gc(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "System>>#fullGC";
 
     expect_args!(SIGNATURE, interpreter, [Value::System]);
 
-    // We don't do any garbage collection at all, so we return false.
-    interpreter.stack.push(Value::Boolean(false));
+    heap.collect_garbage(|| {
+        interpreter.trace();
+        universe.trace();
+    });
+
+    interpreter.stack.push(Value::Boolean(true));
+}
+
+fn gc_stats(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
+    const SIGNATURE: &str = "System>>#fullGC";
+
+    expect_args!(SIGNATURE, interpreter, [Value::System]);
+
+    let stats = heap.stats();
+    let output = heap.allocate(RefCell::new(vec![
+        Value::Integer(stats.collections_performed as i64),
+        Value::BigInteger(stats.total_time_spent.as_millis().to_bigint().unwrap()),
+        Value::Integer(stats.bytes_allocated as i64),
+    ]));
+    interpreter.stack.push(Value::Array(output));
 }
 
 /// Search for an instance primitive matching the given signature.

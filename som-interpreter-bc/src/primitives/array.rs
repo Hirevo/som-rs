@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::convert::TryFrom;
-use std::rc::Rc;
+
+use som_gc::GcHeap;
 
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
@@ -16,7 +17,7 @@ pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
 
 pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[("new:", self::new, true)];
 
-fn at(interpreter: &mut Interpreter, _: &mut Universe) {
+fn at(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Array>>#at:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -32,7 +33,7 @@ fn at(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(value)
 }
 
-fn at_put(interpreter: &mut Interpreter, _: &mut Universe) {
+fn at_put(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Array>>#at:put:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -51,7 +52,7 @@ fn at_put(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Array(values))
 }
 
-fn length(interpreter: &mut Interpreter, _: &mut Universe) {
+fn length(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Array>>#length";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -65,7 +66,7 @@ fn length(interpreter: &mut Interpreter, _: &mut Universe) {
     }
 }
 
-fn new(interpreter: &mut Interpreter, _: &mut Universe) {
+fn new(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Array>>#new:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -74,12 +75,9 @@ fn new(interpreter: &mut Interpreter, _: &mut Universe) {
     ]);
 
     match usize::try_from(count) {
-        Ok(length) => interpreter
-            .stack
-            .push(Value::Array(Rc::new(RefCell::new(vec![
-                Value::Nil;
-                length
-            ])))),
+        Ok(length) => interpreter.stack.push(Value::Array(
+            heap.allocate(RefCell::new(vec![Value::Nil; length])),
+        )),
         Err(err) => panic!("'{}': {}", SIGNATURE, err),
     }
 }

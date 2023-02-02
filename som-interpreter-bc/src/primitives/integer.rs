@@ -1,9 +1,9 @@
-use std::rc::Rc;
-
 use num_bigint::{BigInt, Sign};
 use num_traits::ToPrimitive;
 use rand::distributions::Uniform;
 use rand::Rng;
+
+use som_gc::GcHeap;
 
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
@@ -45,7 +45,7 @@ macro_rules! demote {
     }};
 }
 
-fn from_string(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn from_string(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#fromString:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -71,7 +71,7 @@ fn from_string(interpreter: &mut Interpreter, universe: &mut Universe) {
     }
 }
 
-fn as_string(interpreter: &mut Interpreter, _: &mut Universe) {
+fn as_string(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#asString";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -84,13 +84,10 @@ fn as_string(interpreter: &mut Interpreter, _: &mut Universe) {
         _ => panic!("'{}': wrong types", SIGNATURE),
     };
 
-    {
-        interpreter.stack.push(Value::String(Rc::new(value)));
-        return;
-    }
+    interpreter.stack.push(Value::String(heap.allocate(value)));
 }
 
-fn as_double(interpreter: &mut Interpreter, _: &mut Universe) {
+fn as_double(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#asDouble";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -112,7 +109,7 @@ fn as_double(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(value);
 }
 
-fn at_random(interpreter: &mut Interpreter, _: &mut Universe) {
+fn at_random(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#atRandom";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -138,7 +135,7 @@ fn at_random(interpreter: &mut Interpreter, _: &mut Universe) {
     }
 }
 
-fn as_32bit_signed_value(interpreter: &mut Interpreter, _: &mut Universe) {
+fn as_32bit_signed_value(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#as32BitSignedValue";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -160,7 +157,7 @@ fn as_32bit_signed_value(interpreter: &mut Interpreter, _: &mut Universe) {
     }
 }
 
-fn as_32bit_unsigned_value(interpreter: &mut Interpreter, _: &mut Universe) {
+fn as_32bit_unsigned_value(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#as32BitUnsignedValue";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -182,7 +179,7 @@ fn as_32bit_unsigned_value(interpreter: &mut Interpreter, _: &mut Universe) {
     }
 }
 
-fn plus(interpreter: &mut Interpreter, _: &mut Universe) {
+fn plus(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#+";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -218,7 +215,7 @@ fn plus(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(value);
 }
 
-fn minus(interpreter: &mut Interpreter, _: &mut Universe) {
+fn minus(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#-";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -262,7 +259,7 @@ fn minus(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(value);
 }
 
-fn times(interpreter: &mut Interpreter, _: &mut Universe) {
+fn times(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#*";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -298,7 +295,7 @@ fn times(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(value);
 }
 
-fn divide(interpreter: &mut Interpreter, _: &mut Universe) {
+fn divide(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#/";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -342,7 +339,7 @@ fn divide(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(value);
 }
 
-fn divide_float(interpreter: &mut Interpreter, _: &mut Universe) {
+fn divide_float(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#//";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -379,7 +376,7 @@ fn divide_float(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Double(a / b));
 }
 
-fn modulo(interpreter: &mut Interpreter, _: &mut Universe) {
+fn modulo(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#%";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -395,7 +392,7 @@ fn modulo(interpreter: &mut Interpreter, _: &mut Universe) {
     }
 }
 
-fn remainder(interpreter: &mut Interpreter, _: &mut Universe) {
+fn remainder(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#rem:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -411,7 +408,7 @@ fn remainder(interpreter: &mut Interpreter, _: &mut Universe) {
     }
 }
 
-fn sqrt(interpreter: &mut Interpreter, _: &mut Universe) {
+fn sqrt(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#sqrt";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -436,7 +433,7 @@ fn sqrt(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(value);
 }
 
-fn bitand(interpreter: &mut Interpreter, _: &mut Universe) {
+fn bitand(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#&";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -456,7 +453,7 @@ fn bitand(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(value);
 }
 
-fn bitxor(interpreter: &mut Interpreter, _: &mut Universe) {
+fn bitxor(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#bitXor:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -476,7 +473,7 @@ fn bitxor(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(value);
 }
 
-fn lt(interpreter: &mut Interpreter, _: &mut Universe) {
+fn lt(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#<";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -498,7 +495,7 @@ fn lt(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(value);
 }
 
-fn eq(interpreter: &mut Interpreter, _: &mut Universe) {
+fn eq(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#=";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -518,7 +515,7 @@ fn eq(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(value);
 }
 
-fn shift_left(interpreter: &mut Interpreter, _: &mut Universe) {
+fn shift_left(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#<<";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -538,7 +535,7 @@ fn shift_left(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(value);
 }
 
-fn shift_right(interpreter: &mut Interpreter, _: &mut Universe) {
+fn shift_right(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Integer>>#>>";
 
     expect_args!(SIGNATURE, interpreter, [

@@ -1,5 +1,7 @@
 use std::fmt;
 
+use som_gc::Trace;
+
 use crate::class::Class;
 use crate::value::Value;
 use crate::SOMRef;
@@ -11,6 +13,14 @@ pub struct Instance {
     pub class: SOMRef<Class>,
     /// This instance's locals.
     pub locals: Vec<Value>,
+}
+
+impl Trace for Instance {
+    #[inline]
+    fn trace(&self) {
+        self.class.trace();
+        self.locals.trace();
+    }
 }
 
 impl Instance {

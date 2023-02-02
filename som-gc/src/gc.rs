@@ -28,7 +28,7 @@ where
     #[inline]
     pub fn as_mut_ptr(&self) -> *const T {
         unsafe { &mut self.ptr.get().as_mut().value as *mut T }
-    }    
+    }
 
     #[inline]
     pub fn as_ptr(&self) -> *const T {
