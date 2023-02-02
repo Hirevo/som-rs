@@ -83,11 +83,11 @@ impl GcHeap {
         // TODO: trigger `collect_garbage`
         let mut allocated = Box::new(GcBox::new(value));
         allocated.next = self.head;
+        // SAFETY: `self.head` is guaranteed to be properly aligned and non-null by `Box::into_raw`.
         let ptr = unsafe { NonNull::new_unchecked(Box::into_raw(allocated)) };
         self.head = Some(ptr as NonNull<GcBox<dyn Trace + 'static>>);
         self.stats.bytes_allocated += std::mem::size_of::<GcBox<T>>();
         Gc {
-            // SAFETY: `self.head` is guaranteed to be properly aligned and non-null by `Box::into_raw`.
             ptr: Cell::new(ptr),
             marker: PhantomData,
         }
