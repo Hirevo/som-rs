@@ -4,6 +4,7 @@ use std::time::Instant;
 
 use anyhow::Error;
 
+use som_gc::GcHeap;
 use som_lexer::{Lexer, Token};
 use som_parser::lang;
 
@@ -15,6 +16,7 @@ use som_interpreter_bc::value::Value;
 
 /// Launches an interactive Read-Eval-Print-Loop within the given universe.
 pub fn interactive(
+    heap: &mut GcHeap,
     interpreter: &mut Interpreter,
     universe: &mut Universe,
     verbose: bool,
@@ -82,6 +84,7 @@ pub fn interactive(
 
         let object_class = universe.object_class();
         let class = match compiler::compile_class(
+            heap,
             &mut universe.interner,
             &class_def,
             Some(&object_class),
@@ -93,17 +96,17 @@ pub fn interactive(
             }
         };
         let metaclass_class = universe.metaclass_class();
-        class.borrow_mut().set_super_class(&object_class);
+        class.borrow_mut().set_super_class(object_class.clone());
         class
             .borrow()
             .class()
             .borrow_mut()
-            .set_super_class(&object_class.borrow().class());
+            .set_super_class(object_class.borrow().class().clone());
         class
             .borrow()
             .class()
             .borrow_mut()
-            .set_class(&metaclass_class);
+            .set_class(metaclass_class.clone());
 
         let method = class
             .borrow()
@@ -115,10 +118,10 @@ pub fn interactive(
             holder: class.clone(),
             self_value: Value::Class(class),
         };
-        let frame = interpreter.push_frame(kind);
+        let frame = interpreter.push_frame(heap, kind);
         frame.borrow_mut().args.push(Value::System);
         frame.borrow_mut().args.push(last_value.clone());
-        if let Some(value) = interpreter.run(universe) {
+        if let Some(value) = interpreter.run(heap, universe) {
             writeln!(
                 &mut stdout,
                 "returned: {} ({:?})",

@@ -1,5 +1,5 @@
-use std::ops::{Deref, DerefMut};
 use std::cell::Cell;
+use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
 
 use crate::Trace;

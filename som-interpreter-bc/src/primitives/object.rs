@@ -2,7 +2,10 @@ use std::collections::hash_map::DefaultHasher;
 use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
 
+use som_gc::GcHeap;
+
 use crate::interpreter::Interpreter;
+use crate::method::Method;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
@@ -26,7 +29,7 @@ pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
 ];
 pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
 
-fn class(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn class(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &'static str = "Object>>#class";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -36,7 +39,7 @@ fn class(interpreter: &mut Interpreter, universe: &mut Universe) {
     interpreter.stack.push(Value::Class(object.class(universe)));
 }
 
-fn object_size(interpreter: &mut Interpreter, _: &mut Universe) {
+fn object_size(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const _: &'static str = "Object>>#objectSize";
 
     interpreter
@@ -44,7 +47,7 @@ fn object_size(interpreter: &mut Interpreter, _: &mut Universe) {
         .push(Value::Integer(std::mem::size_of::<Value>() as i64));
 }
 
-fn hashcode(interpreter: &mut Interpreter, _: &mut Universe) {
+fn hashcode(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &'static str = "Object>>#hashcode";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -58,7 +61,7 @@ fn hashcode(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Integer(hash));
 }
 
-fn eq(interpreter: &mut Interpreter, _: &mut Universe) {
+fn eq(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &'static str = "Object>>#==";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -69,7 +72,7 @@ fn eq(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Boolean(a == b));
 }
 
-fn perform(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn perform(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &'static str = "Object>>#perform:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -83,11 +86,11 @@ fn perform(interpreter: &mut Interpreter, universe: &mut Universe) {
     let method = object.lookup_method(universe, sym);
 
     match method {
-        Some(invokable) => invokable.invoke(interpreter, universe, object, vec![]),
+        Some(invokable) => Method::invoke(invokable, interpreter, heap, universe, object, vec![]),
         None => {
             let signature = signature.to_string();
             universe
-                .does_not_understand(interpreter, object.clone(), sym, vec![object.clone()])
+                .does_not_understand(interpreter, heap, object.clone(), sym, vec![object.clone()])
                 .unwrap_or_else(|| {
                     panic!(
                         "'{}': method '{}' not found for '{}'",
@@ -101,7 +104,11 @@ fn perform(interpreter: &mut Interpreter, universe: &mut Universe) {
     }
 }
 
-fn perform_with_arguments(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn perform_with_arguments(
+    interpreter: &mut Interpreter,
+    heap: &mut GcHeap,
+    universe: &mut Universe,
+) {
     const SIGNATURE: &'static str = "Object>>#perform:withArguments:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -116,7 +123,7 @@ fn perform_with_arguments(interpreter: &mut Interpreter, universe: &mut Universe
     match method {
         Some(invokable) => {
             let args = arr.borrow().iter().cloned().collect();
-            invokable.invoke(interpreter, universe, object, args)
+            Method::invoke(invokable, interpreter, heap, universe, object, args);
         }
         None => {
             let signature = signature.to_string();
@@ -124,7 +131,7 @@ fn perform_with_arguments(interpreter: &mut Interpreter, universe: &mut Universe
                 .chain(arr.borrow().iter().cloned())
                 .collect();
             universe
-                .does_not_understand(interpreter, object.clone(), sym, args)
+                .does_not_understand(interpreter, heap, object.clone(), sym, args)
                 .unwrap_or_else(|| {
                     panic!(
                         "'{}': method '{}' not found for '{}'",
@@ -138,7 +145,11 @@ fn perform_with_arguments(interpreter: &mut Interpreter, universe: &mut Universe
     }
 }
 
-fn perform_in_super_class(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn perform_in_super_class(
+    interpreter: &mut Interpreter,
+    heap: &mut GcHeap,
+    universe: &mut Universe,
+) {
     const SIGNATURE: &'static str = "Object>>#perform:inSuperclass:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -151,12 +162,12 @@ fn perform_in_super_class(interpreter: &mut Interpreter, universe: &mut Universe
     let method = class.borrow().lookup_method(sym);
 
     match method {
-        Some(invokable) => invokable.invoke(interpreter, universe, object, vec![]),
+        Some(invokable) => Method::invoke(invokable, interpreter, heap, universe, object, vec![]),
         None => {
             let signature = signature.to_string();
             let args = vec![object.clone()];
             universe
-                .does_not_understand(interpreter, Value::Class(class), sym, args)
+                .does_not_understand(interpreter, heap, Value::Class(class), sym, args)
                 .unwrap_or_else(|| {
                     panic!(
                         "'{}': method '{}' not found for '{}'",
@@ -170,7 +181,11 @@ fn perform_in_super_class(interpreter: &mut Interpreter, universe: &mut Universe
     }
 }
 
-fn perform_with_arguments_in_super_class(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn perform_with_arguments_in_super_class(
+    interpreter: &mut Interpreter,
+    heap: &mut GcHeap,
+    universe: &mut Universe,
+) {
     const SIGNATURE: &'static str = "Object>>#perform:withArguments:inSuperclass:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -186,7 +201,7 @@ fn perform_with_arguments_in_super_class(interpreter: &mut Interpreter, universe
     match method {
         Some(invokable) => {
             let args = arr.borrow().iter().cloned().collect();
-            invokable.invoke(interpreter, universe, object, args)
+            Method::invoke(invokable, interpreter, heap, universe, object, args)
         }
         None => {
             let args = std::iter::once(object.clone())
@@ -194,7 +209,7 @@ fn perform_with_arguments_in_super_class(interpreter: &mut Interpreter, universe
                 .collect();
             let signature = signature.to_string();
             universe
-                .does_not_understand(interpreter, Value::Class(class), sym, args)
+                .does_not_understand(interpreter, heap, Value::Class(class), sym, args)
                 .unwrap_or_else(|| {
                     panic!(
                         "'{}': method '{}' not found for '{}'",
@@ -208,7 +223,7 @@ fn perform_with_arguments_in_super_class(interpreter: &mut Interpreter, universe
     }
 }
 
-fn inst_var_at(interpreter: &mut Interpreter, _: &mut Universe) {
+fn inst_var_at(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &'static str = "Object>>#instVarAt:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -226,7 +241,7 @@ fn inst_var_at(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(local);
 }
 
-fn inst_var_at_put(interpreter: &mut Interpreter, _: &mut Universe) {
+fn inst_var_at_put(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &'static str = "Object>>#instVarAt:put:";
 
     expect_args!(SIGNATURE, interpreter, [

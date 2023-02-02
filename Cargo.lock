@@ -304,6 +304,7 @@ dependencies = [
  "num-traits",
  "rand",
  "som-core",
+ "som-gc",
  "som-lexer",
  "som-parser-symbols",
  "structopt",
