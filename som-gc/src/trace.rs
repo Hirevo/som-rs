@@ -19,6 +19,7 @@ macro_rules! trivial_trace {
     ($($ty:ty),* $(,)?) => {
         $(
             impl $crate::trace::Trace for $ty {
+                #[inline]
                 fn trace(&self) {}
             }
         )*
@@ -82,6 +83,7 @@ macro_rules! tuple_trace {
     (~ $($X:ident)*) => {
         #[allow(non_snake_case)]
         impl<$($X: $crate::trace::Trace),*> Trace for ($($X,)*) {
+            #[inline]
             fn trace(&self) {
                 let ($($X,)*) = self;
                 $($X.trace();)*
@@ -96,6 +98,7 @@ macro_rules! iter_1_trace {
     ($($ty:ty),* $(,)?) => {
         $(
             impl<T: $crate::trace::Trace> $crate::trace::Trace for $ty {
+                #[inline]
                 fn trace(&self) {
                     for it in self.into_iter() {
                         it.trace();
@@ -119,6 +122,7 @@ macro_rules! iter_2_trace {
     ($($ty:ty),* $(,)?) => {
         $(
             impl<K: $crate::trace::Trace, V: $crate::trace::Trace> $crate::trace::Trace for $ty {
+                #[inline]
                 fn trace(&self) {
                     for (k, v) in self.into_iter() {
                         k.trace();
@@ -133,6 +137,7 @@ macro_rules! iter_2_trace {
 iter_2_trace!(HashMap<K, V>, BTreeMap<K, V>);
 
 impl<T: Trace> Trace for &[T] {
+    #[inline]
     fn trace(&self) {
         for it in self.into_iter() {
             it.trace();
@@ -141,6 +146,7 @@ impl<T: Trace> Trace for &[T] {
 }
 
 impl<T: Trace, const N: usize> Trace for [T; N] {
+    #[inline]
     fn trace(&self) {
         for it in self.into_iter() {
             it.trace();
@@ -149,7 +155,27 @@ impl<T: Trace, const N: usize> Trace for [T; N] {
 }
 
 impl<T: Trace> Trace for RefCell<T> {
+    #[inline]
     fn trace(&self) {
         self.borrow().trace();
     }
+}
+
+impl<T: Trace> Trace for Option<T> {
+    #[inline]
+    fn trace(&self) {
+        if let Some(value) = self {
+            value.trace();
+        }
+    }
+}
+
+impl<T: Trace> Trace for *const T {
+    #[inline]
+    fn trace(&self) {}
+}
+
+impl<T: Trace> Trace for *mut T {
+    #[inline]
+    fn trace(&self) {}
 }
