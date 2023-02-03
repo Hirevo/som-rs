@@ -94,6 +94,7 @@ impl GcHeap {
     }
 
     /// Clears the `mark` bits on every GC object.
+    #[allow(unused)]
     fn clear_marks(&mut self) {
         let mut head = self.head;
         while let Some(mut cur) = head {
@@ -123,6 +124,7 @@ impl GcHeap {
                 self.stats.bytes_allocated -= std::mem::size_of_val::<GcBox<_>>(&*value);
                 drop(value);
             } else {
+                cur_ref.marked.set(false);
                 prev = head;
             }
             head = next;
@@ -133,7 +135,6 @@ impl GcHeap {
     pub fn collect_garbage(&mut self, mut mark_fn: impl FnMut()) {
         let start = Instant::now();
         let allocated_start = self.stats.bytes_allocated;
-        self.clear_marks();
         mark_fn();
         self.sweep();
         self.stats.bytes_swept += allocated_start - self.stats.bytes_allocated;
