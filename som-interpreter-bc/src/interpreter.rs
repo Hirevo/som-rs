@@ -56,12 +56,12 @@ impl Interpreter {
 
     pub fn run(&mut self, heap: &mut GcHeap, universe: &mut Universe) -> Option<Value> {
         loop {
-            heap.maybe_collect_garbage(|| {
-                self.trace();
-                universe.trace();
-            });
-
             let Some(frame) = self.current_frame() else {
+                heap.maybe_collect_garbage(|| {
+                    self.trace();
+                    universe.trace();
+                });
+
                 return Some(self.stack.pop().unwrap_or(Value::Nil));
             };
 
@@ -80,6 +80,11 @@ impl Interpreter {
 
             match bytecode {
                 Bytecode::Halt => {
+                    heap.maybe_collect_garbage(|| {
+                        self.trace();
+                        universe.trace();
+                    });
+
                     return Some(Value::Nil);
                 }
                 Bytecode::Dup => {
@@ -216,6 +221,11 @@ impl Interpreter {
                     };
 
                     do_send(self, universe, heap, method, symbol, nb_params);
+
+                    heap.maybe_collect_garbage(|| {
+                        self.trace();
+                        universe.trace();
+                    });
                 }
                 Bytecode::SuperSend(idx) => {
                     let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
@@ -231,6 +241,11 @@ impl Interpreter {
                     };
 
                     do_send(self, universe, heap, method, symbol, nb_params);
+
+                    heap.maybe_collect_garbage(|| {
+                        self.trace();
+                        universe.trace();
+                    });
                 }
                 Bytecode::ReturnLocal => {
                     let value = self.stack.pop().unwrap();
