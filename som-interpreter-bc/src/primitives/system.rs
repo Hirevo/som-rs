@@ -248,7 +248,7 @@ fn full_gc(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Univ
 }
 
 fn gc_stats(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
-    const SIGNATURE: &str = "System>>#fullGC";
+    const SIGNATURE: &str = "System>>#gcStats";
 
     expect_args!(SIGNATURE, interpreter, [Value::System]);
 
