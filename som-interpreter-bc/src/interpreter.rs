@@ -43,6 +43,10 @@ macro_rules! send {
             symbol,
             nb_params as usize,
         );
+        $heap.maybe_collect_garbage(|| {
+            $interp.trace();
+            $universe.trace();
+        });
     }};
 }
 
@@ -75,6 +79,10 @@ macro_rules! super_send {
             symbol,
             nb_params as usize,
         );
+        $heap.maybe_collect_garbage(|| {
+            $interp.trace();
+            $universe.trace();
+        });
     }};
 }
 
@@ -120,12 +128,12 @@ impl Interpreter {
 
     pub fn run(&mut self, heap: &mut GcHeap, universe: &mut Universe) -> Option<Value> {
         loop {
-            heap.maybe_collect_garbage(|| {
-                self.trace();
-                universe.trace();
-            });
-
             let Some(frame) = self.current_frame() else {
+                heap.maybe_collect_garbage(|| {
+                    self.trace();
+                    universe.trace();
+                });
+
                 return Some(self.stack.pop().unwrap_or(Value::Nil));
             };
 
@@ -144,6 +152,11 @@ impl Interpreter {
 
             match bytecode {
                 Bytecode::Halt => {
+                    heap.maybe_collect_garbage(|| {
+                        self.trace();
+                        universe.trace();
+                    });
+
                     return Some(Value::Nil);
                 }
                 Bytecode::Dup => {
