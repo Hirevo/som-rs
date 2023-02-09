@@ -2,10 +2,8 @@ use std::borrow::Borrow;
 use std::cell::Cell;
 use std::fmt;
 use std::hash::Hash;
-use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ptr::NonNull;
-use std::rc::Rc;
 
 use crate::gc_box::GcBox;
 use crate::trace::Trace;
@@ -17,8 +15,6 @@ where
 {
     /// The pointer to the referenced `GcBox<T>`.
     pub(crate) ptr: Cell<NonNull<GcBox<T>>>,
-    // needed for drop-related reasons.
-    pub(crate) marker: PhantomData<Rc<T>>,
 }
 
 impl<T> Gc<T>
@@ -141,7 +137,6 @@ where
     fn clone(&self) -> Self {
         Self {
             ptr: self.ptr.clone(),
-            marker: PhantomData,
         }
     }
 }

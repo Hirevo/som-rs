@@ -1,5 +1,4 @@
 use std::cell::Cell;
-use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::time::{Duration, Instant};
 
@@ -89,7 +88,6 @@ impl GcHeap {
         self.stats.bytes_allocated += std::mem::size_of::<GcBox<T>>();
         Gc {
             ptr: Cell::new(ptr),
-            marker: PhantomData,
         }
     }
 
