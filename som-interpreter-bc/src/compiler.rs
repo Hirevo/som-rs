@@ -329,11 +329,6 @@ impl MethodCodegen for ast::Expression {
                 ctxt.push_instr(Bytecode::PushBlock(idx as u8));
                 Some(())
             }
-            ast::Expression::Term(term) => term
-                .body
-                .exprs
-                .iter()
-                .try_for_each(|expr| expr.codegen(ctxt)),
         }
     }
 }
