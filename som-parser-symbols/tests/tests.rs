@@ -105,15 +105,10 @@ fn expression_test_2() {
     assert_eq!(
         expression,
         Expression::Message(Message {
-            receiver: Box::new(Expression::Term(Term {
-                body: Body {
-                    exprs: vec![Expression::BinaryOp(BinaryOp {
-                        op: String::from("=="),
-                        lhs: Box::new(Expression::Literal(Literal::Integer(3))),
-                        rhs: Box::new(Expression::Literal(Literal::Integer(3))),
-                    })],
-                    full_stopped: false,
-                }
+            receiver: Box::new(Expression::BinaryOp(BinaryOp {
+                op: String::from("=="),
+                lhs: Box::new(Expression::Literal(Literal::Integer(3))),
+                rhs: Box::new(Expression::Literal(Literal::Integer(3))),
             })),
             signature: String::from("ifTrue:ifFalse:"),
             values: vec![
@@ -173,38 +168,19 @@ fn primary_test() {
                     signature: String::from("fib:"),
                     values: vec![Expression::BinaryOp(BinaryOp {
                         op: String::from("+"),
-                        lhs: Box::new(Expression::Term(Term {
-                            body: Body {
-                                exprs: vec![Expression::BinaryOp(BinaryOp {
-                                    op: String::from("-"),
-                                    lhs: Box::new(Expression::Reference(String::from("n"))),
-                                    rhs: Box::new(Expression::Literal(Literal::Integer(1))),
-                                })],
-                                full_stopped: false,
-                            }
+                        lhs: Box::new(Expression::BinaryOp(BinaryOp {
+                            op: String::from("-"),
+                            lhs: Box::new(Expression::Reference(String::from("n"))),
+                            rhs: Box::new(Expression::Literal(Literal::Integer(1))),
                         })),
-                        rhs: Box::new(Expression::Term(Term {
-                            body: Body {
-                                exprs: vec![Expression::Message(Message {
-                                    receiver: Box::new(Expression::Reference(String::from("self"))),
-                                    signature: String::from("fib:"),
-                                    values: vec![Expression::Term(Term {
-                                        body: Body {
-                                            exprs: vec![Expression::BinaryOp(BinaryOp {
-                                                op: String::from("-"),
-                                                lhs: Box::new(Expression::Reference(String::from(
-                                                    "n"
-                                                ))),
-                                                rhs: Box::new(Expression::Literal(
-                                                    Literal::Integer(2)
-                                                )),
-                                            })],
-                                            full_stopped: false,
-                                        }
-                                    })],
-                                })],
-                                full_stopped: false,
-                            }
+                        rhs: Box::new(Expression::Message(Message {
+                            receiver: Box::new(Expression::Reference(String::from("self"))),
+                            signature: String::from("fib:"),
+                            values: vec![Expression::BinaryOp(BinaryOp {
+                                op: String::from("-"),
+                                lhs: Box::new(Expression::Reference(String::from("n"))),
+                                rhs: Box::new(Expression::Literal(Literal::Integer(2))),
+                            })],
                         }))
                     })],
                 })],

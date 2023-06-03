@@ -374,13 +374,10 @@ pub fn term<'a>() -> impl Parser<Expression, &'a [char]> {
     move |input: &'a [char]| {
         let (_, input) = exact('(').parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
-        let (body, input) = body().parse(input)?;
+        let (expr, input) = assignment().or(expression()).parse(input)?;
         let (_, input) = many(spacing()).parse(input)?;
         let (_, input) = exact(')').parse(input)?;
-
-        let term = Term { body };
-        let term = Expression::Term(term);
-        Some((term, input))
+        Some((expr, input))
     }
 }
 

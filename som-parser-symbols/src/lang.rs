@@ -262,8 +262,11 @@ pub fn block<'a>() -> impl Parser<Expression, &'a [Token]> {
 }
 
 pub fn term<'a>() -> impl Parser<Expression, &'a [Token]> {
-    between(exact(Token::NewTerm), body(), exact(Token::EndTerm))
-        .map(|body| Expression::Term(Term { body }))
+    between(
+        exact(Token::NewTerm),
+        assignment().or(expression()),
+        exact(Token::EndTerm),
+    )
 }
 
 pub fn exit<'a>() -> impl Parser<Expression, &'a [Token]> {
