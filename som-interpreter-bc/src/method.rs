@@ -7,6 +7,7 @@ use som_core::bytecode::Bytecode;
 use crate::class::Class;
 use crate::compiler::Literal;
 use crate::frame::FrameKind;
+use crate::interner::Interned;
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
@@ -15,7 +16,7 @@ use crate::{SOMRef, SOMWeakRef};
 
 #[derive(Clone)]
 pub struct MethodEnv {
-    pub locals: Vec<Value>,
+    pub locals: Vec<Interned>,
     pub literals: Vec<Literal>,
     pub body: Vec<Bytecode>,
     pub inline_cache: RefCell<Vec<Option<(*const Class, Rc<Method>)>>>,

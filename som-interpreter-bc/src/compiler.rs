@@ -406,8 +406,14 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
         kind: match &defn.body {
             ast::MethodBody::Primitive => MethodKind::NotImplemented(defn.signature.clone()),
             ast::MethodBody::Body { .. } => {
+                let locals = {
+                    let locals = std::mem::take(&mut ctxt.inner.locals);
+                    locals
+                        .into_iter()
+                        .map(|name| ctxt.intern_symbol(&name))
+                        .collect()
+                };
                 let body = ctxt.inner.body.unwrap_or_default();
-                let locals = ctxt.inner.locals.iter().map(|_| Value::Nil).collect();
                 let literals = ctxt.inner.literals.into_iter().collect();
                 let inline_cache = RefCell::new(vec![None; body.len()]);
 
@@ -450,7 +456,13 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
     }
 
     let frame = None;
-    let locals = ctxt.locals.into_iter().map(|_| Value::Nil).collect();
+    let locals = {
+        let locals = std::mem::take(&mut ctxt.locals);
+        locals
+            .into_iter()
+            .map(|name| ctxt.intern_symbol(&name))
+            .collect()
+    };
     let literals = ctxt.literals.into_iter().collect();
     let body = ctxt.body.unwrap_or_default();
     let nb_params = ctxt.args.len();
