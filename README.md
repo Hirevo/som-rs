@@ -82,6 +82,16 @@ But, since the '-c' accepts multiple files, you might need to add the '--' argum
 ./target/release/som-interpreter-bc -c core-lib/Smalltalk -- core-lib/Examples/Hello.som
 ```
 
+When using the bytecode interpreter, you have the option to dissasemble a given class' methods using `-d` (or `--disassemble`), like so:
+
+```bash
+./target/release/som-interpreter-bc -c core-lib/Smalltalk -d core-lib/Examples/Hello.som
+# OR:
+./target/release/som-interpreter-bc -c core-lib/Smalltalk core-lib/Examples -d Hello
+# OR (for disassembling only specific methods):
+./target/release/som-interpreter-bc -c core-lib/Smalltalk core-lib/Examples -d Hello first:method: second:method:
+```
+
 For other purposes, you can use '-h' (or '--help') to print the complete help message:
 
 ```bash
