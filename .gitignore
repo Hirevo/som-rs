@@ -11,3 +11,6 @@
 /.vscode
 /.nova
 /.idea
+
+# Folder to put files not intended to be pushed (like temporary files)
+/ignored
