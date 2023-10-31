@@ -7,14 +7,14 @@ use som_core::bytecode::Bytecode;
 use crate::class::Class;
 use crate::compiler::Literal;
 use crate::frame::Frame;
+use crate::interner::Interned;
 use crate::method::Method;
 use crate::universe::Universe;
-use crate::value::Value;
 use crate::SOMRef;
 
 #[derive(Clone)]
 pub struct BlockInfo {
-    pub locals: Vec<Value>,
+    pub locals: Vec<Interned>,
     pub literals: Vec<Literal>,
     pub body: Vec<Bytecode>,
     pub nb_params: usize,
