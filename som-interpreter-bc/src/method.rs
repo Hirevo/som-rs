@@ -62,7 +62,6 @@ impl Trace for MethodKind {
 impl Trace for MethodEnv {
     #[inline]
     fn trace(&self) {
-        self.locals.trace();
         self.literals.trace();
         self.inline_cache.trace();
     }

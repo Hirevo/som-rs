@@ -579,8 +579,8 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
             .map(|name| ctxt.intern_symbol(&name))
             .collect()
     };
-    let literals = ctxt.literals.into_iter().collect();
-    let body = ctxt.body.unwrap_or_default();
+    let literals = std::mem::take(&mut ctxt.literals).into_iter().collect();
+    let body = ctxt.body.take().unwrap_or_default();
     let nb_params = ctxt.args.len();
 
     let block = Block {

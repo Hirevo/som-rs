@@ -16,7 +16,7 @@ use som_gc::{GcHeap, GcParams};
 
 use som_interpreter_bc::disassembler::disassemble_method_body;
 use som_interpreter_bc::interpreter::Interpreter;
-use som_interpreter_bc::method::{Method, MethodKind};
+use som_interpreter_bc::method::MethodKind;
 use som_interpreter_bc::universe::Universe;
 use som_interpreter_bc::value::Value;
 
@@ -108,8 +108,7 @@ fn main() -> anyhow::Result<()> {
 
     let args = std::iter::once(String::from(file_stem))
         .chain(opts.args.iter().cloned())
-        .map(Rc::new)
-        .map(Value::String)
+        .map(|it| Value::String(heap.allocate(it)))
         .collect();
 
     universe
@@ -174,7 +173,7 @@ fn disassemble_class(heap: &mut GcHeap, opts: Options) -> anyhow::Result<()> {
 
     let class = universe.load_class(heap, file_stem)?;
 
-    let methods: Vec<Rc<Method>> = if opts.args.is_empty() {
+    let methods: Vec<_> = if opts.args.is_empty() {
         class.borrow().methods.values().cloned().collect()
     } else {
         opts.args

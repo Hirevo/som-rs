@@ -32,7 +32,6 @@ pub struct Block {
 impl Trace for BlockInfo {
     #[inline]
     fn trace(&self) {
-        self.locals.trace();
         self.literals.trace();
         self.inline_cache.trace();
     }
