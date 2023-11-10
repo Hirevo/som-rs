@@ -3,7 +3,7 @@ use som_gc::GcHeap;
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
-use crate::value::Value;
+use crate::value::{SOMValue, Value};
 use crate::{expect_args, reverse};
 
 pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] =
@@ -17,8 +17,8 @@ fn as_string(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Un
         Value::Symbol(sym) => sym,
     ]);
 
-    interpreter.stack.push(Value::String(
-        heap.allocate(universe.lookup_symbol(sym).to_string()),
+    interpreter.stack.push(SOMValue::new_string(
+        &heap.allocate(universe.lookup_symbol(sym).to_string()),
     ));
 }
 

@@ -9,9 +9,9 @@ use crate::compiler::Literal;
 use crate::frame::FrameKind;
 use crate::interner::Interned;
 use crate::interpreter::Interpreter;
-use crate::primitives::PrimitiveFn;
+// use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
-use crate::value::Value;
+use crate::value::SOMValue;
 use crate::SOMRef;
 
 #[derive(Clone)]
@@ -28,7 +28,7 @@ pub enum MethodKind {
     /// A user-defined method from the AST.
     Defined(MethodEnv),
     /// An interpreter primitive.
-    Primitive(PrimitiveFn),
+    Primitive(fn(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Universe)),
     /// A non-implemented primitive.
     NotImplemented(String),
 }
@@ -98,8 +98,8 @@ impl Method {
         interpreter: &mut Interpreter,
         heap: &mut GcHeap,
         universe: &mut Universe,
-        receiver: Value,
-        mut args: Vec<Value>,
+        receiver: SOMValue,
+        mut args: Vec<SOMValue>,
     ) {
         match &this.kind {
             MethodKind::Defined(_) => {

@@ -4,7 +4,7 @@ use crate::interpreter::Interpreter;
 use crate::method::Method;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
-use crate::value::Value;
+use crate::value::{SOMValue, Value};
 use crate::{expect_args, reverse};
 
 pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
@@ -23,7 +23,7 @@ fn holder(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
 
     interpreter
         .stack
-        .push(Value::Class(invokable.holder.clone()));
+        .push(SOMValue::new_class(&invokable.holder));
 }
 
 fn signature(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
@@ -34,7 +34,7 @@ fn signature(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Unive
     ]);
 
     let sym = universe.intern_symbol(invokable.signature());
-    interpreter.stack.push(Value::Symbol(sym))
+    interpreter.stack.push(SOMValue::new_symbol(sym))
 }
 
 fn invoke_on_with(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Universe) {
@@ -46,9 +46,16 @@ fn invoke_on_with(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &m
         Value::Array(args) => args,
     ]);
 
-    let args = args.borrow().iter().cloned().collect();
+    let args = args.take().into_iter().map(SOMValue::from).collect();
 
-    Method::invoke(invokable, interpreter, heap, universe, receiver, args);
+    Method::invoke(
+        invokable,
+        interpreter,
+        heap,
+        universe,
+        receiver.into(),
+        args,
+    );
 }
 
 /// Search for an instance primitive matching the given signature.

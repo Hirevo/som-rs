@@ -16,7 +16,7 @@ use crate::class::Class;
 use crate::interner::{Interned, Interner};
 use crate::method::{Method, MethodEnv, MethodKind};
 use crate::primitives;
-use crate::value::Value;
+use crate::value::SOMValue;
 use crate::SOMRef;
 
 #[derive(Debug, Clone)]
@@ -24,8 +24,8 @@ pub enum Literal {
     Symbol(Interned),
     String(Gc<String>),
     Double(f64),
-    Integer(i64),
-    BigInteger(BigInt),
+    Integer(i32),
+    BigInteger(Gc<BigInt>),
     Array(Vec<u8>),
     Block(Gc<Block>),
 }
@@ -40,7 +40,9 @@ impl Trace for Literal {
             }
             Literal::Double(_) => {}
             Literal::Integer(_) => {}
-            Literal::BigInteger(_) => {}
+            Literal::BigInteger(value) => {
+                value.trace();
+            }
             Literal::Array(_) => {}
             Literal::Block(block) => {
                 block.trace();
@@ -392,7 +394,9 @@ impl MethodCodegen for ast::Expression {
                         }
                         ast::Literal::Double(val) => Literal::Double(*val),
                         ast::Literal::Integer(val) => Literal::Integer(*val),
-                        ast::Literal::BigInteger(val) => Literal::BigInteger(val.parse().unwrap()),
+                        ast::Literal::BigInteger(val) => {
+                            Literal::BigInteger(ctxt.heap().allocate(val.parse().unwrap()))
+                        }
                         ast::Literal::Array(val) => {
                             let literals = val
                                 .iter()
@@ -677,7 +681,7 @@ pub fn compile_class(
     static_class_mut.locals = static_class_ctxt
         .fields
         .into_iter()
-        .map(|name| (name, Value::Nil))
+        .map(|name| (name, SOMValue::NIL))
         .collect();
     static_class_mut.methods = static_class_ctxt.methods;
     drop(static_class_mut);
@@ -760,7 +764,7 @@ pub fn compile_class(
     instance_class_mut.locals = instance_class_ctxt
         .fields
         .into_iter()
-        .map(|name| (name, Value::Nil))
+        .map(|name| (name, SOMValue::NIL))
         .collect();
     instance_class_mut.methods = instance_class_ctxt.methods;
     drop(instance_class_mut);

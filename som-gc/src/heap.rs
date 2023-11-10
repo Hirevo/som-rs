@@ -7,6 +7,7 @@ use crate::gc_box::GcBox;
 use crate::gc::Gc;
 use crate::trace::Trace;
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct GcStats {
     pub collections_performed: usize,
     pub bytes_allocated: usize,
@@ -14,6 +15,7 @@ pub struct GcStats {
     pub total_time_spent: Duration,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct GcParams {
     pub threshold: usize,
     pub used_space_ratio: f64,

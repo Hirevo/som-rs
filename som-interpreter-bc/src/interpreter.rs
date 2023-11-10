@@ -11,16 +11,13 @@ use crate::frame::{Frame, FrameKind};
 use crate::interner::Interned;
 use crate::method::{Method, MethodKind};
 use crate::universe::Universe;
-use crate::value::Value;
+use crate::value::SOMValue;
 use crate::SOMRef;
-
-const INT_0: Value = Value::Integer(0);
-const INT_1: Value = Value::Integer(1);
 
 macro_rules! send {
     ($interp:expr, $universe:expr, $heap:expr, $frame:expr, $lit_idx:expr, $nb_params:expr, $bytecode_idx:expr) => {{
-        let literal = $frame.borrow().lookup_constant($lit_idx as usize).unwrap();
-        let Literal::Symbol(symbol) = literal else {
+        let &Literal::Symbol(symbol) = $frame.borrow().lookup_constant($lit_idx as usize).unwrap()
+        else {
             return None;
         };
         let nb_params = match $nb_params {
@@ -51,12 +48,9 @@ macro_rules! send {
 }
 
 macro_rules! super_send {
-    ($interp:expr, $universe:expr, $heap:expr, $frame_expr:expr, $lit_idx:expr, $nb_params:expr, $bytecode_idx:expr) => {{
-        let literal = $frame_expr
-            .borrow()
-            .lookup_constant($lit_idx as usize)
-            .unwrap();
-        let Literal::Symbol(symbol) = literal else {
+    ($interp:expr, $universe:expr, $heap:expr, $frame:expr, $lit_idx:expr, $nb_params:expr, $bytecode_idx:expr) => {{
+        let &Literal::Symbol(symbol) = $frame.borrow().lookup_constant($lit_idx as usize).unwrap()
+        else {
             return None;
         };
         let nb_params = match $nb_params {
@@ -67,9 +61,9 @@ macro_rules! super_send {
             }
         };
         let method = {
-            let holder = $frame_expr.borrow().get_method_holder();
+            let holder = $frame.borrow().get_method_holder();
             let super_class = holder.borrow().super_class().unwrap();
-            resolve_method($frame_expr, &super_class, symbol, $bytecode_idx)
+            resolve_method($frame, &super_class, symbol, $bytecode_idx)
         };
         do_send(
             $interp,
@@ -90,7 +84,7 @@ pub struct Interpreter {
     /// The interpreter's stack frames.
     pub frames: Vec<SOMRef<Frame>>,
     /// The evaluation stack.
-    pub stack: Vec<Value>,
+    pub stack: Vec<SOMValue>,
     /// The time record of the interpreter's creation.
     pub start_time: Instant,
 }
@@ -126,7 +120,7 @@ impl Interpreter {
         self.frames.last()
     }
 
-    pub fn run(&mut self, heap: &mut GcHeap, universe: &mut Universe) -> Option<Value> {
+    pub fn run(&mut self, heap: &mut GcHeap, universe: &mut Universe) -> Option<SOMValue> {
         loop {
             let Some(frame) = self.current_frame() else {
                 heap.maybe_collect_garbage(|| {
@@ -134,14 +128,14 @@ impl Interpreter {
                     universe.trace();
                 });
 
-                return Some(self.stack.pop().unwrap_or(Value::Nil));
+                return Some(self.stack.pop().unwrap_or(SOMValue::NIL));
             };
 
             let mut cur_frame = frame.borrow_mut();
             let Some(bytecode) = cur_frame.get_current_bytecode() else {
                 drop(cur_frame);
                 self.pop_frame();
-                self.stack.push(Value::Nil);
+                self.stack.push(SOMValue::NIL);
                 continue;
             };
 
@@ -157,7 +151,7 @@ impl Interpreter {
                         universe.trace();
                     });
 
-                    return Some(Value::Nil);
+                    return Some(SOMValue::NIL);
                 }
                 Bytecode::Dup => {
                     let value = self.stack.last().cloned().unwrap();
@@ -202,38 +196,53 @@ impl Interpreter {
                     self.stack.push(value);
                 }
                 Bytecode::PushBlock(idx) => {
-                    let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
-                    let mut block = match literal {
-                        Literal::Block(blk) => Block::clone(&blk),
-                        _ => return None,
+                    let value = {
+                        let frame_ref = frame.borrow();
+                        let literal = frame_ref.lookup_constant(idx as usize).unwrap();
+                        let mut block = match literal {
+                            Literal::Block(blk) => Block::clone(&blk),
+                            _ => return None,
+                        };
+                        block.frame.replace(Gc::clone(&frame));
+                        SOMValue::new_block(&heap.allocate(block))
                     };
-                    block.frame.replace(Gc::clone(&frame));
-                    self.stack.push(Value::Block(heap.allocate(block)));
+                    self.stack.push(value);
                 }
                 Bytecode::PushConstant(idx) => {
-                    let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
-                    let value = convert_literal(heap, &frame, literal).unwrap();
+                    let value = {
+                        let frame_ref = frame.borrow();
+                        let literal = frame_ref.lookup_constant(idx as usize).unwrap();
+                        convert_literal(heap, &frame, literal).unwrap()
+                    };
                     self.stack.push(value);
                 }
                 Bytecode::PushConstant0 => {
-                    let literal = frame.borrow().lookup_constant(0).unwrap();
-                    let value = convert_literal(heap, &frame, literal).unwrap();
+                    let value = {
+                        let frame_ref = frame.borrow();
+                        let literal = frame_ref.lookup_constant(0).unwrap();
+                        convert_literal(heap, &frame, literal).unwrap()
+                    };
                     self.stack.push(value);
                 }
                 Bytecode::PushConstant1 => {
-                    let literal = frame.borrow().lookup_constant(1).unwrap();
-                    let value = convert_literal(heap, &frame, literal).unwrap();
+                    let value = {
+                        let frame_ref = frame.borrow();
+                        let literal = frame_ref.lookup_constant(1).unwrap();
+                        convert_literal(heap, &frame, literal).unwrap()
+                    };
                     self.stack.push(value);
                 }
                 Bytecode::PushConstant2 => {
-                    let literal = frame.borrow().lookup_constant(2).unwrap();
-                    let value = convert_literal(heap, &frame, literal).unwrap();
+                    let value = {
+                        let frame_ref = frame.borrow();
+                        let literal = frame_ref.lookup_constant(2).unwrap();
+                        convert_literal(heap, &frame, literal).unwrap()
+                    };
                     self.stack.push(value);
                 }
                 Bytecode::PushGlobal(idx) => {
-                    let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
-                    let symbol = match literal {
-                        Literal::Symbol(sym) => sym,
+                    let symbol = match frame.borrow().lookup_constant(idx as usize) {
+                        Some(&Literal::Symbol(sym)) => sym,
                         _ => return None,
                     };
                     if let Some(value) = universe.lookup_global(symbol) {
@@ -246,13 +255,13 @@ impl Interpreter {
                     }
                 }
                 Bytecode::Push0 => {
-                    self.stack.push(INT_0);
+                    self.stack.push(SOMValue::INTEGER_ZERO);
                 }
                 Bytecode::Push1 => {
-                    self.stack.push(INT_1);
+                    self.stack.push(SOMValue::INTEGER_ONE);
                 }
                 Bytecode::PushNil => {
-                    self.stack.push(Value::Nil);
+                    self.stack.push(SOMValue::NIL);
                 }
                 Bytecode::Pop => {
                     self.stack.pop();
@@ -489,28 +498,28 @@ impl Interpreter {
         fn convert_literal(
             heap: &mut GcHeap,
             frame: &SOMRef<Frame>,
-            literal: Literal,
-        ) -> Option<Value> {
+            literal: &Literal,
+        ) -> Option<SOMValue> {
             let value = match literal {
-                Literal::Symbol(sym) => Value::Symbol(sym),
-                Literal::String(val) => Value::String(val),
-                Literal::Double(val) => Value::Double(val),
-                Literal::Integer(val) => Value::Integer(val),
-                Literal::BigInteger(val) => Value::BigInteger(val),
+                Literal::Symbol(sym) => SOMValue::new_symbol(*sym),
+                Literal::String(val) => SOMValue::new_string(val),
+                Literal::Double(val) => SOMValue::new_double(*val),
+                Literal::Integer(val) => SOMValue::new_integer(*val),
+                Literal::BigInteger(val) => SOMValue::new_big_integer(val),
                 Literal::Array(val) => {
                     let arr = val
                         .into_iter()
                         .map(|idx| {
                             frame
                                 .borrow()
-                                .lookup_constant(idx as usize)
+                                .lookup_constant(*idx as usize)
                                 .and_then(|lit| convert_literal(heap, frame, lit))
                         })
                         .collect::<Option<Vec<_>>>()
                         .unwrap();
-                    Value::Array(heap.allocate(RefCell::new(arr)))
+                    SOMValue::new_array(&heap.allocate(RefCell::new(arr)))
                 }
-                Literal::Block(val) => Value::Block(val),
+                Literal::Block(val) => SOMValue::new_block(&val),
             };
             Some(value)
         }

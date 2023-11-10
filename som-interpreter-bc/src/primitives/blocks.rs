@@ -77,7 +77,7 @@ pub mod block2 {
         };
 
         let frame = interpreter.push_frame(heap, kind);
-        frame.borrow_mut().args.push(argument);
+        frame.borrow_mut().args.push(argument.into());
     }
 
     /// Search for an instance primitive matching the given signature.
@@ -119,8 +119,8 @@ pub mod block3 {
         };
 
         let frame = interpreter.push_frame(heap, kind);
-        frame.borrow_mut().args.push(argument1);
-        frame.borrow_mut().args.push(argument2);
+        frame.borrow_mut().args.push(argument1.into());
+        frame.borrow_mut().args.push(argument2.into());
     }
 
     /// Search for an instance primitive matching the given signature.

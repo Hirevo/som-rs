@@ -12,7 +12,7 @@ use som_interpreter_bc::compiler;
 use som_interpreter_bc::frame::FrameKind;
 use som_interpreter_bc::interpreter::Interpreter;
 use som_interpreter_bc::universe::Universe;
-use som_interpreter_bc::value::Value;
+use som_interpreter_bc::value::{SOMValue, Value};
 
 /// Launches an interactive Read-Eval-Print-Loop within the given universe.
 pub fn interactive(
@@ -29,7 +29,7 @@ pub fn interactive(
     let mut counter = 0;
     let method_name = universe.intern_symbol("run:");
     let mut line = String::new();
-    let mut last_value = Value::Nil;
+    let mut last_value = SOMValue::NIL;
     loop {
         write!(&mut stdout, "({}) SOM Shell | ", counter)?;
         stdout.flush()?;
@@ -116,17 +116,17 @@ pub fn interactive(
         let kind = FrameKind::Method {
             method,
             holder: class.clone(),
-            self_value: Value::Class(class),
+            self_value: SOMValue::new_class(&class),
         };
         let frame = interpreter.push_frame(heap, kind);
-        frame.borrow_mut().args.push(Value::System);
+        frame.borrow_mut().args.push(SOMValue::SYSTEM);
         frame.borrow_mut().args.push(last_value.clone());
         if let Some(value) = interpreter.run(heap, universe) {
             writeln!(
                 &mut stdout,
                 "returned: {} ({:?})",
                 value.to_string(&universe),
-                value
+                Value::from(value),
             )?;
             last_value = value;
         }
