@@ -179,3 +179,15 @@ impl<T: Trace> Trace for *mut T {
     #[inline]
     fn trace(&self) {}
 }
+
+#[cfg(feature = "num-bigint")]
+impl Trace for num_bigint::BigInt {
+    #[inline]
+    fn trace(&self) {}
+}
+
+#[cfg(feature = "num-bigint")]
+impl Trace for num_bigint::BigUint {
+    #[inline]
+    fn trace(&self) {}
+}

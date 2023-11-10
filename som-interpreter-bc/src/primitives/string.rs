@@ -7,7 +7,7 @@ use som_gc::GcHeap;
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
-use crate::value::Value;
+use crate::value::{SOMValue, Value};
 use crate::{expect_args, reverse};
 
 pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
@@ -36,8 +36,8 @@ fn length(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe
         _ => panic!("'{}': invalid self type", SIGNATURE),
     };
 
-    match i64::try_from(value.chars().count()) {
-        Ok(idx) => interpreter.stack.push(Value::Integer(idx)),
+    match i32::try_from(value.chars().count()) {
+        Ok(idx) => interpreter.stack.push(SOMValue::new_integer(idx)),
         Err(err) => panic!("'{}': {}", SIGNATURE, err),
     }
 }
@@ -60,13 +60,13 @@ fn hashcode(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Univer
     hasher.write(value.as_bytes());
 
     // match i64::try_from(hasher.finish()) {
-    //     Ok(hash) => interpreter.stack.push(Value::Integer(hash)),
+    //     Ok(hash) => interpreter.stack.push(SOMValue::new_integer(hash)),
     //     Err(err) => panic!("'{}': {}", SIGNATURE, err),
     // }
 
     interpreter
         .stack
-        .push(Value::Integer((hasher.finish() as i64).abs()))
+        .push(SOMValue::new_integer((hasher.finish() as i32).abs()))
 }
 
 fn is_letters(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
@@ -82,7 +82,7 @@ fn is_letters(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Univ
         _ => panic!("'{}': invalid self type", SIGNATURE),
     };
 
-    interpreter.stack.push(Value::Boolean(
+    interpreter.stack.push(SOMValue::new_boolean(
         !value.is_empty() && !value.is_empty() && value.chars().all(char::is_alphabetic),
     ))
 }
@@ -100,7 +100,7 @@ fn is_digits(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Unive
         _ => panic!("'{}': invalid self type", SIGNATURE),
     };
 
-    interpreter.stack.push(Value::Boolean(
+    interpreter.stack.push(SOMValue::new_boolean(
         !value.is_empty() && value.chars().all(char::is_numeric),
     ))
 }
@@ -118,7 +118,7 @@ fn is_whitespace(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut U
         _ => panic!("'{}': invalid self type", SIGNATURE),
     };
 
-    interpreter.stack.push(Value::Boolean(
+    interpreter.stack.push(SOMValue::new_boolean(
         !value.is_empty() && value.chars().all(char::is_whitespace),
     ))
 }
@@ -142,9 +142,9 @@ fn concatenate(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut 
         _ => panic!("'{}': wrong types", SIGNATURE),
     };
 
-    interpreter
-        .stack
-        .push(Value::String(heap.allocate(format!("{}{}", s1, s2))))
+    interpreter.stack.push(SOMValue::new_string(
+        &heap.allocate(format!("{}{}", s1, s2)),
+    ))
 }
 
 fn as_symbol(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
@@ -157,8 +157,8 @@ fn as_symbol(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Unive
     match value {
         Value::String(ref value) => interpreter
             .stack
-            .push(Value::Symbol(universe.intern_symbol(value.as_str()))),
-        Value::Symbol(sym) => interpreter.stack.push(Value::Symbol(sym)),
+            .push(SOMValue::new_symbol(universe.intern_symbol(value.as_str()))),
+        Value::Symbol(sym) => interpreter.stack.push(SOMValue::new_symbol(sym)),
         _ => panic!("'{}': invalid self type", SIGNATURE),
     }
 }
@@ -175,7 +175,7 @@ fn eq(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
         Value::String(ref s1) => s1.as_str(),
         Value::Symbol(s1) => universe.lookup_symbol(s1),
         _ => {
-            interpreter.stack.push(Value::Boolean(false));
+            interpreter.stack.push(SOMValue::new_boolean(false));
             return;
         }
     };
@@ -184,12 +184,12 @@ fn eq(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
         Value::String(ref s2) => s2.as_str(),
         Value::Symbol(s2) => universe.lookup_symbol(s2),
         _ => {
-            interpreter.stack.push(Value::Boolean(false));
+            interpreter.stack.push(SOMValue::new_boolean(false));
             return;
         }
     };
 
-    interpreter.stack.push(Value::Boolean(s1 == s2))
+    interpreter.stack.push(SOMValue::new_boolean(s1 == s2))
 }
 
 fn prim_substring_from_to(
@@ -213,7 +213,7 @@ fn prim_substring_from_to(
 
     let string = heap.allocate(value.chars().skip(from).take(to - from).collect());
 
-    interpreter.stack.push(Value::String(string))
+    interpreter.stack.push(SOMValue::new_string(&string))
 }
 
 /// Search for an instance primitive matching the given signature.

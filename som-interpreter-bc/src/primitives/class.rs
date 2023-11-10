@@ -6,7 +6,7 @@ use crate::instance::Instance;
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
-use crate::value::Value;
+use crate::value::{SOMValue, Value};
 use crate::{expect_args, reverse};
 
 pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
@@ -26,9 +26,11 @@ fn superclass(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     ]);
 
     let super_class = class.borrow().super_class();
-    interpreter
-        .stack
-        .push(super_class.map(Value::Class).unwrap_or(Value::Nil));
+    interpreter.stack.push(
+        super_class
+            .map(|it| SOMValue::new_class(&it))
+            .unwrap_or(SOMValue::NIL),
+    );
 }
 
 fn new(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
@@ -40,7 +42,7 @@ fn new(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
 
     let instance = Instance::from_class(class);
     let instance = heap.allocate(RefCell::new(instance));
-    interpreter.stack.push(Value::Instance(instance));
+    interpreter.stack.push(SOMValue::new_instance(&instance));
 }
 
 fn name(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
@@ -51,7 +53,7 @@ fn name(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) 
     ]);
 
     let sym = universe.intern_symbol(class.borrow().name());
-    interpreter.stack.push(Value::Symbol(sym));
+    interpreter.stack.push(SOMValue::new_symbol(sym));
 }
 
 fn methods(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
@@ -65,12 +67,12 @@ fn methods(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
         .borrow()
         .methods
         .values()
-        .map(|invokable| Value::Invokable(invokable.clone()))
+        .map(|invokable| SOMValue::new_invokable(invokable))
         .collect();
 
     interpreter
         .stack
-        .push(Value::Array(heap.allocate(RefCell::new(methods))));
+        .push(SOMValue::new_array(&heap.allocate(RefCell::new(methods))));
 }
 
 fn fields(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
@@ -80,14 +82,14 @@ fn fields(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
         Value::Class(class) => class,
     ]);
 
-    interpreter.stack.push(Value::Array(
-        heap.allocate(RefCell::new(
+    interpreter.stack.push(SOMValue::new_array(
+        &heap.allocate(RefCell::new(
             class
                 .borrow()
                 .locals
                 .keys()
                 .copied()
-                .map(Value::Symbol)
+                .map(SOMValue::new_symbol)
                 .collect(),
         )),
     ));

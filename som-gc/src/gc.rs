@@ -9,6 +9,7 @@ use crate::gc_box::GcBox;
 use crate::trace::Trace;
 
 /// Represent a handle to a GC-allocated value.
+#[repr(C)]
 pub struct Gc<T>
 where
     T: Trace + 'static,
@@ -34,6 +35,16 @@ where
     #[inline]
     pub fn ptr_eq(&self, other: &Self) -> bool {
         self.ptr == other.ptr
+    }
+
+    pub fn as_raw_ptr(&self) -> NonNull<GcBox<T>> {
+        self.ptr.get()
+    }
+
+    pub fn from_raw(ptr: NonNull<GcBox<T>>) -> Gc<T> {
+        Gc {
+            ptr: Cell::new(ptr),
+        }
     }
 }
 

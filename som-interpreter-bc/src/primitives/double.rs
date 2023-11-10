@@ -5,7 +5,7 @@ use som_gc::GcHeap;
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
-use crate::value::Value;
+use crate::value::{SOMValue, Value};
 use crate::{expect_args, reverse};
 
 pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
@@ -59,7 +59,7 @@ fn from_string(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) 
     ]);
 
     match string.parse() {
-        Ok(parsed) => interpreter.stack.push(Value::Double(parsed)),
+        Ok(parsed) => interpreter.stack.push(SOMValue::new_double(parsed)),
         Err(err) => panic!("'{}': {}", SIGNATURE, err),
     }
 }
@@ -75,7 +75,7 @@ fn as_string(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe)
 
     interpreter
         .stack
-        .push(Value::String(heap.allocate(value.to_string())));
+        .push(SOMValue::new_string(&heap.allocate(value.to_string())));
 }
 
 fn as_integer(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
@@ -85,7 +85,9 @@ fn as_integer(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
         Value::Double(value) => value,
     ]);
 
-    interpreter.stack.push(Value::Integer(value.trunc() as i64));
+    interpreter
+        .stack
+        .push(SOMValue::new_integer(value.trunc() as i32));
 }
 
 fn sqrt(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
@@ -97,7 +99,7 @@ fn sqrt(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
 
     let value = promote!(SIGNATURE, value);
 
-    interpreter.stack.push(Value::Double(value.sqrt()));
+    interpreter.stack.push(SOMValue::new_double(value.sqrt()));
 }
 
 fn round(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
@@ -109,7 +111,7 @@ fn round(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
 
     let value = promote!(SIGNATURE, value);
 
-    interpreter.stack.push(Value::Double(value.round()));
+    interpreter.stack.push(SOMValue::new_double(value.round()));
 }
 
 fn cos(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
@@ -121,7 +123,7 @@ fn cos(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
 
     let value = promote!(SIGNATURE, value);
 
-    interpreter.stack.push(Value::Double(value.cos()));
+    interpreter.stack.push(SOMValue::new_double(value.cos()));
 }
 
 fn sin(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
@@ -133,7 +135,7 @@ fn sin(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
 
     let value = promote!(SIGNATURE, value);
 
-    interpreter.stack.push(Value::Double(value.sin()));
+    interpreter.stack.push(SOMValue::new_double(value.sin()));
 }
 
 fn eq(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
@@ -146,7 +148,7 @@ fn eq(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
         b => b,
     ]);
 
-    interpreter.stack.push(Value::Boolean(a == b));
+    interpreter.stack.push(SOMValue::new_boolean(a == b));
 }
 
 fn lt(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
@@ -160,7 +162,7 @@ fn lt(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     let a = promote!(SIGNATURE, a);
     let b = promote!(SIGNATURE, b);
 
-    interpreter.stack.push(Value::Boolean(a < b));
+    interpreter.stack.push(SOMValue::new_boolean(a < b));
 }
 
 fn plus(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
@@ -174,7 +176,7 @@ fn plus(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     let a = promote!(SIGNATURE, a);
     let b = promote!(SIGNATURE, b);
 
-    interpreter.stack.push(Value::Double(a + b));
+    interpreter.stack.push(SOMValue::new_double(a + b));
 }
 
 fn minus(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
@@ -188,7 +190,7 @@ fn minus(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     let a = promote!(SIGNATURE, a);
     let b = promote!(SIGNATURE, b);
 
-    interpreter.stack.push(Value::Double(a - b));
+    interpreter.stack.push(SOMValue::new_double(a - b));
 }
 
 fn times(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
@@ -202,7 +204,7 @@ fn times(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     let a = promote!(SIGNATURE, a);
     let b = promote!(SIGNATURE, b);
 
-    interpreter.stack.push(Value::Double(a * b));
+    interpreter.stack.push(SOMValue::new_double(a * b));
 }
 
 fn divide(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
@@ -216,7 +218,7 @@ fn divide(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     let a = promote!(SIGNATURE, a);
     let b = promote!(SIGNATURE, b);
 
-    interpreter.stack.push(Value::Double(a / b));
+    interpreter.stack.push(SOMValue::new_double(a / b));
 }
 
 fn modulo(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
@@ -230,7 +232,7 @@ fn modulo(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     let a = promote!(SIGNATURE, a);
     let b = promote!(SIGNATURE, b);
 
-    interpreter.stack.push(Value::Double(a % b));
+    interpreter.stack.push(SOMValue::new_double(a % b));
 }
 
 fn positive_infinity(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
@@ -238,7 +240,7 @@ fn positive_infinity(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Univ
 
     expect_args!(SIGNATURE, interpreter, [_]);
 
-    interpreter.stack.push(Value::Double(f64::INFINITY));
+    interpreter.stack.push(SOMValue::new_double(f64::INFINITY));
 }
 
 /// Search for an instance primitive matching the given signature.

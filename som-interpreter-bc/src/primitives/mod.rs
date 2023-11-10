@@ -36,7 +36,7 @@ macro_rules! reverse {
         #[allow(unused_mut)]
         let ($($(mut $name,)?)*) = {
             $(#[allow(unreachable_patterns)]
-            $(let $name =)? match $interpreter.stack.pop() {
+            $(let $name =)? match $interpreter.stack.pop().map($crate::value::Value::from) {
                 Some($ptrn) => {$($name)?},
                 Some(_) => panic!("'{}': wrong type", $signature),
                 None => panic!("'{}': missing argument", $signature),

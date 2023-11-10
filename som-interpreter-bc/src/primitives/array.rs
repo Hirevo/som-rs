@@ -6,7 +6,7 @@ use som_gc::GcHeap;
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
-use crate::value::Value;
+use crate::value::{SOMValue, Value};
 use crate::{expect_args, reverse};
 
 pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
@@ -29,7 +29,7 @@ fn at(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
         Ok(index) => index,
         Err(err) => panic!("'{}': {}", SIGNATURE, err),
     };
-    let value = values.borrow().get(index).cloned().unwrap_or(Value::Nil);
+    let value = values.borrow().get(index).cloned().unwrap_or(SOMValue::NIL);
     interpreter.stack.push(value)
 }
 
@@ -47,9 +47,9 @@ fn at_put(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
         Err(err) => panic!("'{}': {}", SIGNATURE, err),
     };
     if let Some(location) = values.borrow_mut().get_mut(index) {
-        *location = value;
+        *location = value.into();
     }
-    interpreter.stack.push(Value::Array(values))
+    interpreter.stack.push(SOMValue::new_array(&values))
 }
 
 fn length(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
@@ -60,8 +60,8 @@ fn length(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     ]);
 
     let length = values.borrow().len();
-    match i64::try_from(length) {
-        Ok(length) => interpreter.stack.push(Value::Integer(length)),
+    match i32::try_from(length) {
+        Ok(length) => interpreter.stack.push(SOMValue::new_integer(length)),
         Err(err) => panic!("'{}': {}", SIGNATURE, err),
     }
 }
@@ -75,8 +75,8 @@ fn new(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
     ]);
 
     match usize::try_from(count) {
-        Ok(length) => interpreter.stack.push(Value::Array(
-            heap.allocate(RefCell::new(vec![Value::Nil; length])),
+        Ok(length) => interpreter.stack.push(SOMValue::new_array(
+            &heap.allocate(RefCell::new(vec![SOMValue::NIL; length])),
         )),
         Err(err) => panic!("'{}': {}", SIGNATURE, err),
     }

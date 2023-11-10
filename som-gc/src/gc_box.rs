@@ -6,7 +6,7 @@ use crate::Trace;
 
 /// Represents a value, as it is stored within the GC.
 #[repr(C)]
-pub(crate) struct GcBox<T: ?Sized> {
+pub struct GcBox<T: ?Sized> {
     /// Pointer to next value in the GC chain.  
     pub(crate) marked: Cell<bool>,
     pub(crate) next: Option<NonNull<GcBox<dyn Trace + 'static>>>,

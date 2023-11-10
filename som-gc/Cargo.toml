@@ -6,3 +6,6 @@ authors = ["Nicolas Polomack <nmp21@kent.ac.uk>"]
 edition = "2021"
 publish = false
 license = "MIT OR Apache-2.0"
+
+[dependencies]
+num-bigint = { version = "0.4.3", optional = true }

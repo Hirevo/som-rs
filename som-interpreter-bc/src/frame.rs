@@ -5,7 +5,7 @@ use crate::block::Block;
 use crate::class::Class;
 use crate::compiler::Literal;
 use crate::method::{Method, MethodKind};
-use crate::value::Value;
+use crate::value::SOMValue;
 use crate::SOMRef;
 
 /// The kind of a given frame.
@@ -23,7 +23,7 @@ pub enum FrameKind {
         /// The current method.
         method: Gc<Method>,
         /// The self value.
-        self_value: Value,
+        self_value: SOMValue,
     },
 }
 
@@ -32,9 +32,9 @@ pub struct Frame {
     /// This frame's kind.
     pub kind: FrameKind,
     /// The arguments within this frame.
-    pub args: Vec<Value>,
+    pub args: Vec<SOMValue>,
     /// The bindings within this frame.
-    pub locals: Vec<Value>,
+    pub locals: Vec<SOMValue>,
     /// Bytecode index.
     pub bytecode_idx: usize,
 }
@@ -71,7 +71,12 @@ impl Frame {
     pub fn from_kind(kind: FrameKind) -> Self {
         match &kind {
             FrameKind::Block { block } => {
-                let locals = block.blk_info.locals.iter().map(|_| Value::Nil).collect();
+                let locals = block
+                    .blk_info
+                    .locals
+                    .iter()
+                    .map(|_| SOMValue::NIL)
+                    .collect();
                 Self {
                     kind,
                     locals,
@@ -81,7 +86,7 @@ impl Frame {
             }
             FrameKind::Method { method, .. } => {
                 if let MethodKind::Defined(env) = &method.kind {
-                    let locals = env.locals.iter().map(|_| Value::Nil).collect();
+                    let locals = env.locals.iter().map(|_| SOMValue::NIL).collect();
                     Self {
                         kind,
                         locals,
@@ -106,7 +111,7 @@ impl Frame {
     }
 
     /// Get the self value for this frame.
-    pub fn get_self(&self) -> Value {
+    pub fn get_self(&self) -> SOMValue {
         match &self.kind {
             FrameKind::Method { self_value, .. } => self_value.clone(),
             FrameKind::Block { block, .. } => block.frame.as_ref().unwrap().borrow().get_self(),
@@ -148,23 +153,23 @@ impl Frame {
         self.get_bytecode(self.bytecode_idx)
     }
 
-    pub fn lookup_constant(&self, idx: usize) -> Option<Literal> {
+    pub fn lookup_constant(&self, idx: usize) -> Option<&Literal> {
         match self.kind() {
-            FrameKind::Block { block } => block.blk_info.literals.get(idx).cloned(),
+            FrameKind::Block { block } => block.blk_info.literals.get(idx),
             FrameKind::Method { method, .. } => match &method.kind {
-                MethodKind::Defined(env) => env.literals.get(idx).cloned(),
+                MethodKind::Defined(env) => env.literals.get(idx),
                 MethodKind::Primitive(_) => None,
                 MethodKind::NotImplemented(_) => None,
             },
         }
     }
 
-    pub fn lookup_argument(&self, idx: usize) -> Option<Value> {
+    pub fn lookup_argument(&self, idx: usize) -> Option<SOMValue> {
         self.args.get(idx).cloned()
     }
 
     /// Search for a local binding.
-    pub fn lookup_local(&self, idx: usize) -> Option<Value> {
+    pub fn lookup_local(&self, idx: usize) -> Option<SOMValue> {
         self.locals.get(idx).cloned()
         // if let Some(value) = self.locals.get(idx).cloned() {
         //     return Some(value);
@@ -186,7 +191,7 @@ impl Frame {
     }
 
     /// Assign to a local binding.
-    pub fn assign_local(&mut self, idx: usize, value: Value) -> Option<()> {
+    pub fn assign_local(&mut self, idx: usize, value: SOMValue) -> Option<()> {
         // if let Some(local) = self.locals.get_mut(idx) {
         //     *local = value;
         //     return Some(());
