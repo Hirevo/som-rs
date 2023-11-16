@@ -113,32 +113,33 @@ pub fn interactive(
             .lookup_method(method_name)
             .expect("method not found ??");
         let start = Instant::now();
-        let kind = FrameKind::Method {
-            method,
-            holder: class.clone(),
-            self_value: SOMValue::new_class(&class),
-        };
-        let frame = interpreter.push_frame(heap, kind);
+
+        let frame = interpreter.push_frame(
+            heap,
+            FrameKind::Method {
+                method,
+                holder: class.clone(),
+                self_value: SOMValue::new_class(&class),
+            },
+        );
         frame.borrow_mut().args.push(SOMValue::SYSTEM);
         frame.borrow_mut().args.push(last_value.clone());
-        if let Some(value) = interpreter.run(heap, universe) {
-            writeln!(
-                &mut stdout,
-                "returned: {} ({:?})",
-                value.to_string(&universe),
-                Value::from(value),
-            )?;
-            last_value = value;
-        }
-        // , |universe| {
-        //     universe
-        //         .current_frame()
-        //         .borrow_mut()
-        //         .bindings
-        //         .insert("it".into(), last_value.clone());
 
-        //     expr.evaluate(universe)
-        // });
+        match interpreter.run(heap, universe) {
+            Ok(value) => {
+                writeln!(
+                    &mut stdout,
+                    "returned: {} ({:?})",
+                    value.to_string(&universe),
+                    Value::from(value),
+                )?;
+                last_value = value;
+            }
+            Err(err) => {
+                writeln!(&mut stdout, "errored: {err:?}")?;
+            }
+        }
+
         let elapsed = start.elapsed();
         if verbose {
             writeln!(

@@ -90,7 +90,30 @@ fn main() -> anyhow::Result<()> {
 
     let Some(file) = opts.file else {
         let mut universe = Universe::with_classpath(&mut heap, opts.classpath)?;
-        return shell::interactive(&mut heap, &mut interpreter, &mut universe, opts.verbose);
+        let result = shell::interactive(&mut heap, &mut interpreter, &mut universe, opts.verbose);
+
+        if opts.gc.gc_print_stats {
+            if opts.gc.gc_collect_before_stats {
+                heap.collect_garbage(|| {});
+            }
+
+            let stats = heap.stats();
+            let params = heap.params();
+
+            println!();
+            println!("total GC runs: {}", stats.collections_performed);
+            println!("total bytes swept: {}", stats.bytes_swept);
+            println!("total bytes still allocated: {}", stats.bytes_allocated);
+            println!("total GC time: {:?}", stats.total_time_spent);
+            println!("final GC threshold: {}", params.threshold);
+            println!();
+        }
+
+        if opts.gc.gc_collect_on_exit {
+            heap.collect_garbage(|| {});
+        }
+
+        return result;
     };
 
     let file_stem = file
@@ -115,7 +138,7 @@ fn main() -> anyhow::Result<()> {
         .initialize(&mut heap, &mut interpreter, args)
         .expect("issue running program");
 
-    interpreter.run(&mut heap, &mut universe);
+    interpreter.run(&mut heap, &mut universe)?;
 
     // let class = universe.load_class_from_path(file)?;
     // let instance = som_interpreter::instance::Instance::from_class(class);

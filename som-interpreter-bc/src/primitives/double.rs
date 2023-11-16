@@ -1,38 +1,48 @@
+use anyhow::Error;
 use num_traits::ToPrimitive;
+use once_cell::sync::Lazy;
 
-use som_gc::GcHeap;
+use som_gc::{Gc, GcHeap};
 
 use crate::interpreter::Interpreter;
-use crate::primitives::PrimitiveFn;
+use crate::primitives::{DoubleLike, Primitive, PrimitiveFn};
 use crate::universe::Universe;
-use crate::value::{SOMValue, Value};
-use crate::{expect_args, reverse};
+use crate::value::SOMValue;
 
-pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
-    ("+", self::plus, true),
-    ("-", self::minus, true),
-    ("*", self::times, true),
-    ("//", self::divide, true),
-    ("%", self::modulo, true),
-    ("=", self::eq, true),
-    ("<", self::lt, true),
-    ("sqrt", self::sqrt, true),
-    ("round", self::round, true),
-    ("cos", self::cos, true),
-    ("sin", self::sin, true),
-    ("asString", self::as_string, true),
-    ("asInteger", self::as_integer, true),
-];
-pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
-    ("fromString:", self::from_string, true),
-    ("PositiveInfinity", self::positive_infinity, true),
-];
+pub static INSTANCE_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> = Lazy::new(|| {
+    Box::new([
+        ("+", self::plus.into_func(), true),
+        ("-", self::minus.into_func(), true),
+        ("*", self::times.into_func(), true),
+        ("//", self::divide.into_func(), true),
+        ("%", self::modulo.into_func(), true),
+        ("=", self::eq.into_func(), true),
+        ("<", self::lt.into_func(), true),
+        ("sqrt", self::sqrt.into_func(), true),
+        ("round", self::round.into_func(), true),
+        ("cos", self::cos.into_func(), true),
+        ("sin", self::sin.into_func(), true),
+        ("asString", self::as_string.into_func(), true),
+        ("asInteger", self::as_integer.into_func(), true),
+    ])
+});
+pub static CLASS_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> = Lazy::new(|| {
+    Box::new([
+        ("fromString:", self::from_string.into_func(), true),
+        (
+            "PositiveInfinity",
+            self::positive_infinity.into_func(),
+            true,
+        ),
+    ])
+});
 
 macro_rules! promote {
     ($signature:expr, $value:expr) => {
         match $value {
-            Value::Integer(value) => value as f64,
-            Value::BigInteger(value) => match value.to_f64() {
+            DoubleLike::Double(value) => value,
+            DoubleLike::Integer(value) => value as f64,
+            DoubleLike::BigInteger(value) => match value.to_f64() {
                 Some(value) => value,
                 None => {
                     panic!(
@@ -41,210 +51,249 @@ macro_rules! promote {
                     )
                 }
             },
-            Value::Double(value) => value,
-            _ => panic!(
-                "'{}': wrong type (expected `integer` or `double`)",
-                $signature
-            ),
         }
     };
 }
 
-fn from_string(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn from_string(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    _: SOMValue,
+    string: Gc<String>,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "Double>>#fromString:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        _,
-        Value::String(string) => string,
-    ]);
+    let parsed = string.parse()?;
+    interpreter.stack.push(SOMValue::new_double(parsed));
 
-    match string.parse() {
-        Ok(parsed) => interpreter.stack.push(SOMValue::new_double(parsed)),
-        Err(err) => panic!("'{}': {}", SIGNATURE, err),
-    }
+    Ok(())
 }
 
-fn as_string(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
+fn as_string(
+    interpreter: &mut Interpreter,
+    heap: &mut GcHeap,
+    _: &mut Universe,
+    receiver: DoubleLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "Double>>#asString";
 
-    expect_args!(SIGNATURE, interpreter, [
-        value => value,
-    ]);
+    let receiver = promote!(SIGNATURE, receiver);
 
-    let value = promote!(SIGNATURE, value);
+    let allocated = heap.allocate(receiver.to_string());
+    interpreter.stack.push(SOMValue::new_string(&allocated));
 
-    interpreter
-        .stack
-        .push(SOMValue::new_string(&heap.allocate(value.to_string())));
+    Ok(())
 }
 
-fn as_integer(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn as_integer(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    receiver: f64,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "Double>>#asInteger";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::Double(value) => value,
-    ]);
+    interpreter
+        .stack
+        .push(SOMValue::new_integer(receiver.trunc() as i32));
+
+    Ok(())
+}
+
+fn sqrt(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    receiver: DoubleLike,
+) -> Result<(), Error> {
+    const SIGNATURE: &str = "Double>>#sqrt";
+
+    let receiver = promote!(SIGNATURE, receiver);
 
     interpreter
         .stack
-        .push(SOMValue::new_integer(value.trunc() as i32));
+        .push(SOMValue::new_double(receiver.sqrt()));
+
+    Ok(())
 }
 
-fn sqrt(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
-    const SIGNATURE: &str = "Double>>#sqrt";
-
-    expect_args!(SIGNATURE, interpreter, [
-        value => value,
-    ]);
-
-    let value = promote!(SIGNATURE, value);
-
-    interpreter.stack.push(SOMValue::new_double(value.sqrt()));
-}
-
-fn round(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn round(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    receiver: DoubleLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "Double>>#round";
 
-    expect_args!(SIGNATURE, interpreter, [
-        value => value,
-    ]);
+    let receiver = promote!(SIGNATURE, receiver);
 
-    let value = promote!(SIGNATURE, value);
+    interpreter
+        .stack
+        .push(SOMValue::new_double(receiver.round()));
 
-    interpreter.stack.push(SOMValue::new_double(value.round()));
+    Ok(())
 }
 
-fn cos(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn cos(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    receiver: DoubleLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "Double>>#cos";
 
-    expect_args!(SIGNATURE, interpreter, [
-        value => value,
-    ]);
+    let receiver = promote!(SIGNATURE, receiver);
+    interpreter.stack.push(SOMValue::new_double(receiver.cos()));
 
-    let value = promote!(SIGNATURE, value);
-
-    interpreter.stack.push(SOMValue::new_double(value.cos()));
+    Ok(())
 }
 
-fn sin(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn sin(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    receiver: DoubleLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "Double>>#sin";
 
-    expect_args!(SIGNATURE, interpreter, [
-        value => value,
-    ]);
+    let receiver = promote!(SIGNATURE, receiver);
+    interpreter.stack.push(SOMValue::new_double(receiver.sin()));
 
-    let value = promote!(SIGNATURE, value);
-
-    interpreter.stack.push(SOMValue::new_double(value.sin()));
+    Ok(())
 }
 
-fn eq(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn eq(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    a: SOMValue,
+    b: SOMValue,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "Double>>#=";
 
-    expect_args!(SIGNATURE, interpreter, [
-        // Value::Double(a) => a,
-        // Value::Double(b) => b,
-        a => a,
-        b => b,
-    ]);
-
     interpreter.stack.push(SOMValue::new_boolean(a == b));
+
+    Ok(())
 }
 
-fn lt(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn lt(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    a: DoubleLike,
+    b: DoubleLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "Double>>#<";
-
-    expect_args!(SIGNATURE, interpreter, [
-        a => a,
-        b => b,
-    ]);
 
     let a = promote!(SIGNATURE, a);
     let b = promote!(SIGNATURE, b);
 
     interpreter.stack.push(SOMValue::new_boolean(a < b));
+
+    Ok(())
 }
 
-fn plus(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn plus(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    a: DoubleLike,
+    b: DoubleLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "Double>>#+";
-
-    expect_args!(SIGNATURE, interpreter, [
-        a => a,
-        b => b,
-    ]);
 
     let a = promote!(SIGNATURE, a);
     let b = promote!(SIGNATURE, b);
 
     interpreter.stack.push(SOMValue::new_double(a + b));
+
+    Ok(())
 }
 
-fn minus(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn minus(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    a: DoubleLike,
+    b: DoubleLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "Double>>#-";
-
-    expect_args!(SIGNATURE, interpreter, [
-        a => a,
-        b => b,
-    ]);
 
     let a = promote!(SIGNATURE, a);
     let b = promote!(SIGNATURE, b);
 
     interpreter.stack.push(SOMValue::new_double(a - b));
+
+    Ok(())
 }
 
-fn times(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn times(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    a: DoubleLike,
+    b: DoubleLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "Double>>#*";
-
-    expect_args!(SIGNATURE, interpreter, [
-        a => a,
-        b => b,
-    ]);
 
     let a = promote!(SIGNATURE, a);
     let b = promote!(SIGNATURE, b);
 
     interpreter.stack.push(SOMValue::new_double(a * b));
+
+    Ok(())
 }
 
-fn divide(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn divide(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    a: DoubleLike,
+    b: DoubleLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "Double>>#//";
-
-    expect_args!(SIGNATURE, interpreter, [
-        a => a,
-        b => b,
-    ]);
 
     let a = promote!(SIGNATURE, a);
     let b = promote!(SIGNATURE, b);
 
     interpreter.stack.push(SOMValue::new_double(a / b));
+
+    Ok(())
 }
 
-fn modulo(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn modulo(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    a: DoubleLike,
+    b: DoubleLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "Double>>#%";
-
-    expect_args!(SIGNATURE, interpreter, [
-        a => a,
-        b => b,
-    ]);
 
     let a = promote!(SIGNATURE, a);
     let b = promote!(SIGNATURE, b);
 
     interpreter.stack.push(SOMValue::new_double(a % b));
+
+    Ok(())
 }
 
-fn positive_infinity(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn positive_infinity(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    _: SOMValue,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "Double>>#positiveInfinity";
 
-    expect_args!(SIGNATURE, interpreter, [_]);
-
     interpreter.stack.push(SOMValue::new_double(f64::INFINITY));
+
+    Ok(())
 }
 
 /// Search for an instance primitive matching the given signature.
-pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
+pub fn get_instance_primitive(signature: &str) -> Option<&'static PrimitiveFn> {
     INSTANCE_PRIMITIVES
         .iter()
         .find(|it| it.0 == signature)
@@ -252,7 +301,7 @@ pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
 }
 
 /// Search for a class primitive matching the given signature.
-pub fn get_class_primitive(signature: &str) -> Option<PrimitiveFn> {
+pub fn get_class_primitive(signature: &str) -> Option<&'static PrimitiveFn> {
     CLASS_PRIMITIVES
         .iter()
         .find(|it| it.0 == signature)

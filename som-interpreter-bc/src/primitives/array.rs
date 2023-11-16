@@ -1,89 +1,102 @@
 use std::cell::RefCell;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
+
+use anyhow::Error;
+use once_cell::sync::Lazy;
 
 use som_gc::GcHeap;
 
 use crate::interpreter::Interpreter;
-use crate::primitives::PrimitiveFn;
+use crate::primitives::{Primitive, PrimitiveFn};
 use crate::universe::Universe;
-use crate::value::{SOMValue, Value};
-use crate::{expect_args, reverse};
+use crate::value::SOMValue;
+use crate::SOMRef;
 
-pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
-    ("at:", self::at, true),
-    ("at:put:", self::at_put, true),
-    ("length", self::length, true),
-];
+pub static INSTANCE_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> = Lazy::new(|| {
+    Box::new([
+        ("at:", self::at.into_func(), true),
+        ("at:put:", self::at_put.into_func(), true),
+        ("length", self::length.into_func(), true),
+    ])
+});
 
-pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[("new:", self::new, true)];
+pub static CLASS_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> =
+    Lazy::new(|| Box::new([("new:", self::new.into_func(), true)]));
 
-fn at(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn at(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    receiver: SOMRef<Vec<SOMValue>>,
+    index: i32,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "Array>>#at:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::Array(values) => values,
-        Value::Integer(index) => index,
-    ]);
+    let index = usize::try_from(index - 1)?;
+    let value = receiver
+        .borrow()
+        .get(index)
+        .cloned()
+        .unwrap_or(SOMValue::NIL);
 
-    let index = match usize::try_from(index - 1) {
-        Ok(index) => index,
-        Err(err) => panic!("'{}': {}", SIGNATURE, err),
-    };
-    let value = values.borrow().get(index).cloned().unwrap_or(SOMValue::NIL);
-    interpreter.stack.push(value)
+    interpreter.stack.push(value);
+
+    Ok(())
 }
 
-fn at_put(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn at_put(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    receiver: SOMRef<Vec<SOMValue>>,
+    index: i32,
+    value: SOMValue,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "Array>>#at:put:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::Array(values) => values,
-        Value::Integer(index) => index,
-        value => value,
-    ]);
+    let index = usize::try_from(index - 1)?;
 
-    let index = match usize::try_from(index - 1) {
-        Ok(index) => index,
-        Err(err) => panic!("'{}': {}", SIGNATURE, err),
-    };
-    if let Some(location) = values.borrow_mut().get_mut(index) {
-        *location = value.into();
+    if let Some(location) = receiver.borrow_mut().get_mut(index) {
+        *location = value;
     }
-    interpreter.stack.push(SOMValue::new_array(&values))
+
+    interpreter.stack.push(SOMValue::new_array(&receiver));
+
+    Ok(())
 }
 
-fn length(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn length(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    receiver: SOMRef<Vec<SOMValue>>,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "Array>>#length";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::Array(values) => values,
-    ]);
+    let length = receiver.borrow().len().try_into()?;
+    interpreter.stack.push(SOMValue::new_integer(length));
 
-    let length = values.borrow().len();
-    match i32::try_from(length) {
-        Ok(length) => interpreter.stack.push(SOMValue::new_integer(length)),
-        Err(err) => panic!("'{}': {}", SIGNATURE, err),
-    }
+    Ok(())
 }
 
-fn new(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
+fn new(
+    interpreter: &mut Interpreter,
+    heap: &mut GcHeap,
+    _: &mut Universe,
+    _: SOMValue,
+    count: i32,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "Array>>#new:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        _,
-        Value::Integer(count) => count,
-    ]);
+    let count = usize::try_from(count)?;
+    let allocated = heap.allocate(RefCell::new(vec![SOMValue::NIL; count]));
+    interpreter.stack.push(SOMValue::new_array(&allocated));
 
-    match usize::try_from(count) {
-        Ok(length) => interpreter.stack.push(SOMValue::new_array(
-            &heap.allocate(RefCell::new(vec![SOMValue::NIL; length])),
-        )),
-        Err(err) => panic!("'{}': {}", SIGNATURE, err),
-    }
+    Ok(())
 }
 
 /// Search for an instance primitive matching the given signature.
-pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
+pub fn get_instance_primitive(signature: &str) -> Option<&'static PrimitiveFn> {
     INSTANCE_PRIMITIVES
         .iter()
         .find(|it| it.0 == signature)
@@ -91,7 +104,7 @@ pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
 }
 
 /// Search for a class primitive matching the given signature.
-pub fn get_class_primitive(signature: &str) -> Option<PrimitiveFn> {
+pub fn get_class_primitive(signature: &str) -> Option<&'static PrimitiveFn> {
     CLASS_PRIMITIVES
         .iter()
         .find(|it| it.0 == signature)

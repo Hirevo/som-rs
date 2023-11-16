@@ -1,223 +1,251 @@
 use std::collections::hash_map::DefaultHasher;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::hash::Hasher;
+
+use anyhow::Error;
+use num_bigint::BigInt;
+use once_cell::sync::Lazy;
 
 use som_gc::GcHeap;
 
 use crate::interpreter::Interpreter;
-use crate::primitives::PrimitiveFn;
+use crate::primitives::{Primitive, PrimitiveFn, StringLike};
 use crate::universe::Universe;
-use crate::value::{SOMValue, Value};
-use crate::{expect_args, reverse};
+use crate::value::SOMValue;
 
-pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
-    ("length", self::length, true),
-    ("hashcode", self::hashcode, true),
-    ("isLetters", self::is_letters, true),
-    ("isDigits", self::is_digits, true),
-    ("isWhiteSpace", self::is_whitespace, true),
-    ("asSymbol", self::as_symbol, true),
-    ("concatenate:", self::concatenate, true),
-    ("primSubstringFrom:to:", self::prim_substring_from_to, true),
-    ("=", self::eq, true),
-];
-pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
+pub static INSTANCE_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> = Lazy::new(|| {
+    Box::new([
+        ("length", self::length.into_func(), true),
+        ("hashcode", self::hashcode.into_func(), true),
+        ("isLetters", self::is_letters.into_func(), true),
+        ("isDigits", self::is_digits.into_func(), true),
+        ("isWhiteSpace", self::is_whitespace.into_func(), true),
+        ("asSymbol", self::as_symbol.into_func(), true),
+        ("concatenate:", self::concatenate.into_func(), true),
+        (
+            "primSubstringFrom:to:",
+            self::prim_substring_from_to.into_func(),
+            true,
+        ),
+        ("=", self::eq.into_func(), true),
+    ])
+});
+pub static CLASS_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> =
+    Lazy::new(|| Box::new([]));
 
-fn length(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
+fn length(
+    interpreter: &mut Interpreter,
+    heap: &mut GcHeap,
+    universe: &mut Universe,
+    receiver: StringLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "String>>#length";
 
-    expect_args!(SIGNATURE, interpreter, [
-        value => value,
-    ]);
-
-    let value = match value {
-        Value::String(ref value) => value.as_str(),
-        Value::Symbol(sym) => universe.lookup_symbol(sym),
-        _ => panic!("'{}': invalid self type", SIGNATURE),
+    let string = match receiver {
+        StringLike::String(ref value) => value.as_str(),
+        StringLike::Symbol(sym) => universe.lookup_symbol(sym),
     };
 
-    match i32::try_from(value.chars().count()) {
-        Ok(idx) => interpreter.stack.push(SOMValue::new_integer(idx)),
-        Err(err) => panic!("'{}': {}", SIGNATURE, err),
-    }
+    let length = string.chars().count();
+    let length = match length.try_into() {
+        Ok(value) => SOMValue::new_integer(value),
+        Err(_) => {
+            let allocated = heap.allocate(BigInt::from(length));
+            SOMValue::new_big_integer(&allocated)
+        }
+    };
+
+    interpreter.stack.push(length);
+
+    Ok(())
 }
 
-fn hashcode(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
+fn hashcode(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    universe: &mut Universe,
+    receiver: StringLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "String>>#hashcode";
 
-    expect_args!(SIGNATURE, interpreter, [
-        value => value,
-    ]);
-
-    let value = match value {
-        Value::String(ref value) => value.as_str(),
-        Value::Symbol(sym) => universe.lookup_symbol(sym),
-        _ => panic!("'{}': invalid self type", SIGNATURE),
+    let string = match receiver {
+        StringLike::String(ref value) => value.as_str(),
+        StringLike::Symbol(sym) => universe.lookup_symbol(sym),
     };
 
     let mut hasher = DefaultHasher::new();
+    hasher.write(string.as_bytes());
+    let hash = (hasher.finish() as i32).abs();
 
-    hasher.write(value.as_bytes());
+    interpreter.stack.push(SOMValue::new_integer(hash));
 
-    // match i64::try_from(hasher.finish()) {
-    //     Ok(hash) => interpreter.stack.push(SOMValue::new_integer(hash)),
-    //     Err(err) => panic!("'{}': {}", SIGNATURE, err),
-    // }
-
-    interpreter
-        .stack
-        .push(SOMValue::new_integer((hasher.finish() as i32).abs()))
+    Ok(())
 }
 
-fn is_letters(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
+fn is_letters(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    universe: &mut Universe,
+    receiver: StringLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "String>>#isLetters";
 
-    expect_args!(SIGNATURE, interpreter, [
-        value => value,
-    ]);
-
-    let value = match value {
-        Value::String(ref value) => value.as_str(),
-        Value::Symbol(sym) => universe.lookup_symbol(sym),
-        _ => panic!("'{}': invalid self type", SIGNATURE),
+    let string = match receiver {
+        StringLike::String(ref value) => value.as_str(),
+        StringLike::Symbol(sym) => universe.lookup_symbol(sym),
     };
 
     interpreter.stack.push(SOMValue::new_boolean(
-        !value.is_empty() && !value.is_empty() && value.chars().all(char::is_alphabetic),
-    ))
+        !string.is_empty() && !string.is_empty() && string.chars().all(char::is_alphabetic),
+    ));
+
+    Ok(())
 }
 
-fn is_digits(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
+fn is_digits(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    universe: &mut Universe,
+    receiver: StringLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "String>>#isDigits";
 
-    expect_args!(SIGNATURE, interpreter, [
-        value => value,
-    ]);
-
-    let value = match value {
-        Value::String(ref value) => value.as_str(),
-        Value::Symbol(sym) => universe.lookup_symbol(sym),
-        _ => panic!("'{}': invalid self type", SIGNATURE),
+    let string = match receiver {
+        StringLike::String(ref value) => value.as_str(),
+        StringLike::Symbol(sym) => universe.lookup_symbol(sym),
     };
 
     interpreter.stack.push(SOMValue::new_boolean(
-        !value.is_empty() && value.chars().all(char::is_numeric),
-    ))
+        !string.is_empty() && string.chars().all(char::is_numeric),
+    ));
+
+    Ok(())
 }
 
-fn is_whitespace(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
+fn is_whitespace(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    universe: &mut Universe,
+    receiver: StringLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "String>>#isWhiteSpace";
 
-    expect_args!(SIGNATURE, interpreter, [
-        value => value,
-    ]);
-
-    let value = match value {
-        Value::String(ref value) => value.as_str(),
-        Value::Symbol(sym) => universe.lookup_symbol(sym),
-        _ => panic!("'{}': invalid self type", SIGNATURE),
+    let string = match receiver {
+        StringLike::String(ref value) => value.as_str(),
+        StringLike::Symbol(sym) => universe.lookup_symbol(sym),
     };
 
     interpreter.stack.push(SOMValue::new_boolean(
-        !value.is_empty() && value.chars().all(char::is_whitespace),
-    ))
+        !string.is_empty() && string.chars().all(char::is_whitespace),
+    ));
+
+    Ok(())
 }
 
-fn concatenate(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Universe) {
+fn concatenate(
+    interpreter: &mut Interpreter,
+    heap: &mut GcHeap,
+    universe: &mut Universe,
+    receiver: StringLike,
+    other: StringLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "String>>#concatenate:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        s1 => s1,
-        s2 => s2,
-    ]);
-
-    let s1 = match s1 {
-        Value::String(ref value) => value.as_str(),
-        Value::Symbol(sym) => universe.lookup_symbol(sym),
-        _ => panic!("'{}': wrong types", SIGNATURE),
-    };
-    let s2 = match s2 {
-        Value::String(ref value) => value.as_str(),
-        Value::Symbol(sym) => universe.lookup_symbol(sym),
-        _ => panic!("'{}': wrong types", SIGNATURE),
+    let s1 = match receiver {
+        StringLike::String(ref value) => value.as_str(),
+        StringLike::Symbol(sym) => universe.lookup_symbol(sym),
     };
 
-    interpreter.stack.push(SOMValue::new_string(
-        &heap.allocate(format!("{}{}", s1, s2)),
-    ))
+    let s2 = match other {
+        StringLike::String(ref value) => value.as_str(),
+        StringLike::Symbol(sym) => universe.lookup_symbol(sym),
+    };
+
+    let allocated = heap.allocate(format!("{s1}{s2}"));
+    interpreter.stack.push(SOMValue::new_string(&allocated));
+
+    Ok(())
 }
 
-fn as_symbol(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
+fn as_symbol(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    universe: &mut Universe,
+    receiver: StringLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "String>>#asSymbol";
 
-    expect_args!(SIGNATURE, interpreter, [
-        value => value,
-    ]);
+    let symbol = match receiver {
+        StringLike::String(ref value) => universe.intern_symbol(value.as_str()),
+        StringLike::Symbol(symbol) => symbol,
+    };
 
-    match value {
-        Value::String(ref value) => interpreter
-            .stack
-            .push(SOMValue::new_symbol(universe.intern_symbol(value.as_str()))),
-        Value::Symbol(sym) => interpreter.stack.push(SOMValue::new_symbol(sym)),
-        _ => panic!("'{}': invalid self type", SIGNATURE),
-    }
+    interpreter.stack.push(SOMValue::new_symbol(symbol));
+
+    Ok(())
 }
 
-fn eq(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
+fn eq(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    universe: &mut Universe,
+    a: SOMValue,
+    b: SOMValue,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "String>>#=";
 
-    expect_args!(SIGNATURE, interpreter, [
-        s1 => s1,
-        s2 => s2,
-    ]);
-
-    let s1 = match s1 {
-        Value::String(ref s1) => s1.as_str(),
-        Value::Symbol(s1) => universe.lookup_symbol(s1),
-        _ => {
-            interpreter.stack.push(SOMValue::new_boolean(false));
-            return;
-        }
+    let Ok(a) = StringLike::try_from(a) else {
+        interpreter.stack.push(SOMValue::FALSE);
+        return Ok(());
     };
 
-    let s2 = match s2 {
-        Value::String(ref s2) => s2.as_str(),
-        Value::Symbol(s2) => universe.lookup_symbol(s2),
-        _ => {
-            interpreter.stack.push(SOMValue::new_boolean(false));
-            return;
-        }
+    let Ok(b) = StringLike::try_from(b) else {
+        interpreter.stack.push(SOMValue::FALSE);
+        return Ok(());
     };
 
-    interpreter.stack.push(SOMValue::new_boolean(s1 == s2))
+    let a = match a {
+        StringLike::String(ref value) => value.as_str(),
+        StringLike::Symbol(sym) => universe.lookup_symbol(sym),
+    };
+
+    let b = match b {
+        StringLike::String(ref value) => value.as_str(),
+        StringLike::Symbol(sym) => universe.lookup_symbol(sym),
+    };
+
+    interpreter.stack.push(SOMValue::new_boolean(a == b));
+
+    Ok(())
 }
 
 fn prim_substring_from_to(
     interpreter: &mut Interpreter,
     heap: &mut GcHeap,
     universe: &mut Universe,
-) {
+    receiver: StringLike,
+    from: i32,
+    to: i32,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "String>>#primSubstringFrom:to:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        value => value,
-        Value::Integer(from) => from,
-        Value::Integer(to) => to,
-    ]);
+    let from = usize::try_from(from - 1)?;
+    let to = usize::try_from(to)?;
 
-    let (value, from, to) = match (&value, usize::try_from(from - 1), usize::try_from(to)) {
-        (Value::String(ref value), Ok(from), Ok(to)) => (value.as_str(), from, to),
-        (Value::Symbol(sym), Ok(from), Ok(to)) => (universe.lookup_symbol(*sym), from, to),
-        (_, _, _) => panic!("'{}': wrong types", SIGNATURE),
+    let string = match receiver {
+        StringLike::String(ref value) => value.as_str(),
+        StringLike::Symbol(sym) => universe.lookup_symbol(sym),
     };
 
-    let string = heap.allocate(value.chars().skip(from).take(to - from).collect());
+    let string = heap.allocate(string.chars().skip(from).take(to - from).collect());
 
-    interpreter.stack.push(SOMValue::new_string(&string))
+    interpreter.stack.push(SOMValue::new_string(&string));
+
+    Ok(())
 }
 
 /// Search for an instance primitive matching the given signature.
-pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
+pub fn get_instance_primitive(signature: &str) -> Option<&'static PrimitiveFn> {
     INSTANCE_PRIMITIVES
         .iter()
         .find(|it| it.0 == signature)
@@ -225,7 +253,7 @@ pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
 }
 
 /// Search for a class primitive matching the given signature.
-pub fn get_class_primitive(signature: &str) -> Option<PrimitiveFn> {
+pub fn get_class_primitive(signature: &str) -> Option<&'static PrimitiveFn> {
     CLASS_PRIMITIVES
         .iter()
         .find(|it| it.0 == signature)
