@@ -1,49 +1,55 @@
 use std::cell::RefCell;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryInto;
 use std::fs;
+use std::io::Write;
 
-use num_bigint::{BigInt, ToBigInt};
+use anyhow::Error;
+use num_bigint::BigInt;
+use once_cell::sync::Lazy;
 
 use som_gc::{GcHeap, Trace};
 
 use crate::frame::FrameKind;
+use crate::interner::Interned;
 use crate::interpreter::Interpreter;
-use crate::primitives::PrimitiveFn;
+use crate::primitives::{Primitive, PrimitiveFn, StringLike};
 use crate::universe::Universe;
-use crate::value::{SOMValue, Value};
-use crate::{expect_args, reverse};
+use crate::value::SOMValue;
 
-pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
-    ("loadFile:", self::load_file, true),
-    ("printString:", self::print_string, true),
-    ("printNewline", self::print_newline, true),
-    ("errorPrint:", self::error_print, true),
-    ("errorPrintln:", self::error_println, true),
-    ("load:", self::load, true),
-    ("ticks", self::ticks, true),
-    ("time", self::time, true),
-    ("fullGC", self::full_gc, true),
-    ("gcStats", self::gc_stats, true),
-    ("exit:", self::exit, true),
-    ("global:", self::global, true),
-    ("global:put:", self::global_put, true),
-    ("hasGlobal:", self::has_global, true),
-    ("printStackTrace", self::print_stack_trace, true),
-];
-pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
+pub static INSTANCE_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> = Lazy::new(|| {
+    Box::new([
+        ("loadFile:", self::load_file.into_func(), true),
+        ("printString:", self::print_string.into_func(), true),
+        ("printNewline", self::print_newline.into_func(), true),
+        ("errorPrint:", self::error_print.into_func(), true),
+        ("errorPrintln:", self::error_println.into_func(), true),
+        ("load:", self::load.into_func(), true),
+        ("ticks", self::ticks.into_func(), true),
+        ("time", self::time.into_func(), true),
+        ("fullGC", self::full_gc.into_func(), true),
+        ("gcStats", self::gc_stats.into_func(), true),
+        ("exit:", self::exit.into_func(), true),
+        ("global:", self::global.into_func(), true),
+        ("global:put:", self::global_put.into_func(), true),
+        ("hasGlobal:", self::has_global.into_func(), true),
+        ("printStackTrace", self::print_stack_trace.into_func(), true),
+    ])
+});
+pub static CLASS_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> =
+    Lazy::new(|| Box::new([]));
 
-fn load_file(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Universe) {
+fn load_file(
+    interpreter: &mut Interpreter,
+    heap: &mut GcHeap,
+    universe: &mut Universe,
+    _: SOMValue,
+    path: StringLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "System>>#loadFie:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::System,
-        value => value,
-    ]);
-
-    let path = match value {
-        Value::String(ref string) => string,
-        Value::Symbol(sym) => universe.lookup_symbol(sym),
-        _ => panic!("'{}': wrong type", SIGNATURE),
+    let path = match path {
+        StringLike::String(ref string) => string,
+        StringLike::Symbol(sym) => universe.lookup_symbol(sym),
     };
 
     let value = match fs::read_to_string(path) {
@@ -52,188 +58,196 @@ fn load_file(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Un
     };
 
     interpreter.stack.push(value);
+
+    Ok(())
 }
 
-fn print_string(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
+fn print_string(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    universe: &mut Universe,
+    _: SOMValue,
+    string: StringLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "System>>#printString:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::System,
-        value => value,
-    ]);
-
-    let string = match value {
-        Value::String(ref string) => string,
-        Value::Symbol(sym) => universe.lookup_symbol(sym),
-        _ => panic!("'{}': wrong type", SIGNATURE),
+    let string = match string {
+        StringLike::String(ref string) => string,
+        StringLike::Symbol(sym) => universe.lookup_symbol(sym),
     };
 
-    print!("{}", string);
-    use std::io::Write;
-    std::io::stdout().flush().unwrap();
-    interpreter.stack.push(SOMValue::SYSTEM)
+    print!("{string}");
+    std::io::stdout().flush()?;
+    interpreter.stack.push(SOMValue::SYSTEM);
+
+    Ok(())
 }
 
-fn print_newline(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn print_newline(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    _: SOMValue,
+) -> Result<(), Error> {
     const SIGNATURE: &'static str = "System>>#printNewline";
-
-    expect_args!(SIGNATURE, interpreter, [Value::System]);
 
     println!();
     interpreter.stack.push(SOMValue::NIL);
+
+    Ok(())
 }
 
-fn error_print(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
+fn error_print(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    universe: &mut Universe,
+    _: SOMValue,
+    string: StringLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "System>>#errorPrint:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::System,
-        value => value,
-    ]);
-
-    let string = match value {
-        Value::String(ref string) => string,
-        Value::Symbol(sym) => universe.lookup_symbol(sym),
-        _ => panic!("'{}': wrong type", SIGNATURE),
+    let string = match string {
+        StringLike::String(ref string) => string,
+        StringLike::Symbol(sym) => universe.lookup_symbol(sym),
     };
 
-    eprint!("{}", string);
+    eprint!("{string}");
+    std::io::stderr().flush()?;
     interpreter.stack.push(SOMValue::SYSTEM);
+
+    Ok(())
 }
 
-fn error_println(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
+fn error_println(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    universe: &mut Universe,
+    _: SOMValue,
+    string: StringLike,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "System>>#errorPrintln:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::System,
-        value => value,
-    ]);
-
-    let string = match value {
-        Value::String(ref string) => string,
-        Value::Symbol(sym) => universe.lookup_symbol(sym),
-        _ => panic!("'{}': wrong type", SIGNATURE),
+    let string = match string {
+        StringLike::String(ref string) => string,
+        StringLike::Symbol(sym) => universe.lookup_symbol(sym),
     };
 
-    eprintln!("{}", string);
+    eprintln!("{string}");
     interpreter.stack.push(SOMValue::SYSTEM);
+
+    Ok(())
 }
 
-fn load(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Universe) {
+fn load(
+    interpreter: &mut Interpreter,
+    heap: &mut GcHeap,
+    universe: &mut Universe,
+    _: SOMValue,
+    class_name: Interned,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "System>>#load:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::System,
-        Value::Symbol(sym) => sym,
-    ]);
+    let class_name = universe.lookup_symbol(class_name).to_string();
+    let class = universe.load_class(heap, class_name)?;
+    interpreter.stack.push(SOMValue::new_class(&class));
 
-    let name = universe.lookup_symbol(sym).to_string();
-    match universe.load_class(heap, name) {
-        Ok(class) => interpreter.stack.push(SOMValue::new_class(&class)),
-        Err(err) => panic!("'{}': {}", SIGNATURE, err),
-    }
+    Ok(())
 }
 
-fn has_global(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
+fn has_global(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    universe: &mut Universe,
+    _: SOMValue,
+    name: Interned,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "System>>#hasGlobal:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::System,
-        Value::Symbol(sym) => sym,
-    ]);
-
-    let value = SOMValue::new_boolean(universe.has_global(sym));
-
+    let value = SOMValue::new_boolean(universe.has_global(name));
     interpreter.stack.push(value);
+
+    Ok(())
 }
 
-fn global(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
+fn global(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    universe: &mut Universe,
+    _: SOMValue,
+    name: Interned,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "System>>#global:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::System,
-        Value::Symbol(sym) => sym,
-    ]);
-
-    let value = universe.lookup_global(sym).unwrap_or(SOMValue::NIL);
-
+    let value = universe.lookup_global(name).unwrap_or(SOMValue::NIL);
     interpreter.stack.push(value);
+
+    Ok(())
 }
 
-fn global_put(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
+fn global_put(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    universe: &mut Universe,
+    _: SOMValue,
+    name: Interned,
+    value: SOMValue,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "System>>#global:put:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::System,
-        Value::Symbol(sym) => sym,
-        value => value,
-    ]);
-
-    let value = value.into();
-    universe.assign_global(sym, value);
+    universe.assign_global(name, value);
     interpreter.stack.push(value);
+
+    Ok(())
 }
 
-fn exit(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
+fn exit(_: &mut Interpreter, _: &mut GcHeap, _: &mut Universe, status: i32) -> Result<(), Error> {
     const SIGNATURE: &str = "System>>#exit:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::System,
-        Value::Integer(code) => code,
-    ]);
-
-    match i32::try_from(code) {
-        Ok(code) => {
-            heap.collect_garbage(|| {});
-
-            let stats = heap.stats();
-            let params = heap.params();
-
-            println!();
-            println!("total GC runs: {}", stats.collections_performed);
-            println!("total bytes swept: {}", stats.bytes_swept);
-            println!("total bytes still allocated: {}", stats.bytes_allocated);
-            println!("total GC time: {:?}", stats.total_time_spent);
-            println!("final GC threshold: {}", params.threshold);
-            println!();
-            std::process::exit(code)
-        }
-        Err(err) => panic!("'{}': {}", SIGNATURE, err),
-    }
+    std::process::exit(status);
 }
 
-fn ticks(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn ticks(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    _: SOMValue,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "System>>#ticks";
 
-    expect_args!(SIGNATURE, interpreter, [Value::System]);
+    let micros = interpreter.start_time.elapsed().as_micros().try_into()?;
+    interpreter.stack.push(SOMValue::new_integer(micros));
 
-    match i32::try_from(interpreter.start_time.elapsed().as_micros()) {
-        Ok(micros) => interpreter.stack.push(SOMValue::new_integer(micros)),
-        Err(err) => panic!("'{}': {}", SIGNATURE, err),
-    }
+    Ok(())
 }
 
-fn time(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn time(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    _: SOMValue,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "System>>#time";
 
-    expect_args!(SIGNATURE, interpreter, [Value::System]);
+    let micros = interpreter.start_time.elapsed().as_millis().try_into()?;
+    interpreter.stack.push(SOMValue::new_integer(micros));
 
-    match i32::try_from(interpreter.start_time.elapsed().as_millis()) {
-        Ok(micros) => interpreter.stack.push(SOMValue::new_integer(micros)),
-        Err(err) => panic!("'{}': {}", SIGNATURE, err),
-    }
+    Ok(())
 }
 
-fn print_stack_trace(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn print_stack_trace(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    _: SOMValue,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "System>>#printStackTrace";
 
-    expect_args!(SIGNATURE, interpreter, [Value::System]);
-
     for frame in &interpreter.frames {
-        let class = frame.borrow().get_method_holder();
-        let method = frame.borrow().get_method();
-        let bytecode_idx = frame.borrow().bytecode_idx;
-        let block = match frame.borrow().kind() {
+        let frame_ref = frame.borrow();
+        let class = frame_ref.get_method_holder();
+        let method = frame_ref.get_method();
+        let bytecode_idx = frame_ref.bytecode_idx;
+        let block = match frame_ref.kind() {
             FrameKind::Block { .. } => "$block",
             _ => "",
         };
@@ -247,12 +261,17 @@ fn print_stack_trace(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Univ
     }
 
     interpreter.stack.push(SOMValue::TRUE);
+
+    Ok(())
 }
 
-fn full_gc(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Universe) {
+fn full_gc(
+    interpreter: &mut Interpreter,
+    heap: &mut GcHeap,
+    universe: &mut Universe,
+    _: SOMValue,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "System>>#fullGC";
-
-    expect_args!(SIGNATURE, interpreter, [Value::System]);
 
     heap.collect_garbage(|| {
         interpreter.trace();
@@ -260,37 +279,52 @@ fn full_gc(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Univ
     });
 
     interpreter.stack.push(SOMValue::TRUE);
+
+    Ok(())
 }
 
-fn gc_stats(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
+fn gc_stats(
+    interpreter: &mut Interpreter,
+    heap: &mut GcHeap,
+    _: &mut Universe,
+    _: SOMValue,
+) -> Result<(), Error> {
     const SIGNATURE: &str = "System>>#gcStats";
-
-    expect_args!(SIGNATURE, interpreter, [Value::System]);
 
     let stats = heap.stats().clone();
     let collections_performed = match stats.collections_performed.try_into() {
         Ok(value) => SOMValue::new_integer(value),
         Err(_) => {
-            SOMValue::new_big_integer(&heap.allocate(BigInt::from(stats.collections_performed)))
+            let allocated = heap.allocate(BigInt::from(stats.collections_performed));
+            SOMValue::new_big_integer(&allocated)
         }
     };
     let bytes_allocated = match stats.bytes_allocated.try_into() {
         Ok(value) => SOMValue::new_integer(value),
-        Err(_) => SOMValue::new_big_integer(&heap.allocate(BigInt::from(stats.bytes_allocated))),
+        Err(_) => {
+            let allocated = heap.allocate(BigInt::from(stats.bytes_allocated));
+            SOMValue::new_big_integer(&allocated)
+        }
     };
-    let total_time_spent = SOMValue::new_big_integer(
-        &heap.allocate(stats.total_time_spent.as_millis().to_bigint().unwrap()),
-    );
+    let total_time_spent = match stats.total_time_spent.as_millis().try_into() {
+        Ok(value) => SOMValue::new_integer(value),
+        Err(_) => {
+            let allocated = heap.allocate(BigInt::from(stats.total_time_spent.as_millis()));
+            SOMValue::new_big_integer(&allocated)
+        }
+    };
     let output = heap.allocate(RefCell::new(vec![
         collections_performed,
         total_time_spent,
         bytes_allocated,
     ]));
     interpreter.stack.push(SOMValue::new_array(&output));
+
+    Ok(())
 }
 
 /// Search for an instance primitive matching the given signature.
-pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
+pub fn get_instance_primitive(signature: &str) -> Option<&'static PrimitiveFn> {
     INSTANCE_PRIMITIVES
         .iter()
         .find(|it| it.0 == signature)
@@ -298,7 +332,7 @@ pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
 }
 
 /// Search for a class primitive matching the given signature.
-pub fn get_class_primitive(signature: &str) -> Option<PrimitiveFn> {
+pub fn get_class_primitive(signature: &str) -> Option<&'static PrimitiveFn> {
     CLASS_PRIMITIVES
         .iter()
         .find(|it| it.0 == signature)

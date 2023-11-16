@@ -1,105 +1,142 @@
 use std::collections::hash_map::DefaultHasher;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::hash::{Hash, Hasher};
+
+use anyhow::{anyhow, Context, Error};
+use once_cell::sync::Lazy;
 
 use som_gc::GcHeap;
 
+use crate::class::Class;
+use crate::interner::Interned;
 use crate::interpreter::Interpreter;
 use crate::method::Method;
-use crate::primitives::PrimitiveFn;
+use crate::primitives::{Primitive, PrimitiveFn};
 use crate::universe::Universe;
-use crate::value::{SOMValue, Value};
-use crate::{expect_args, reverse};
+use crate::value::SOMValue;
+use crate::SOMRef;
 
-pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
-    ("class", self::class, true),
-    ("objectSize", self::object_size, true),
-    ("hashcode", self::hashcode, true),
-    ("perform:", self::perform, true),
-    ("perform:withArguments:", self::perform_with_arguments, true),
-    ("perform:inSuperclass:", self::perform_in_super_class, true),
-    (
-        "perform:withArguments:inSuperclass:",
-        self::perform_with_arguments_in_super_class,
-        true,
-    ),
-    ("instVarAt:", self::inst_var_at, true),
-    ("instVarAt:put:", self::inst_var_at_put, true),
-    ("==", self::eq, true),
-];
-pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
+pub static INSTANCE_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> = Lazy::new(|| {
+    Box::new([
+        ("class", self::class.into_func(), true),
+        ("objectSize", self::object_size.into_func(), true),
+        ("hashcode", self::hashcode.into_func(), true),
+        ("perform:", self::perform.into_func(), true),
+        (
+            "perform:withArguments:",
+            self::perform_with_arguments.into_func(),
+            true,
+        ),
+        (
+            "perform:inSuperclass:",
+            self::perform_in_super_class.into_func(),
+            true,
+        ),
+        (
+            "perform:withArguments:inSuperclass:",
+            self::perform_with_arguments_in_super_class.into_func(),
+            true,
+        ),
+        ("instVarAt:", self::inst_var_at.into_func(), true),
+        ("instVarAt:put:", self::inst_var_at_put.into_func(), true),
+        ("==", self::eq.into_func(), true),
+    ])
+});
+pub static CLASS_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> =
+    Lazy::new(|| Box::new([]));
 
-fn class(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
+fn class(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    universe: &mut Universe,
+    receiver: SOMValue,
+) -> Result<(), Error> {
     const SIGNATURE: &'static str = "Object>>#class";
 
-    expect_args!(SIGNATURE, interpreter, [
-        object => object,
-    ]);
-
     interpreter
         .stack
-        .push(SOMValue::new_class(&object.class(universe)));
+        .push(SOMValue::new_class(&receiver.class(universe)));
+
+    Ok(())
 }
 
-fn object_size(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn object_size(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    receiver: SOMValue,
+) -> Result<(), Error> {
     const _: &'static str = "Object>>#objectSize";
 
-    interpreter
-        .stack
-        .push(SOMValue::new_integer(std::mem::size_of::<Value>() as i32));
+    let size = std::mem::size_of_val(&receiver).try_into()?;
+    interpreter.stack.push(SOMValue::new_integer(size));
+
+    Ok(())
 }
 
-fn hashcode(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn hashcode(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    receiver: SOMValue,
+) -> Result<(), Error> {
     const SIGNATURE: &'static str = "Object>>#hashcode";
 
-    expect_args!(SIGNATURE, interpreter, [
-        value => value,
-    ]);
-
     let mut hasher = DefaultHasher::new();
-    value.hash(&mut hasher);
+    receiver.hash(&mut hasher);
     let hash = (hasher.finish() as i32).abs();
 
     interpreter.stack.push(SOMValue::new_integer(hash));
+
+    Ok(())
 }
 
-fn eq(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn eq(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    receiver: SOMValue,
+    other: SOMValue,
+) -> Result<(), Error> {
     const SIGNATURE: &'static str = "Object>>#==";
 
-    expect_args!(SIGNATURE, interpreter, [
-        a => a,
-        b => b,
-    ]);
+    interpreter
+        .stack
+        .push(SOMValue::new_boolean(receiver == other));
 
-    interpreter.stack.push(SOMValue::new_boolean(a == b));
+    Ok(())
 }
 
-fn perform(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Universe) {
+fn perform(
+    interpreter: &mut Interpreter,
+    heap: &mut GcHeap,
+    universe: &mut Universe,
+    receiver: SOMValue,
+    signature: Interned,
+) -> Result<(), Error> {
     const SIGNATURE: &'static str = "Object>>#perform:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        receiver => receiver,
-        Value::Symbol(sym) => sym,
-    ]);
-
-    let receiver = SOMValue::from(receiver);
-    let signature = universe.lookup_symbol(sym);
-    let method = receiver.lookup_method(universe, sym);
+    let method = receiver.lookup_method(universe, signature);
 
     match method {
         Some(invokable) => Method::invoke(invokable, interpreter, heap, universe, receiver, vec![]),
         None => {
-            let signature = signature.to_string();
+            let signature_str = universe.lookup_symbol(signature).to_owned();
             universe
-                .does_not_understand(interpreter, heap, receiver.into(), sym, vec![receiver])
-                .unwrap_or_else(|| {
-                    panic!(
+                .does_not_understand(
+                    interpreter,
+                    heap,
+                    receiver.into(),
+                    signature,
+                    vec![receiver],
+                )
+                .with_context(|| {
+                    anyhow!(
                         "'{}': method '{}' not found for '{}'",
                         SIGNATURE,
-                        signature,
+                        signature_str,
                         receiver.to_string(universe),
                     )
-                    // Return::Local(Value::Nil)
                 })
         }
     }
@@ -109,37 +146,35 @@ fn perform_with_arguments(
     interpreter: &mut Interpreter,
     heap: &mut GcHeap,
     universe: &mut Universe,
-) {
+    receiver: SOMValue,
+    signature: Interned,
+    arguments: SOMRef<Vec<SOMValue>>,
+) -> Result<(), Error> {
     const SIGNATURE: &'static str = "Object>>#perform:withArguments:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        receiver => receiver,
-        Value::Symbol(sym) => sym,
-        Value::Array(arr) => arr,
-    ]);
-
-    let receiver = SOMValue::from(receiver);
-    let signature = universe.lookup_symbol(sym);
-    let method = receiver.lookup_method(universe, sym);
-    let args = arr.take().into_iter().map(SOMValue::from).collect();
+    let method = receiver.lookup_method(universe, signature);
 
     match method {
-        Some(invokable) => {
-            Method::invoke(invokable, interpreter, heap, universe, receiver, args);
-        }
+        Some(invokable) => Method::invoke(
+            invokable,
+            interpreter,
+            heap,
+            universe,
+            receiver,
+            arguments.take(),
+        ),
         None => {
-            let signature = signature.to_string();
-            let args = std::iter::once(receiver).chain(args).collect();
+            let signature_str = universe.lookup_symbol(signature).to_owned();
+            let args = std::iter::once(receiver).chain(arguments.take()).collect();
             universe
-                .does_not_understand(interpreter, heap, receiver, sym, args)
-                .unwrap_or_else(|| {
-                    panic!(
+                .does_not_understand(interpreter, heap, receiver, signature, args)
+                .with_context(|| {
+                    anyhow!(
                         "'{}': method '{}' not found for '{}'",
                         SIGNATURE,
-                        signature,
+                        signature_str,
                         receiver.to_string(universe)
                     )
-                    // Return::Local(Value::Nil)
                 })
         }
     }
@@ -149,34 +184,34 @@ fn perform_in_super_class(
     interpreter: &mut Interpreter,
     heap: &mut GcHeap,
     universe: &mut Universe,
-) {
+    receiver: SOMValue,
+    signature: Interned,
+    class: SOMRef<Class>,
+) -> Result<(), Error> {
     const SIGNATURE: &'static str = "Object>>#perform:inSuperclass:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        receiver => receiver,
-        Value::Symbol(sym) => sym,
-        Value::Class(class) => class,
-    ]);
-
-    let receiver = SOMValue::from(receiver);
-    let signature = universe.lookup_symbol(sym);
-    let method = class.borrow().lookup_method(sym);
+    let method = class.borrow().lookup_method(signature);
 
     match method {
         Some(invokable) => Method::invoke(invokable, interpreter, heap, universe, receiver, vec![]),
         None => {
-            let signature = signature.to_string();
+            let signature_str = universe.lookup_symbol(signature).to_owned();
             let args = vec![receiver];
             universe
-                .does_not_understand(interpreter, heap, SOMValue::new_class(&class), sym, args)
-                .unwrap_or_else(|| {
-                    panic!(
+                .does_not_understand(
+                    interpreter,
+                    heap,
+                    SOMValue::new_class(&class),
+                    signature,
+                    args,
+                )
+                .with_context(|| {
+                    anyhow!(
                         "'{}': method '{}' not found for '{}'",
                         SIGNATURE,
-                        signature,
+                        signature_str,
                         receiver.to_string(universe)
                     )
-                    // Return::Local(Value::Nil)
                 })
         }
     }
@@ -186,86 +221,84 @@ fn perform_with_arguments_in_super_class(
     interpreter: &mut Interpreter,
     heap: &mut GcHeap,
     universe: &mut Universe,
-) {
+    receiver: SOMValue,
+    signature: Interned,
+    arguments: SOMRef<Vec<SOMValue>>,
+    class: SOMRef<Class>,
+) -> Result<(), Error> {
     const SIGNATURE: &'static str = "Object>>#perform:withArguments:inSuperclass:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        receiver => receiver,
-        Value::Symbol(sym) => sym,
-        Value::Array(arr) => arr,
-        Value::Class(class) => class,
-    ]);
-
-    let receiver = SOMValue::from(receiver);
-    let signature = universe.lookup_symbol(sym);
-    let method = class.borrow().lookup_method(sym);
-    let args = arr.take().into_iter().map(SOMValue::from).collect();
+    let method = class.borrow().lookup_method(signature);
 
     match method {
-        Some(invokable) => Method::invoke(invokable, interpreter, heap, universe, receiver, args),
+        Some(invokable) => Method::invoke(
+            invokable,
+            interpreter,
+            heap,
+            universe,
+            receiver,
+            arguments.take(),
+        ),
         None => {
-            let args = std::iter::once(receiver).chain(args).collect();
-            let signature = signature.to_string();
+            let signature_str = universe.lookup_symbol(signature).to_owned();
+            let args = std::iter::once(receiver).chain(arguments.take()).collect();
             universe
-                .does_not_understand(interpreter, heap, SOMValue::new_class(&class), sym, args)
-                .unwrap_or_else(|| {
-                    panic!(
+                .does_not_understand(
+                    interpreter,
+                    heap,
+                    SOMValue::new_class(&class),
+                    signature,
+                    args,
+                )
+                .with_context(|| {
+                    anyhow!(
                         "'{}': method '{}' not found for '{}'",
                         SIGNATURE,
-                        signature,
+                        signature_str,
                         receiver.to_string(universe)
                     )
-                    // Return::Local(Value::Nil)
                 })
         }
     }
 }
 
-fn inst_var_at(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn inst_var_at(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    receiver: SOMValue,
+    index: i32,
+) -> Result<(), Error> {
     const SIGNATURE: &'static str = "Object>>#instVarAt:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        receiver => receiver,
-        Value::Integer(index) => index,
-    ]);
-
-    let index = match usize::try_from(index - 1) {
-        Ok(index) => index,
-        Err(err) => panic!("'{}': {}", SIGNATURE, err),
-    };
-
-    let receiver = SOMValue::from(receiver);
+    let index = usize::try_from(index.saturating_sub(1))?;
     let local = receiver.lookup_local(index).unwrap_or(SOMValue::NIL);
-
     interpreter.stack.push(local);
+
+    Ok(())
 }
 
-fn inst_var_at_put(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
+fn inst_var_at_put(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    mut receiver: SOMValue,
+    index: i32,
+    value: SOMValue,
+) -> Result<(), Error> {
     const SIGNATURE: &'static str = "Object>>#instVarAt:put:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        receiver => receiver,
-        Value::Integer(index) => index,
-        value => value,
-    ]);
-
-    let index = match usize::try_from(index - 1) {
-        Ok(index) => index,
-        Err(err) => panic!("'{}': {}", SIGNATURE, err),
-    };
-
-    let mut receiver = SOMValue::from(receiver);
-    let value = SOMValue::from(value);
+    let index = usize::try_from(index.saturating_sub(1))?;
     let local = receiver
         .assign_local(index, value)
-        .map(|_| value)
-        .unwrap_or(SOMValue::NIL);
-
+        .map_or(SOMValue::NIL, |_| value);
     interpreter.stack.push(local);
+
+    Ok(())
 }
 
 /// Search for an instance primitive matching the given signature.
-pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
+pub fn get_instance_primitive(signature: &str) -> Option<&'static PrimitiveFn> {
     INSTANCE_PRIMITIVES
         .iter()
         .find(|it| it.0 == signature)
@@ -273,7 +306,7 @@ pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
 }
 
 /// Search for a class primitive matching the given signature.
-pub fn get_class_primitive(signature: &str) -> Option<PrimitiveFn> {
+pub fn get_class_primitive(signature: &str) -> Option<&'static PrimitiveFn> {
     CLASS_PRIMITIVES
         .iter()
         .find(|it| it.0 == signature)

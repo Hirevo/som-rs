@@ -705,6 +705,7 @@ impl Trace for Value {
 
 impl Value {
     /// Get the class of the current value.
+    #[inline(always)]
     pub fn class(&self, universe: &Universe) -> SOMRef<Class> {
         match self {
             Self::Nil => universe.nil_class(),
@@ -725,27 +726,30 @@ impl Value {
     }
 
     /// Search for a given method for this value.
+    #[inline(always)]
     pub fn lookup_method(&self, universe: &Universe, signature: Interned) -> Option<Gc<Method>> {
         self.class(universe).borrow().lookup_method(signature)
     }
 
-    // /// Search for a local binding within this value.
-    // pub fn lookup_local(&self, idx: usize) -> Option<Self> {
-    //     match self {
-    //         Self::Instance(instance) => instance.borrow().lookup_local(idx),
-    //         Self::Class(class) => class.borrow().lookup_local(idx),
-    //         _ => None,
-    //     }
-    // }
+    /// Search for a local binding within this value.
+    #[inline(always)]
+    pub fn lookup_local(&self, idx: usize) -> Option<Self> {
+        match self {
+            Self::Instance(instance) => instance.borrow().lookup_local(idx).map(|it| it.into()),
+            Self::Class(class) => class.borrow().lookup_local(idx).map(|it| it.into()),
+            _ => None,
+        }
+    }
 
-    // /// Assign a value to a local binding within this value.
-    // pub fn assign_local(&mut self, idx: usize, value: Self) -> Option<()> {
-    //     match self {
-    //         Self::Instance(instance) => instance.borrow_mut().assign_local(idx, value),
-    //         Self::Class(class) => class.borrow_mut().assign_local(idx, value),
-    //         _ => None,
-    //     }
-    // }
+    /// Assign a value to a local binding within this value.
+    #[inline(always)]
+    pub fn assign_local(&mut self, idx: usize, value: Self) -> Option<()> {
+        match self {
+            Self::Instance(instance) => instance.borrow_mut().assign_local(idx, value.into()),
+            Self::Class(class) => class.borrow_mut().assign_local(idx, value.into()),
+            _ => None,
+        }
+    }
 
     /// Get the string representation of this value.
     pub fn to_string(&self, universe: &Universe) -> String {

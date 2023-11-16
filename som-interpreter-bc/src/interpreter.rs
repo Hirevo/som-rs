@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::time::Instant;
 
+use anyhow::{bail, Context, Error};
 use som_core::bytecode::Bytecode;
 use som_gc::{Gc, GcHeap, Trace};
 
@@ -16,9 +17,12 @@ use crate::SOMRef;
 
 macro_rules! send {
     ($interp:expr, $universe:expr, $heap:expr, $frame:expr, $lit_idx:expr, $nb_params:expr, $bytecode_idx:expr) => {{
-        let &Literal::Symbol(symbol) = $frame.borrow().lookup_constant($lit_idx as usize).unwrap()
+        let &Literal::Symbol(symbol) = $frame
+            .borrow()
+            .lookup_constant($lit_idx as usize)
+            .context("SEND without a signature constant")?
         else {
-            return None;
+            bail!("SEND with a non-symbol signature constant");
         };
         let nb_params = match $nb_params {
             Some(v) => v,
@@ -28,7 +32,11 @@ macro_rules! send {
             }
         };
         let method = {
-            let receiver = $interp.stack.iter().nth_back(nb_params)?;
+            let receiver = $interp
+                .stack
+                .iter()
+                .nth_back(nb_params)
+                .context("missing SEND arguments")?;
             let receiver_class = receiver.class($universe);
             resolve_method($frame, &receiver_class, symbol, $bytecode_idx)
         };
@@ -39,7 +47,8 @@ macro_rules! send {
             method,
             symbol,
             nb_params as usize,
-        );
+        )
+        .with_context(|| anyhow::anyhow!("error calling `{}`", $universe.lookup_symbol(symbol)))?;
         $heap.maybe_collect_garbage(|| {
             $interp.trace();
             $universe.trace();
@@ -49,10 +58,14 @@ macro_rules! send {
 
 macro_rules! super_send {
     ($interp:expr, $universe:expr, $heap:expr, $frame:expr, $lit_idx:expr, $nb_params:expr, $bytecode_idx:expr) => {{
-        let &Literal::Symbol(symbol) = $frame.borrow().lookup_constant($lit_idx as usize).unwrap()
+        let &Literal::Symbol(symbol) = $frame
+            .borrow()
+            .lookup_constant($lit_idx as usize)
+            .context("SUPER_SEND without a signature constant")?
         else {
-            return None;
+            bail!("SUPER_SEND with a non-symbol signature constant");
         };
+
         let nb_params = match $nb_params {
             Some(v) => v,
             None => {
@@ -62,7 +75,10 @@ macro_rules! super_send {
         };
         let method = {
             let holder = $frame.borrow().get_method_holder();
-            let super_class = holder.borrow().super_class().unwrap();
+            let super_class = holder
+                .borrow()
+                .super_class()
+                .context("SUPER_SEND without a super class")?;
             resolve_method($frame, &super_class, symbol, $bytecode_idx)
         };
         do_send(
@@ -72,7 +88,8 @@ macro_rules! super_send {
             method,
             symbol,
             nb_params as usize,
-        );
+        )
+        .with_context(|| anyhow::anyhow!("error calling `{}`", $universe.lookup_symbol(symbol)))?;
         $heap.maybe_collect_garbage(|| {
             $interp.trace();
             $universe.trace();
@@ -120,29 +137,29 @@ impl Interpreter {
         self.frames.last()
     }
 
-    pub fn run(&mut self, heap: &mut GcHeap, universe: &mut Universe) -> Option<SOMValue> {
+    pub fn run(&mut self, heap: &mut GcHeap, universe: &mut Universe) -> Result<SOMValue, Error> {
         loop {
-            let Some(frame) = self.current_frame() else {
+            let Some(frame) = self.frames.last() else {
                 heap.maybe_collect_garbage(|| {
                     self.trace();
                     universe.trace();
                 });
 
-                return Some(self.stack.pop().unwrap_or(SOMValue::NIL));
+                return Ok(self.stack.pop().unwrap_or(SOMValue::NIL));
             };
 
-            let mut cur_frame = frame.borrow_mut();
-            let Some(bytecode) = cur_frame.get_current_bytecode() else {
-                drop(cur_frame);
-                self.pop_frame();
-                self.stack.push(SOMValue::NIL);
-                continue;
+            let (bytecode, bytecode_idx) = {
+                let mut cur_frame = frame.borrow_mut();
+                let Some(bytecode) = cur_frame.get_current_bytecode() else {
+                    drop(cur_frame);
+                    self.pop_frame();
+                    self.stack.push(SOMValue::NIL);
+                    continue;
+                };
+                let bytecode_idx = cur_frame.bytecode_idx;
+                cur_frame.bytecode_idx += 1;
+                (bytecode, bytecode_idx)
             };
-
-            let bytecode_idx = cur_frame.bytecode_idx;
-            cur_frame.bytecode_idx += 1;
-
-            drop(cur_frame);
 
             match bytecode {
                 Bytecode::Halt => {
@@ -151,58 +168,79 @@ impl Interpreter {
                         universe.trace();
                     });
 
-                    return Some(SOMValue::NIL);
+                    return Ok(SOMValue::NIL);
                 }
                 Bytecode::Dup => {
-                    let value = self.stack.last().cloned().unwrap();
+                    let value = self
+                        .stack
+                        .last()
+                        .cloned()
+                        .context("DUP with missing value")?;
                     self.stack.push(value);
                 }
                 Bytecode::PushLocal(up_idx, idx) => {
                     let mut from = frame.clone();
                     for _ in 0..up_idx {
                         let temp = match from.borrow().kind() {
-                            FrameKind::Block { block } => block.frame.clone().unwrap(),
+                            FrameKind::Block { block } => {
+                                block.frame.clone().context("missing block frame")?
+                            }
                             FrameKind::Method { .. } => {
-                                panic!("requested local from non-existing frame")
+                                bail!("requested local from non-existing frame");
                             }
                         };
                         from = temp;
                     }
-                    let value = from.borrow().lookup_local(idx as usize).unwrap();
+                    let value = from
+                        .borrow()
+                        .lookup_local(idx as usize)
+                        .context("PUSH_LOCAL with missing local")?;
                     self.stack.push(value);
                 }
                 Bytecode::PushArgument(up_idx, idx) => {
                     let mut from = frame.clone();
                     for _ in 0..up_idx {
                         let temp = match from.borrow().kind() {
-                            FrameKind::Block { block } => block.frame.clone().unwrap(),
+                            FrameKind::Block { block } => {
+                                block.frame.clone().context("missing block frame")?
+                            }
                             FrameKind::Method { .. } => {
-                                panic!("requested local from non-existing frame")
+                                bail!("requested local from non-existing frame");
                             }
                         };
                         from = temp;
                     }
-                    let value = from.borrow().lookup_argument(idx as usize).unwrap();
+                    let value = from
+                        .borrow()
+                        .lookup_argument(idx as usize)
+                        .context("PUSH_ARGUMENT with missing argument")?;
                     self.stack.push(value);
                 }
                 Bytecode::PushField(idx) => {
                     let holder = frame.borrow().get_method_holder();
                     let value = if holder.borrow().is_static {
-                        holder.borrow_mut().lookup_local(idx as usize).unwrap()
+                        holder
+                            .borrow_mut()
+                            .lookup_local(idx as usize)
+                            .context("PUSH_FIELD with missing field")?
                     } else {
                         let self_value = frame.borrow().get_self();
-                        self_value.lookup_local(idx as usize).unwrap()
+                        self_value
+                            .lookup_local(idx as usize)
+                            .context("PUSH_FIELD with missing field")?
                     };
                     self.stack.push(value);
                 }
                 Bytecode::PushBlock(idx) => {
                     let value = {
                         let frame_ref = frame.borrow();
-                        let literal = frame_ref.lookup_constant(idx as usize).unwrap();
-                        let mut block = match literal {
-                            Literal::Block(blk) => Block::clone(&blk),
-                            _ => return None,
+                        let literal = frame_ref
+                            .lookup_constant(idx as usize)
+                            .context("PUSH_BLOCK with missing constant")?;
+                        let Literal::Block(block) = literal else {
+                            bail!("PUSH_BLOCK with non-block literal constant");
                         };
+                        let mut block = Block::clone(&block);
                         block.frame.replace(Gc::clone(&frame));
                         SOMValue::new_block(&heap.allocate(block))
                     };
@@ -211,8 +249,10 @@ impl Interpreter {
                 Bytecode::PushConstant(idx) => {
                     let value = {
                         let frame_ref = frame.borrow();
-                        let literal = frame_ref.lookup_constant(idx as usize).unwrap();
-                        convert_literal(heap, &frame, literal).unwrap()
+                        let literal = frame_ref
+                            .lookup_constant(idx as usize)
+                            .context("PUSH_CONSTANT with missing constant")?;
+                        convert_literal(heap, &frame, literal)?
                     };
                     self.stack.push(value);
                 }
@@ -241,18 +281,22 @@ impl Interpreter {
                     self.stack.push(value);
                 }
                 Bytecode::PushGlobal(idx) => {
-                    let symbol = match frame.borrow().lookup_constant(idx as usize) {
-                        Some(&Literal::Symbol(sym)) => sym,
-                        _ => return None,
+                    let frame_ref = frame.borrow();
+                    let &Literal::Symbol(symbol) = frame_ref
+                        .lookup_constant(idx as usize)
+                        .context("PUSH_GLOBAL with missing constant")?
+                    else {
+                        bail!("PUSH_GLOBAL attempted with a non-symbol constant");
                     };
-                    if let Some(value) = universe.lookup_global(symbol) {
-                        self.stack.push(value);
-                    } else {
-                        let self_value = frame.borrow().get_self();
+                    let Some(value) = universe.lookup_global(symbol) else {
+                        let self_value = frame_ref.get_self();
+                        drop(frame_ref);
                         universe
                             .unknown_global(self, heap, self_value, symbol)
-                            .unwrap();
-                    }
+                            .context("missing `#unknownGlobal:` method")?;
+                        continue;
+                    };
+                    self.stack.push(value);
                 }
                 Bytecode::Push0 => {
                     self.stack.push(SOMValue::INTEGER_ZERO);
@@ -264,30 +308,39 @@ impl Interpreter {
                     self.stack.push(SOMValue::NIL);
                 }
                 Bytecode::Pop => {
-                    self.stack.pop();
+                    self.stack.pop().context("POP with missing value")?;
                 }
                 Bytecode::PopLocal(up_idx, idx) => {
-                    let value = self.stack.pop().unwrap();
-                    let mut from = self.current_frame().unwrap().clone();
+                    let value = self.stack.pop().context("POP_LOCAL with missing value")?;
+                    let mut from = frame.clone();
                     for _ in 0..up_idx {
                         let temp = match from.borrow().kind() {
-                            FrameKind::Block { block } => block.frame.clone().unwrap(),
+                            FrameKind::Block { block } => {
+                                block.frame.clone().context("missing block frame")?
+                            }
                             FrameKind::Method { .. } => {
-                                panic!("requested local from non-existing frame")
+                                bail!("requested local from non-existing frame");
                             }
                         };
                         from = temp;
                     }
-                    from.borrow_mut().assign_local(idx as usize, value).unwrap();
+                    from.borrow_mut()
+                        .assign_local(idx as usize, value)
+                        .context("POP_LOCAL with missing local")?;
                 }
                 Bytecode::PopArgument(up_idx, idx) => {
-                    let value = self.stack.pop().unwrap();
-                    let mut from = self.current_frame().unwrap().clone();
+                    let value = self
+                        .stack
+                        .pop()
+                        .context("POP_ARGUMENT with missing value")?;
+                    let mut from = frame.clone();
                     for _ in 0..up_idx {
                         let temp = match from.borrow().kind() {
-                            FrameKind::Block { block } => block.frame.clone().unwrap(),
+                            FrameKind::Block { block } => {
+                                block.frame.clone().context("missing block frame")?
+                            }
                             FrameKind::Method { .. } => {
-                                panic!("requested local from non-existing frame")
+                                bail!("requested local from non-existing frame");
                             }
                         };
                         from = temp;
@@ -296,20 +349,21 @@ impl Interpreter {
                         .args
                         .get_mut(idx as usize)
                         .map(|loc| *loc = value)
-                        .unwrap();
+                        .context("POP_ARGUMENT with missing argument")?;
                 }
                 Bytecode::PopField(idx) => {
-                    let value = self.stack.pop().unwrap();
-                    let frame = self.current_frame().unwrap();
+                    let value = self.stack.pop().context("POP_FIELD with missing value")?;
                     let holder = frame.borrow().get_method_holder();
                     if holder.borrow().is_static {
                         holder
                             .borrow_mut()
                             .assign_local(idx as usize, value)
-                            .unwrap();
+                            .context("POP_FIELD with missing field")?;
                     } else {
                         let mut self_value = frame.borrow().get_self();
-                        self_value.assign_local(idx as usize, value).unwrap();
+                        self_value
+                            .assign_local(idx as usize, value)
+                            .context("POP_FIELD with missing field")?;
                     }
                 }
                 Bytecode::Send1(idx) => {
@@ -338,14 +392,19 @@ impl Interpreter {
                     super_send!(self, universe, heap, frame, idx, None, bytecode_idx)
                 }
                 Bytecode::ReturnLocal => {
-                    let value = self.stack.pop().unwrap();
+                    let value = self
+                        .stack
+                        .pop()
+                        .context("RETURN_LOCAL with missing value")?;
                     self.pop_frame();
                     self.stack.push(value);
                 }
                 Bytecode::ReturnNonLocal => {
-                    let value = self.stack.pop().unwrap();
-                    let frame = self.current_frame().unwrap();
-                    let method_frame = Frame::method_frame(&frame);
+                    let value = self
+                        .stack
+                        .pop()
+                        .context("RETURN_NON_LOCAL with missing value")?;
+                    let method_frame = Frame::method_frame(frame);
                     let escaped_frames = self
                         .frames
                         .iter()
@@ -358,19 +417,19 @@ impl Interpreter {
                         self.stack.push(value);
                     } else {
                         // Block has escaped its method frame.
-                        let instance = frame.borrow().get_self();
-                        let block = match frame.borrow().kind() {
-                            FrameKind::Block { block, .. } => block.clone(),
-                            _ => {
-                                // Should never happen, because `universe.current_frame()` would
-                                // have been equal to `universe.current_method_frame()`.
-                                panic!("A method frame has escaped itself ??");
-                            }
+                        let frame_ref = frame.borrow();
+                        let instance = frame_ref.get_self();
+                        let FrameKind::Block { block, .. } = frame_ref.kind() else {
+                            // Should never happen, because `universe.current_frame()` would
+                            // have been equal to `universe.current_method_frame()`.
+                            bail!("A method frame has escaped itself ??");
                         };
+                        let block = Gc::clone(&block);
+                        drop(frame_ref);
                         // TODO: should we call `doesNotUnderstand:` here ?
-                        universe.escaped_block(self, heap, instance, block).expect(
-                            "A block has escaped and `escapedBlock:` is not defined on receiver",
-                        );
+                        universe
+                            .escaped_block(self, heap, instance, block.clone())
+                            .context("A block has escaped and `escapedBlock:` is not defined on receiver")?;
                     }
                 }
             }
@@ -383,24 +442,28 @@ impl Interpreter {
             method: Option<Gc<Method>>,
             symbol: Interned,
             nb_params: usize,
-        ) {
+        ) -> Result<(), Error> {
             let Some(method) = method else {
                 let mut args = Vec::with_capacity(nb_params + 1);
 
                 for _ in 0..nb_params {
-                    let arg = interpreter.stack.pop().unwrap();
+                    let arg = interpreter
+                        .stack
+                        .pop()
+                        .context("message send with missing argument")?;
                     args.push(arg);
                 }
-                let self_value = interpreter.stack.pop().unwrap();
+                let self_value = interpreter
+                    .stack
+                    .pop()
+                    .context("message send with missing receiver")?;
 
                 args.reverse();
 
-                universe.does_not_understand(interpreter, heap, self_value, symbol, args)
-                    .expect(
+                return universe.does_not_understand(interpreter, heap, self_value, symbol, args)
+                    .context(
                         "A message cannot be handled and `doesNotUnderstand:arguments:` is not defined on receiver"
                     );
-
-                return;
             };
 
             match &method.kind {
@@ -408,10 +471,16 @@ impl Interpreter {
                     let mut args = Vec::with_capacity(nb_params + 1);
 
                     for _ in 0..nb_params {
-                        let arg = interpreter.stack.pop().unwrap();
+                        let arg = interpreter
+                            .stack
+                            .pop()
+                            .context("message send with missing argument")?;
                         args.push(arg);
                     }
-                    let self_value = interpreter.stack.pop().unwrap();
+                    let self_value = interpreter
+                        .stack
+                        .pop()
+                        .context("message send with missing receiver")?;
                     args.push(self_value.clone());
 
                     args.reverse();
@@ -425,10 +494,10 @@ impl Interpreter {
                         },
                     );
                     frame.borrow_mut().args = args;
+
+                    Ok(())
                 }
-                MethodKind::Primitive(func) => {
-                    func(interpreter, heap, universe);
-                }
+                MethodKind::Primitive(func) => func(interpreter, heap, universe),
                 MethodKind::NotImplemented(err) => {
                     let self_value = interpreter.stack.iter().nth_back(nb_params).unwrap();
                     println!(
@@ -436,7 +505,7 @@ impl Interpreter {
                         self_value.class(&universe).borrow().name(),
                         method.signature(),
                     );
-                    panic!("Primitive `#{}` not implemented", err)
+                    bail!("Primitive `#{}` not implemented", err)
                 }
             }
         }
@@ -499,7 +568,7 @@ impl Interpreter {
             heap: &mut GcHeap,
             frame: &SOMRef<Frame>,
             literal: &Literal,
-        ) -> Option<SOMValue> {
+        ) -> Result<SOMValue, Error> {
             let value = match literal {
                 Literal::Symbol(sym) => SOMValue::new_symbol(*sym),
                 Literal::String(val) => SOMValue::new_string(val),
@@ -513,15 +582,15 @@ impl Interpreter {
                             frame
                                 .borrow()
                                 .lookup_constant(*idx as usize)
+                                .context("missing constant in array literal")
                                 .and_then(|lit| convert_literal(heap, frame, lit))
                         })
-                        .collect::<Option<Vec<_>>>()
-                        .unwrap();
+                        .collect::<Result<Vec<_>, _>>()?;
                     SOMValue::new_array(&heap.allocate(RefCell::new(arr)))
                 }
                 Literal::Block(val) => SOMValue::new_block(&val),
             };
-            Some(value)
+            Ok(value)
         }
 
         fn nb_params(signature: &str) -> usize {

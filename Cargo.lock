@@ -324,6 +324,7 @@ dependencies = [
  "jemallocator",
  "num-bigint",
  "num-traits",
+ "once_cell",
  "rand",
  "som-core",
  "som-gc",
