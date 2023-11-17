@@ -38,7 +38,7 @@ pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] =
 macro_rules! demote {
     ($expr:expr) => {{
         let value = $expr;
-        match value.to_i64() {
+        match value.to_i32() {
             Some(value) => Return::Local(Value::Integer(value)),
             None => Return::Local(Value::BigInteger(value)),
         }
@@ -137,10 +137,10 @@ fn as_32bit_signed_value(_: &mut Universe, args: Vec<Value>) -> Return {
     ]);
 
     let value = match value {
-        Value::Integer(value) => value as i32 as i64,
+        Value::Integer(value) => value as i32,
         Value::BigInteger(value) => match value.to_u32_digits() {
-            (Sign::Minus, values) => -(values[0] as i64),
-            (Sign::Plus, values) | (Sign::NoSign, values) => values[0] as i64,
+            (Sign::Minus, values) => -(values[0] as i32),
+            (Sign::Plus, values) | (Sign::NoSign, values) => values[0] as i32,
         },
         _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
     };
@@ -156,10 +156,10 @@ fn as_32bit_unsigned_value(_: &mut Universe, args: Vec<Value>) -> Return {
     ]);
 
     let value = match value {
-        Value::Integer(value) => value as u32 as i64,
+        Value::Integer(value) => value as u32 as i32,
         Value::BigInteger(value) => {
             let (_, values) = value.to_u32_digits();
-            values[0] as i64
+            values[0] as i32
         }
         _ => return Return::Exception(format!("'{}': wrong types", SIGNATURE)),
     };
@@ -352,7 +352,7 @@ fn sqrt(_: &mut Universe, args: Vec<Value>) -> Return {
             let sqrt = (a as f64).sqrt();
             let trucated = sqrt.trunc();
             if sqrt == trucated {
-                Return::Local(Value::Integer(trucated as i64))
+                Return::Local(Value::Integer(trucated as i32))
             } else {
                 Return::Local(Value::Double(sqrt))
             }
