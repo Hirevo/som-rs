@@ -1,4 +1,4 @@
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::fs;
 use std::rc::Rc;
 
@@ -182,7 +182,7 @@ fn ticks(universe: &mut Universe, args: Vec<Value>) -> Return {
 
     expect_args!(SIGNATURE, args, [Value::System]);
 
-    match i64::try_from(universe.start_time.elapsed().as_micros()) {
+    match universe.start_time.elapsed().as_micros().try_into() {
         Ok(micros) => Return::Local(Value::Integer(micros)),
         Err(err) => Return::Exception(format!("'{}': {}", SIGNATURE, err)),
     }
@@ -193,7 +193,7 @@ fn time(universe: &mut Universe, args: Vec<Value>) -> Return {
 
     expect_args!(SIGNATURE, args, [Value::System]);
 
-    match i64::try_from(universe.start_time.elapsed().as_millis()) {
+    match universe.start_time.elapsed().as_millis().try_into() {
         Ok(micros) => Return::Local(Value::Integer(micros)),
         Err(err) => Return::Exception(format!("'{}': {}", SIGNATURE, err)),
     }
