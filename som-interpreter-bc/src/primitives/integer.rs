@@ -7,10 +7,11 @@ use once_cell::sync::Lazy;
 use rand::distributions::Uniform;
 use rand::Rng;
 
-use som_gc::GcHeap;
+use som_gc::{Gc, GcHeap};
 
+use crate::convert::{DoubleLike, IntegerLike, Primitive, StringLike};
 use crate::interpreter::Interpreter;
-use crate::primitives::{DoubleLike, IntegerLike, Primitive, PrimitiveFn, StringLike};
+use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::SOMValue;
 
@@ -49,7 +50,7 @@ pub static CLASS_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> =
     Lazy::new(|| Box::new([("fromString:", self::from_string.into_func(), true)]));
 
 macro_rules! demote {
-    ($interpreter:expr, $heap:expr, $expr:expr) => {{
+    ($heap:expr, $expr:expr) => {{
         let value = $expr;
         match value.to_i32() {
             Some(value) => SOMValue::new_integer(value),
@@ -59,12 +60,12 @@ macro_rules! demote {
 }
 
 fn from_string(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     universe: &mut Universe,
     _: SOMValue,
     string: StringLike,
-) -> Result<(), Error> {
+) -> Result<SOMValue, Error> {
     const SIGNATURE: &str = "Integer>>#fromString:";
 
     let string = match string {
@@ -79,17 +80,15 @@ fn from_string(
         })
     })?;
 
-    interpreter.stack.push(parsed);
-
-    Ok(())
+    Ok(parsed)
 }
 
 fn as_string(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     _: &mut Universe,
     receiver: IntegerLike,
-) -> Result<(), Error> {
+) -> Result<Gc<String>, Error> {
     const SIGNATURE: &str = "Integer>>#asString";
 
     let receiver = match receiver {
@@ -97,41 +96,33 @@ fn as_string(
         IntegerLike::BigInteger(value) => value.to_string(),
     };
 
-    let allocated = heap.allocate(receiver);
-    interpreter.stack.push(SOMValue::new_string(&allocated));
-
-    Ok(())
+    Ok(heap.allocate(receiver))
 }
 
 fn as_double(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
     receiver: IntegerLike,
-) -> Result<(), Error> {
+) -> Result<f64, Error> {
     const SIGNATURE: &str = "Integer>>#asDouble";
 
-    let receiver = match receiver {
-        IntegerLike::Integer(value) => SOMValue::new_double(value as f64),
-        IntegerLike::BigInteger(value) => {
-            let value = value
-                .to_f64()
-                .context("could not convert big integer to f64")?;
-            SOMValue::new_double(value)
-        }
+    let value = match receiver {
+        IntegerLike::Integer(value) => value as f64,
+        IntegerLike::BigInteger(value) => value
+            .to_f64()
+            .context("could not convert big integer to f64")?,
     };
 
-    interpreter.stack.push(receiver);
-
-    Ok(())
+    Ok(value)
 }
 
 fn at_random(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
     receiver: IntegerLike,
-) -> Result<(), Error> {
+) -> Result<i32, Error> {
     const SIGNATURE: &str = "Integer>>#atRandom";
 
     let chosen = match receiver {
@@ -145,20 +136,18 @@ fn at_random(
         }
     };
 
-    interpreter.stack.push(SOMValue::new_integer(chosen));
-
-    Ok(())
+    Ok(chosen)
 }
 
 fn as_32bit_signed_value(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
     receiver: IntegerLike,
-) -> Result<(), Error> {
+) -> Result<i32, Error> {
     const SIGNATURE: &str = "Integer>>#as32BitSignedValue";
 
-    let receiver = match receiver {
+    let value = match receiver {
         IntegerLike::Integer(value) => value,
         IntegerLike::BigInteger(value) => match value.to_u32_digits() {
             (Sign::Minus, values) => -(values[0] as i32),
@@ -166,20 +155,18 @@ fn as_32bit_signed_value(
         },
     };
 
-    interpreter.stack.push(SOMValue::new_integer(receiver));
-
-    Ok(())
+    Ok(value)
 }
 
 fn as_32bit_unsigned_value(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
     receiver: IntegerLike,
-) -> Result<(), Error> {
+) -> Result<i32, Error> {
     const SIGNATURE: &str = "Integer>>#as32BitUnsignedValue";
 
-    let receiver = match receiver {
+    let value = match receiver {
         IntegerLike::Integer(value) => value as u32 as i32,
         IntegerLike::BigInteger(value) => {
             let (_, values) = value.to_u32_digits();
@@ -187,31 +174,29 @@ fn as_32bit_unsigned_value(
         }
     };
 
-    interpreter.stack.push(SOMValue::new_integer(receiver));
-
-    Ok(())
+    Ok(value)
 }
 
 fn plus(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     _: &mut Universe,
     a: DoubleLike,
     b: DoubleLike,
-) -> Result<(), Error> {
+) -> Result<SOMValue, Error> {
     const SIGNATURE: &str = "Integer>>#+";
 
     let value = match (a, b) {
         (DoubleLike::Integer(a), DoubleLike::Integer(b)) => match a.checked_add(b) {
             Some(value) => SOMValue::new_integer(value),
-            None => demote!(interpreter, heap, BigInt::from(a) + BigInt::from(b)),
+            None => demote!(heap, BigInt::from(a) + BigInt::from(b)),
         },
         (DoubleLike::BigInteger(a), DoubleLike::BigInteger(b)) => {
-            demote!(interpreter, heap, a.as_ref() + b.as_ref())
+            demote!(heap, a.as_ref() + b.as_ref())
         }
         (DoubleLike::BigInteger(a), DoubleLike::Integer(b))
         | (DoubleLike::Integer(b), DoubleLike::BigInteger(a)) => {
-            demote!(interpreter, heap, a.as_ref() + BigInt::from(b))
+            demote!(heap, a.as_ref() + BigInt::from(b))
         }
         (DoubleLike::Double(a), DoubleLike::Double(b)) => SOMValue::new_double(a + b),
         (DoubleLike::Integer(a), DoubleLike::Double(b))
@@ -226,33 +211,31 @@ fn plus(
         },
     };
 
-    interpreter.stack.push(value);
-
-    Ok(())
+    Ok(value)
 }
 
 fn minus(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     _: &mut Universe,
     a: DoubleLike,
     b: DoubleLike,
-) -> Result<(), Error> {
+) -> Result<SOMValue, Error> {
     const SIGNATURE: &str = "Integer>>#-";
 
     let value = match (a, b) {
         (DoubleLike::Integer(a), DoubleLike::Integer(b)) => match a.checked_sub(b) {
             Some(value) => SOMValue::new_integer(value),
-            None => demote!(interpreter, heap, BigInt::from(a) - BigInt::from(b)),
+            None => demote!(heap, BigInt::from(a) - BigInt::from(b)),
         },
         (DoubleLike::BigInteger(a), DoubleLike::BigInteger(b)) => {
-            demote!(interpreter, heap, a.as_ref() - b.as_ref())
+            demote!(heap, a.as_ref() - b.as_ref())
         }
         (DoubleLike::BigInteger(a), DoubleLike::Integer(b)) => {
-            demote!(interpreter, heap, a.as_ref() - BigInt::from(b))
+            demote!(heap, a.as_ref() - BigInt::from(b))
         }
         (DoubleLike::Integer(a), DoubleLike::BigInteger(b)) => {
-            demote!(interpreter, heap, BigInt::from(a) - b.as_ref())
+            demote!(heap, BigInt::from(a) - b.as_ref())
         }
         (DoubleLike::Double(a), DoubleLike::Double(b)) => SOMValue::new_double(a - b),
         (DoubleLike::Integer(a), DoubleLike::Double(b))
@@ -271,31 +254,29 @@ fn minus(
         },
     };
 
-    interpreter.stack.push(value);
-
-    Ok(())
+    Ok(value)
 }
 
 fn times(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     _: &mut Universe,
     a: DoubleLike,
     b: DoubleLike,
-) -> Result<(), Error> {
+) -> Result<SOMValue, Error> {
     const SIGNATURE: &str = "Integer>>#*";
 
     let value = match (a, b) {
         (DoubleLike::Integer(a), DoubleLike::Integer(b)) => match a.checked_mul(b) {
             Some(value) => SOMValue::new_integer(value),
-            None => demote!(interpreter, heap, BigInt::from(a) * BigInt::from(b)),
+            None => demote!(heap, BigInt::from(a) * BigInt::from(b)),
         },
         (DoubleLike::BigInteger(a), DoubleLike::BigInteger(b)) => {
-            demote!(interpreter, heap, a.as_ref() * b.as_ref())
+            demote!(heap, a.as_ref() * b.as_ref())
         }
         (DoubleLike::BigInteger(a), DoubleLike::Integer(b))
         | (DoubleLike::Integer(b), DoubleLike::BigInteger(a)) => {
-            demote!(interpreter, heap, a.as_ref() * BigInt::from(b))
+            demote!(heap, a.as_ref() * BigInt::from(b))
         }
         (DoubleLike::Double(a), DoubleLike::Double(b)) => SOMValue::new_double(a * b),
         (DoubleLike::Integer(a), DoubleLike::Double(b))
@@ -309,33 +290,31 @@ fn times(
         },
     };
 
-    interpreter.stack.push(value);
-
-    Ok(())
+    Ok(value)
 }
 
 fn divide(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     _: &mut Universe,
     a: DoubleLike,
     b: DoubleLike,
-) -> Result<(), Error> {
+) -> Result<SOMValue, Error> {
     const SIGNATURE: &str = "Integer>>#/";
 
     let value = match (a, b) {
         (DoubleLike::Integer(a), DoubleLike::Integer(b)) => match a.checked_div(b) {
             Some(value) => SOMValue::new_integer(value),
-            None => demote!(interpreter, heap, BigInt::from(a) / BigInt::from(b)),
+            None => demote!(heap, BigInt::from(a) / BigInt::from(b)),
         },
         (DoubleLike::BigInteger(a), DoubleLike::BigInteger(b)) => {
-            demote!(interpreter, heap, a.as_ref() / b.as_ref())
+            demote!(heap, a.as_ref() / b.as_ref())
         }
         (DoubleLike::BigInteger(a), DoubleLike::Integer(b)) => {
-            demote!(interpreter, heap, a.as_ref() / BigInt::from(b))
+            demote!(heap, a.as_ref() / BigInt::from(b))
         }
         (DoubleLike::Integer(a), DoubleLike::BigInteger(b)) => {
-            demote!(interpreter, heap, BigInt::from(a) / b.as_ref())
+            demote!(heap, BigInt::from(a) / b.as_ref())
         }
         (DoubleLike::Double(a), DoubleLike::Double(b)) => SOMValue::new_double(a / b),
         (DoubleLike::Integer(a), DoubleLike::Double(b))
@@ -354,18 +333,16 @@ fn divide(
         },
     };
 
-    interpreter.stack.push(value);
-
-    Ok(())
+    Ok(value)
 }
 
 fn divide_float(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
     a: DoubleLike,
     b: DoubleLike,
-) -> Result<(), Error> {
+) -> Result<f64, Error> {
     const SIGNATURE: &str = "Integer>>#//";
 
     let a = match a {
@@ -390,18 +367,16 @@ fn divide_float(
         },
     };
 
-    interpreter.stack.push(SOMValue::new_double(a / b));
-
-    Ok(())
+    Ok(a / b)
 }
 
 fn modulo(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     _: &mut Universe,
     a: IntegerLike,
     b: i32,
-) -> Result<(), Error> {
+) -> Result<SOMValue, Error> {
     const SIGNATURE: &str = "Integer>>#%";
 
     let result = match a {
@@ -416,45 +391,39 @@ fn modulo(
         IntegerLike::BigInteger(a) => {
             let result = a.as_ref() % b;
             if result.is_positive() != b.is_positive() {
-                demote!(interpreter, heap, (result + b) % b)
+                demote!(heap, (result + b) % b)
             } else {
-                demote!(interpreter, heap, result)
+                demote!(heap, result)
             }
         }
     };
 
-    interpreter.stack.push(result);
-
-    Ok(())
+    Ok(result)
 }
 
 fn remainder(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
     a: i32,
     b: i32,
-) -> Result<(), Error> {
+) -> Result<i32, Error> {
     const SIGNATURE: &str = "Integer>>#rem:";
 
     let result = a % b;
     if result.signum() != a.signum() {
-        interpreter
-            .stack
-            .push(SOMValue::new_integer((result + a) % a));
+        Ok((result + a) % a)
     } else {
-        interpreter.stack.push(SOMValue::new_integer(result));
+        Ok(result)
     }
-
-    Ok(())
 }
 
 fn sqrt(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     _: &mut Universe,
     a: DoubleLike,
-) -> Result<(), Error> {
+) -> Result<SOMValue, Error> {
     const SIGNATURE: &str = "Integer>>#sqrt";
 
     let value = match a {
@@ -468,71 +437,65 @@ fn sqrt(
                 SOMValue::new_double(sqrt)
             }
         }
-        DoubleLike::BigInteger(a) => demote!(interpreter, heap, a.sqrt()),
+        DoubleLike::BigInteger(a) => demote!(heap, a.sqrt()),
     };
 
-    interpreter.stack.push(value);
-
-    Ok(())
+    Ok(value)
 }
 
 fn bitand(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     _: &mut Universe,
     a: IntegerLike,
     b: IntegerLike,
-) -> Result<(), Error> {
+) -> Result<SOMValue, Error> {
     const SIGNATURE: &str = "Integer>>#&";
 
     let value = match (a, b) {
         (IntegerLike::Integer(a), IntegerLike::Integer(b)) => SOMValue::new_integer(a & b),
         (IntegerLike::BigInteger(a), IntegerLike::BigInteger(b)) => {
-            demote!(interpreter, heap, a.as_ref() & b.as_ref())
+            demote!(heap, a.as_ref() & b.as_ref())
         }
         (IntegerLike::BigInteger(a), IntegerLike::Integer(b))
         | (IntegerLike::Integer(b), IntegerLike::BigInteger(a)) => {
-            demote!(interpreter, heap, a.as_ref() & BigInt::from(b))
+            demote!(heap, a.as_ref() & BigInt::from(b))
         }
     };
 
-    interpreter.stack.push(value);
-
-    Ok(())
+    Ok(value)
 }
 
 fn bitxor(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     _: &mut Universe,
     a: IntegerLike,
     b: IntegerLike,
-) -> Result<(), Error> {
+) -> Result<SOMValue, Error> {
     const SIGNATURE: &str = "Integer>>#bitXor:";
 
     let value = match (a, b) {
         (IntegerLike::Integer(a), IntegerLike::Integer(b)) => SOMValue::new_integer(a ^ b),
         (IntegerLike::BigInteger(a), IntegerLike::BigInteger(b)) => {
-            demote!(interpreter, heap, a.as_ref() ^ b.as_ref())
+            demote!(heap, a.as_ref() ^ b.as_ref())
         }
         (IntegerLike::BigInteger(a), IntegerLike::Integer(b))
         | (IntegerLike::Integer(b), IntegerLike::BigInteger(a)) => {
-            demote!(interpreter, heap, a.as_ref() ^ BigInt::from(b))
+            demote!(heap, a.as_ref() ^ BigInt::from(b))
         }
     };
 
-    interpreter.stack.push(value);
-
-    Ok(())
+    Ok(value)
 }
 
 fn lt(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
     a: DoubleLike,
     b: DoubleLike,
-) -> Result<(), Error> {
+) -> Result<SOMValue, Error> {
     const SIGNATURE: &str = "Integer>>#<";
 
     let value = match (a, b) {
@@ -547,89 +510,81 @@ fn lt(
         (DoubleLike::Integer(a), DoubleLike::BigInteger(b)) => {
             SOMValue::new_boolean(&BigInt::from(a) < b.as_ref())
         }
-        _ => panic!("'{}': wrong types", SIGNATURE),
+        _ => {
+            bail!("'{SIGNATURE}': wrong types");
+        }
     };
 
-    interpreter.stack.push(value);
-
-    Ok(())
+    Ok(value)
 }
 
 fn eq(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
     a: SOMValue,
     b: SOMValue,
-) -> Result<(), Error> {
+) -> Result<bool, Error> {
     const SIGNATURE: &str = "Integer>>#=";
 
     let Ok(a) = DoubleLike::try_from(a) else {
-        interpreter.stack.push(SOMValue::FALSE);
-        return Ok(());
+        return Ok(false);
     };
 
     let Ok(b) = DoubleLike::try_from(b) else {
-        interpreter.stack.push(SOMValue::FALSE);
-        return Ok(());
+        return Ok(false);
     };
 
     let value = match (a, b) {
-        (DoubleLike::Integer(a), DoubleLike::Integer(b)) => SOMValue::new_boolean(a == b),
-        (DoubleLike::BigInteger(a), DoubleLike::BigInteger(b)) => SOMValue::new_boolean(a == b),
-        (DoubleLike::Double(a), DoubleLike::Double(b)) => SOMValue::new_boolean(a == b),
-        (DoubleLike::Integer(a), DoubleLike::Double(b)) => SOMValue::new_boolean((a as f64) == b),
-        (DoubleLike::Double(a), DoubleLike::Integer(b)) => SOMValue::new_boolean(a == (b as f64)),
-        _ => SOMValue::FALSE,
+        (DoubleLike::Integer(a), DoubleLike::Integer(b)) => a == b,
+        (DoubleLike::BigInteger(a), DoubleLike::BigInteger(b)) => a == b,
+        (DoubleLike::Double(a), DoubleLike::Double(b)) => a == b,
+        (DoubleLike::Integer(a), DoubleLike::Double(b)) => (a as f64) == b,
+        (DoubleLike::Double(a), DoubleLike::Integer(b)) => a == (b as f64),
+        _ => false,
     };
 
-    interpreter.stack.push(value);
-
-    Ok(())
+    Ok(value)
 }
 
 fn shift_left(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     _: &mut Universe,
     a: IntegerLike,
     b: i32,
-) -> Result<(), Error> {
+) -> Result<SOMValue, Error> {
     const SIGNATURE: &str = "Integer>>#<<";
 
     let value = match a {
         IntegerLike::Integer(a) => match a.checked_shl(b as u32) {
             Some(value) => SOMValue::new_integer(value),
-            None => demote!(interpreter, heap, BigInt::from(a) << (b as usize)),
+            None => demote!(heap, BigInt::from(a) << (b as usize)),
         },
-        IntegerLike::BigInteger(a) => demote!(interpreter, heap, a.as_ref() << (b as usize)),
+        IntegerLike::BigInteger(a) => demote!(heap, a.as_ref() << (b as usize)),
     };
 
-    interpreter.stack.push(value);
-
-    Ok(())
+    Ok(value)
 }
 
 fn shift_right(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     _: &mut Universe,
     a: IntegerLike,
     b: i32,
-) -> Result<(), Error> {
+) -> Result<SOMValue, Error> {
     const SIGNATURE: &str = "Integer>>#>>";
 
     let value = match a {
         IntegerLike::Integer(a) => match a.checked_shr(b as u32) {
             Some(value) => SOMValue::new_integer(value),
-            None => demote!(interpreter, heap, BigInt::from(a) >> (b as usize)),
+            None => demote!(heap, BigInt::from(a) >> (b as usize)),
         },
-        IntegerLike::BigInteger(a) => demote!(interpreter, heap, a.as_ref() >> (b as usize)),
+        IntegerLike::BigInteger(a) => demote!(heap, a.as_ref() >> (b as usize)),
     };
 
-    interpreter.stack.push(value);
-
-    Ok(())
+    Ok(value)
 }
 
 /// Search for an instance primitive matching the given signature.

@@ -4,9 +4,10 @@ use once_cell::sync::Lazy;
 use som_gc::{Gc, GcHeap};
 
 use crate::block::Block;
+use crate::convert::Primitive;
 use crate::frame::FrameKind;
 use crate::interpreter::Interpreter;
-use crate::primitives::{Primitive, PrimitiveFn};
+use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::SOMValue;
 

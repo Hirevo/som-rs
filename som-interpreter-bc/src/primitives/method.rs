@@ -3,9 +3,12 @@ use once_cell::sync::Lazy;
 
 use som_gc::{Gc, GcHeap};
 
+use crate::class::Class;
+use crate::convert::Primitive;
+use crate::interner::Interned;
 use crate::interpreter::Interpreter;
 use crate::method::Method;
-use crate::primitives::{Primitive, PrimitiveFn};
+use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::SOMValue;
 use crate::SOMRef;
@@ -21,32 +24,25 @@ pub static CLASS_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> =
     Lazy::new(|| Box::new([]));
 
 fn holder(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
     invokable: Gc<Method>,
-) -> Result<(), Error> {
+) -> Result<SOMRef<Class>, Error> {
     const SIGNATURE: &str = "Method>>#holder";
 
-    interpreter
-        .stack
-        .push(SOMValue::new_class(&invokable.holder));
-
-    Ok(())
+    Ok(Gc::clone(&invokable.holder))
 }
 
 fn signature(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     universe: &mut Universe,
     invokable: Gc<Method>,
-) -> Result<(), Error> {
+) -> Result<Interned, Error> {
     const SIGNATURE: &str = "Method>>#signature";
 
-    let sym = universe.intern_symbol(invokable.signature());
-    interpreter.stack.push(SOMValue::new_symbol(sym));
-
-    Ok(())
+    Ok(universe.intern_symbol(invokable.signature()))
 }
 
 fn invoke_on_with(
