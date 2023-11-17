@@ -89,7 +89,7 @@ fn as_integer(
     _: &mut Universe,
     receiver: f64,
 ) -> Result<i32, Error> {
-    const SIGNATURE: &str = "Double>>#asInteger";
+    const _: &str = "Double>>#asInteger";
 
     Ok(receiver.trunc() as i32)
 }
@@ -153,7 +153,7 @@ fn eq(
     a: SOMValue,
     b: SOMValue,
 ) -> Result<bool, Error> {
-    const SIGNATURE: &str = "Double>>#=";
+    const _: &str = "Double>>#=";
 
     Ok(a == b)
 }
@@ -254,7 +254,7 @@ fn positive_infinity(
     _: &mut Universe,
     _: SOMValue,
 ) -> Result<f64, Error> {
-    const SIGNATURE: &str = "Double>>#positiveInfinity";
+    const _: &str = "Double>>#positiveInfinity";
 
     Ok(f64::INFINITY)
 }

@@ -52,7 +52,7 @@ fn class(
     universe: &mut Universe,
     receiver: SOMValue,
 ) -> Result<SOMRef<Class>, Error> {
-    const SIGNATURE: &'static str = "Object>>#class";
+    const _: &'static str = "Object>>#class";
 
     Ok(Gc::clone(&receiver.class(universe)))
 }
@@ -76,7 +76,7 @@ fn hashcode(
     _: &mut Universe,
     receiver: SOMValue,
 ) -> Result<i32, Error> {
-    const SIGNATURE: &'static str = "Object>>#hashcode";
+    const _: &'static str = "Object>>#hashcode";
 
     let mut hasher = DefaultHasher::new();
     receiver.hash(&mut hasher);
@@ -92,7 +92,7 @@ fn eq(
     receiver: SOMValue,
     other: SOMValue,
 ) -> Result<bool, Error> {
-    const SIGNATURE: &'static str = "Object>>#==";
+    const _: &'static str = "Object>>#==";
 
     Ok(receiver == other)
 }
@@ -236,7 +236,7 @@ fn inst_var_at(
     receiver: SOMValue,
     index: i32,
 ) -> Result<Option<SOMValue>, Error> {
-    const SIGNATURE: &'static str = "Object>>#instVarAt:";
+    const _: &'static str = "Object>>#instVarAt:";
 
     let index = usize::try_from(index.saturating_sub(1))?;
 
@@ -251,7 +251,7 @@ fn inst_var_at_put(
     index: i32,
     value: SOMValue,
 ) -> Result<Option<SOMValue>, Error> {
-    const SIGNATURE: &'static str = "Object>>#instVarAt:put:";
+    const _: &'static str = "Object>>#instVarAt:put:";
 
     let index = usize::try_from(index.saturating_sub(1))?;
 

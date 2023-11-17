@@ -66,7 +66,7 @@ fn from_string(
     _: SOMValue,
     string: StringLike,
 ) -> Result<SOMValue, Error> {
-    const SIGNATURE: &str = "Integer>>#fromString:";
+    const _: &str = "Integer>>#fromString:";
 
     let string = match string {
         StringLike::String(ref value) => value.as_str(),
@@ -89,7 +89,7 @@ fn as_string(
     _: &mut Universe,
     receiver: IntegerLike,
 ) -> Result<Gc<String>, Error> {
-    const SIGNATURE: &str = "Integer>>#asString";
+    const _: &str = "Integer>>#asString";
 
     let receiver = match receiver {
         IntegerLike::Integer(value) => value.to_string(),
@@ -105,7 +105,7 @@ fn as_double(
     _: &mut Universe,
     receiver: IntegerLike,
 ) -> Result<f64, Error> {
-    const SIGNATURE: &str = "Integer>>#asDouble";
+    const _: &str = "Integer>>#asDouble";
 
     let value = match receiver {
         IntegerLike::Integer(value) => value as f64,
@@ -145,7 +145,7 @@ fn as_32bit_signed_value(
     _: &mut Universe,
     receiver: IntegerLike,
 ) -> Result<i32, Error> {
-    const SIGNATURE: &str = "Integer>>#as32BitSignedValue";
+    const _: &str = "Integer>>#as32BitSignedValue";
 
     let value = match receiver {
         IntegerLike::Integer(value) => value,
@@ -164,7 +164,7 @@ fn as_32bit_unsigned_value(
     _: &mut Universe,
     receiver: IntegerLike,
 ) -> Result<i32, Error> {
-    const SIGNATURE: &str = "Integer>>#as32BitUnsignedValue";
+    const _: &str = "Integer>>#as32BitUnsignedValue";
 
     let value = match receiver {
         IntegerLike::Integer(value) => value as u32 as i32,
@@ -377,7 +377,7 @@ fn modulo(
     a: IntegerLike,
     b: i32,
 ) -> Result<SOMValue, Error> {
-    const SIGNATURE: &str = "Integer>>#%";
+    const _: &str = "Integer>>#%";
 
     let result = match a {
         IntegerLike::Integer(a) => {
@@ -408,7 +408,7 @@ fn remainder(
     a: i32,
     b: i32,
 ) -> Result<i32, Error> {
-    const SIGNATURE: &str = "Integer>>#rem:";
+    const _: &str = "Integer>>#rem:";
 
     let result = a % b;
     if result.signum() != a.signum() {
@@ -424,7 +424,7 @@ fn sqrt(
     _: &mut Universe,
     a: DoubleLike,
 ) -> Result<SOMValue, Error> {
-    const SIGNATURE: &str = "Integer>>#sqrt";
+    const _: &str = "Integer>>#sqrt";
 
     let value = match a {
         DoubleLike::Double(a) => SOMValue::new_double(a.sqrt()),
@@ -450,7 +450,7 @@ fn bitand(
     a: IntegerLike,
     b: IntegerLike,
 ) -> Result<SOMValue, Error> {
-    const SIGNATURE: &str = "Integer>>#&";
+    const _: &str = "Integer>>#&";
 
     let value = match (a, b) {
         (IntegerLike::Integer(a), IntegerLike::Integer(b)) => SOMValue::new_integer(a & b),
@@ -473,7 +473,7 @@ fn bitxor(
     a: IntegerLike,
     b: IntegerLike,
 ) -> Result<SOMValue, Error> {
-    const SIGNATURE: &str = "Integer>>#bitXor:";
+    const _: &str = "Integer>>#bitXor:";
 
     let value = match (a, b) {
         (IntegerLike::Integer(a), IntegerLike::Integer(b)) => SOMValue::new_integer(a ^ b),
@@ -525,7 +525,7 @@ fn eq(
     a: SOMValue,
     b: SOMValue,
 ) -> Result<bool, Error> {
-    const SIGNATURE: &str = "Integer>>#=";
+    const _: &str = "Integer>>#=";
 
     let Ok(a) = DoubleLike::try_from(a) else {
         return Ok(false);
@@ -554,7 +554,7 @@ fn shift_left(
     a: IntegerLike,
     b: i32,
 ) -> Result<SOMValue, Error> {
-    const SIGNATURE: &str = "Integer>>#<<";
+    const _: &str = "Integer>>#<<";
 
     let value = match a {
         IntegerLike::Integer(a) => match a.checked_shl(b as u32) {
@@ -574,7 +574,7 @@ fn shift_right(
     a: IntegerLike,
     b: i32,
 ) -> Result<SOMValue, Error> {
-    const SIGNATURE: &str = "Integer>>#>>";
+    const _: &str = "Integer>>#>>";
 
     let value = match a {
         IntegerLike::Integer(a) => match a.checked_shr(b as u32) {

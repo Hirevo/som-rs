@@ -31,7 +31,7 @@ pub mod block1 {
         _: &mut Universe,
         receiver: Gc<Block>,
     ) -> Result<(), Error> {
-        const SIGNATURE: &str = "Block1>>#value";
+        const _: &str = "Block1>>#value";
 
         let kind = FrameKind::Block {
             block: Gc::clone(&receiver),
@@ -47,7 +47,7 @@ pub mod block1 {
         _: &mut Universe,
         _: Gc<Block>,
     ) -> Result<(), Error> {
-        const SIGNATURE: &str = "Block>>#restart";
+        const _: &str = "Block>>#restart";
 
         interpreter
             .current_frame()
@@ -91,7 +91,7 @@ pub mod block2 {
         receiver: Gc<Block>,
         argument: SOMValue,
     ) -> Result<(), Error> {
-        const SIGNATURE: &str = "Block2>>#value:";
+        const _: &str = "Block2>>#value:";
 
         let kind = FrameKind::Block {
             block: Gc::clone(&receiver),
@@ -136,7 +136,7 @@ pub mod block3 {
         argument1: SOMValue,
         argument2: SOMValue,
     ) -> Result<(), Error> {
-        const SIGNATURE: &str = "Block3>>#value:with:";
+        const _: &str = "Block3>>#value:with:";
 
         let kind = FrameKind::Block {
             block: Gc::clone(&receiver),

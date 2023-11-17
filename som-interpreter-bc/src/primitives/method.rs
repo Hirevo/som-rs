@@ -29,7 +29,7 @@ fn holder(
     _: &mut Universe,
     invokable: Gc<Method>,
 ) -> Result<SOMRef<Class>, Error> {
-    const SIGNATURE: &str = "Method>>#holder";
+    const _: &str = "Method>>#holder";
 
     Ok(Gc::clone(&invokable.holder))
 }
@@ -40,7 +40,7 @@ fn signature(
     universe: &mut Universe,
     invokable: Gc<Method>,
 ) -> Result<Interned, Error> {
-    const SIGNATURE: &str = "Method>>#signature";
+    const _: &str = "Method>>#signature";
 
     Ok(universe.intern_symbol(invokable.signature()))
 }
@@ -53,7 +53,7 @@ fn invoke_on_with(
     receiver: SOMValue,
     arguments: SOMRef<Vec<SOMValue>>,
 ) -> Result<(), Error> {
-    const SIGNATURE: &str = "Method>>#invokeOn:with:";
+    const _: &str = "Method>>#invokeOn:with:";
 
     Method::invoke(
         invokable,

@@ -41,7 +41,7 @@ fn length(
     universe: &mut Universe,
     receiver: StringLike,
 ) -> Result<SOMValue, Error> {
-    const SIGNATURE: &str = "String>>#length";
+    const _: &str = "String>>#length";
 
     let string = match receiver {
         StringLike::String(ref value) => value.as_str(),
@@ -66,7 +66,7 @@ fn hashcode(
     universe: &mut Universe,
     receiver: StringLike,
 ) -> Result<i32, Error> {
-    const SIGNATURE: &str = "String>>#hashcode";
+    const _: &str = "String>>#hashcode";
 
     let string = match receiver {
         StringLike::String(ref value) => value.as_str(),
@@ -86,7 +86,7 @@ fn is_letters(
     universe: &mut Universe,
     receiver: StringLike,
 ) -> Result<bool, Error> {
-    const SIGNATURE: &str = "String>>#isLetters";
+    const _: &str = "String>>#isLetters";
 
     let string = match receiver {
         StringLike::String(ref value) => value.as_str(),
@@ -102,7 +102,7 @@ fn is_digits(
     universe: &mut Universe,
     receiver: StringLike,
 ) -> Result<bool, Error> {
-    const SIGNATURE: &str = "String>>#isDigits";
+    const _: &str = "String>>#isDigits";
 
     let string = match receiver {
         StringLike::String(ref value) => value.as_str(),
@@ -118,7 +118,7 @@ fn is_whitespace(
     universe: &mut Universe,
     receiver: StringLike,
 ) -> Result<bool, Error> {
-    const SIGNATURE: &str = "String>>#isWhiteSpace";
+    const _: &str = "String>>#isWhiteSpace";
 
     let string = match receiver {
         StringLike::String(ref value) => value.as_str(),
@@ -135,7 +135,7 @@ fn concatenate(
     receiver: StringLike,
     other: StringLike,
 ) -> Result<Gc<String>, Error> {
-    const SIGNATURE: &str = "String>>#concatenate:";
+    const _: &str = "String>>#concatenate:";
 
     let s1 = match receiver {
         StringLike::String(ref value) => value.as_str(),
@@ -156,7 +156,7 @@ fn as_symbol(
     universe: &mut Universe,
     receiver: StringLike,
 ) -> Result<Interned, Error> {
-    const SIGNATURE: &str = "String>>#asSymbol";
+    const _: &str = "String>>#asSymbol";
 
     let symbol = match receiver {
         StringLike::String(ref value) => universe.intern_symbol(value.as_str()),
@@ -173,7 +173,7 @@ fn eq(
     a: SOMValue,
     b: SOMValue,
 ) -> Result<bool, Error> {
-    const SIGNATURE: &str = "String>>#=";
+    const _: &str = "String>>#=";
 
     let Ok(a) = StringLike::try_from(a) else {
         return Ok(false);
@@ -204,7 +204,7 @@ fn prim_substring_from_to(
     from: i32,
     to: i32,
 ) -> Result<Gc<String>, Error> {
-    const SIGNATURE: &str = "String>>#primSubstringFrom:to:";
+    const _: &str = "String>>#primSubstringFrom:to:";
 
     let from = usize::try_from(from - 1)?;
     let to = usize::try_from(to)?;

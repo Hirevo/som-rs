@@ -47,7 +47,7 @@ fn load_file(
     _: SOMValue,
     path: StringLike,
 ) -> Result<Option<Gc<String>>, Error> {
-    const SIGNATURE: &str = "System>>#loadFie:";
+    const _: &str = "System>>#loadFie:";
 
     let path = match path {
         StringLike::String(ref string) => string,
@@ -68,7 +68,7 @@ fn print_string(
     _: SOMValue,
     string: StringLike,
 ) -> Result<System, Error> {
-    const SIGNATURE: &str = "System>>#printString:";
+    const _: &str = "System>>#printString:";
 
     let string = match string {
         StringLike::String(ref string) => string,
@@ -87,7 +87,7 @@ fn print_newline(
     _: &mut Universe,
     _: SOMValue,
 ) -> Result<Nil, Error> {
-    const SIGNATURE: &'static str = "System>>#printNewline";
+    const _: &'static str = "System>>#printNewline";
 
     println!();
 
@@ -101,7 +101,7 @@ fn error_print(
     _: SOMValue,
     string: StringLike,
 ) -> Result<System, Error> {
-    const SIGNATURE: &str = "System>>#errorPrint:";
+    const _: &str = "System>>#errorPrint:";
 
     let string = match string {
         StringLike::String(ref string) => string,
@@ -121,7 +121,7 @@ fn error_println(
     _: SOMValue,
     string: StringLike,
 ) -> Result<System, Error> {
-    const SIGNATURE: &str = "System>>#errorPrintln:";
+    const _: &str = "System>>#errorPrintln:";
 
     let string = match string {
         StringLike::String(ref string) => string,
@@ -140,7 +140,7 @@ fn load(
     _: SOMValue,
     class_name: Interned,
 ) -> Result<SOMRef<Class>, Error> {
-    const SIGNATURE: &str = "System>>#load:";
+    const _: &str = "System>>#load:";
 
     let class_name = universe.lookup_symbol(class_name).to_string();
     let class = universe.load_class(heap, class_name)?;
@@ -155,7 +155,7 @@ fn has_global(
     _: SOMValue,
     name: Interned,
 ) -> Result<bool, Error> {
-    const SIGNATURE: &str = "System>>#hasGlobal:";
+    const _: &str = "System>>#hasGlobal:";
 
     Ok(universe.has_global(name))
 }
@@ -167,7 +167,7 @@ fn global(
     _: SOMValue,
     name: Interned,
 ) -> Result<Option<SOMValue>, Error> {
-    const SIGNATURE: &str = "System>>#global:";
+    const _: &str = "System>>#global:";
 
     Ok(universe.lookup_global(name))
 }
@@ -180,13 +180,13 @@ fn global_put(
     name: Interned,
     value: SOMValue,
 ) -> Result<Option<SOMValue>, Error> {
-    const SIGNATURE: &str = "System>>#global:put:";
+    const _: &str = "System>>#global:put:";
 
     Ok(universe.assign_global(name, value).map(|_| value))
 }
 
 fn exit(_: &mut Interpreter, _: &mut GcHeap, _: &mut Universe, status: i32) -> Result<(), Error> {
-    const SIGNATURE: &str = "System>>#exit:";
+    const _: &str = "System>>#exit:";
 
     std::process::exit(status);
 }
@@ -229,7 +229,7 @@ fn print_stack_trace(
     _: &mut Universe,
     _: SOMValue,
 ) -> Result<bool, Error> {
-    const SIGNATURE: &str = "System>>#printStackTrace";
+    const _: &str = "System>>#printStackTrace";
 
     for frame in &interpreter.frames {
         let frame_ref = frame.borrow();
@@ -258,7 +258,7 @@ fn full_gc(
     universe: &mut Universe,
     _: SOMValue,
 ) -> Result<bool, Error> {
-    const SIGNATURE: &str = "System>>#fullGC";
+    const _: &str = "System>>#fullGC";
 
     heap.collect_garbage(|| {
         interpreter.trace();
@@ -274,7 +274,7 @@ fn gc_stats(
     _: &mut Universe,
     _: SOMValue,
 ) -> Result<(IntegerLike, IntegerLike, IntegerLike), Error> {
-    const SIGNATURE: &str = "System>>#gcStats";
+    const _: &str = "System>>#gcStats";
 
     let stats = heap.stats().clone();
     let collections_performed = match stats.collections_performed.try_into() {
