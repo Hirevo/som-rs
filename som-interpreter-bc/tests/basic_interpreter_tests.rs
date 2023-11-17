@@ -253,8 +253,7 @@ fn basic_interpreter_tests() {
             self_value: SOMValue::new_class(&class),
         };
         interpreter.push_frame(&mut heap, kind);
-        if let Some(output) = interpreter.run(&mut heap, &mut universe) {
-            assert_eq!(&output, expected, "unexpected test output value");
-        }
+        let output = interpreter.run(&mut heap, &mut universe).unwrap();
+        assert_eq!(&output, expected, "unexpected test output value");
     }
 }
