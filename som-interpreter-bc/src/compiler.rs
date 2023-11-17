@@ -6,6 +6,7 @@ use std::hash::{Hash, Hasher};
 
 use indexmap::{IndexMap, IndexSet};
 use num_bigint::BigInt;
+use num_traits::ToPrimitive;
 
 use som_core::ast;
 use som_core::bytecode::Bytecode;
@@ -395,7 +396,11 @@ impl MethodCodegen for ast::Expression {
                         ast::Literal::Double(val) => Literal::Double(*val),
                         ast::Literal::Integer(val) => Literal::Integer(*val),
                         ast::Literal::BigInteger(val) => {
-                            Literal::BigInteger(ctxt.heap().allocate(val.parse().unwrap()))
+                            let value: BigInt = val.parse().unwrap();
+                            match value.to_i32() {
+                                Some(value) => Literal::Integer(value),
+                                None => Literal::BigInteger(ctxt.heap().allocate(value)),
+                            }
                         }
                         ast::Literal::Array(val) => {
                             let literals = val
