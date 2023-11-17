@@ -1,13 +1,14 @@
 use std::cell::RefCell;
 use std::convert::{TryFrom, TryInto};
 
-use anyhow::Error;
+use anyhow::{Context, Error};
 use once_cell::sync::Lazy;
 
 use som_gc::GcHeap;
 
+use crate::convert::Primitive;
 use crate::interpreter::Interpreter;
-use crate::primitives::{Primitive, PrimitiveFn};
+use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::SOMValue;
 use crate::SOMRef;
@@ -24,34 +25,31 @@ pub static CLASS_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> =
     Lazy::new(|| Box::new([("new:", self::new.into_func(), true)]));
 
 fn at(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
     receiver: SOMRef<Vec<SOMValue>>,
     index: i32,
-) -> Result<(), Error> {
+) -> Result<SOMValue, Error> {
     const SIGNATURE: &str = "Array>>#at:";
 
     let index = usize::try_from(index - 1)?;
-    let value = receiver
+
+    receiver
         .borrow()
         .get(index)
         .cloned()
-        .unwrap_or(SOMValue::NIL);
-
-    interpreter.stack.push(value);
-
-    Ok(())
+        .context("index out of bounds")
 }
 
 fn at_put(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
     receiver: SOMRef<Vec<SOMValue>>,
     index: i32,
     value: SOMValue,
-) -> Result<(), Error> {
+) -> Result<SOMRef<Vec<SOMValue>>, Error> {
     const SIGNATURE: &str = "Array>>#at:put:";
 
     let index = usize::try_from(index - 1)?;
@@ -60,39 +58,37 @@ fn at_put(
         *location = value;
     }
 
-    interpreter.stack.push(SOMValue::new_array(&receiver));
-
-    Ok(())
+    Ok(receiver)
 }
 
 fn length(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
     receiver: SOMRef<Vec<SOMValue>>,
-) -> Result<(), Error> {
+) -> Result<i32, Error> {
     const SIGNATURE: &str = "Array>>#length";
 
-    let length = receiver.borrow().len().try_into()?;
-    interpreter.stack.push(SOMValue::new_integer(length));
-
-    Ok(())
+    receiver
+        .borrow()
+        .len()
+        .try_into()
+        .context("could not convert `usize` to `i32`")
 }
 
 fn new(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     _: &mut Universe,
     _: SOMValue,
     count: i32,
-) -> Result<(), Error> {
+) -> Result<SOMRef<Vec<SOMValue>>, Error> {
     const SIGNATURE: &str = "Array>>#new:";
 
     let count = usize::try_from(count)?;
     let allocated = heap.allocate(RefCell::new(vec![SOMValue::NIL; count]));
-    interpreter.stack.push(SOMValue::new_array(&allocated));
 
-    Ok(())
+    Ok(allocated)
 }
 
 /// Search for an instance primitive matching the given signature.

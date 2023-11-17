@@ -1,13 +1,13 @@
 use anyhow::Error;
 use once_cell::sync::Lazy;
 
-use som_gc::GcHeap;
+use som_gc::{Gc, GcHeap};
 
+use crate::convert::Primitive;
 use crate::interner::Interned;
 use crate::interpreter::Interpreter;
-use crate::primitives::{Primitive, PrimitiveFn};
+use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
-use crate::value::SOMValue;
 
 pub static INSTANCE_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> =
     Lazy::new(|| Box::new([("asString", self::as_string.into_func(), true)]));
@@ -15,17 +15,14 @@ pub static CLASS_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> =
     Lazy::new(|| Box::new([]));
 
 fn as_string(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     universe: &mut Universe,
     symbol: Interned,
-) -> Result<(), Error> {
+) -> Result<Gc<String>, Error> {
     const SIGNATURE: &str = "Symbol>>#asString";
 
-    let allocated = heap.allocate(universe.lookup_symbol(symbol).to_owned());
-    interpreter.stack.push(SOMValue::new_string(&allocated));
-
-    Ok(())
+    Ok(heap.allocate(universe.lookup_symbol(symbol).to_owned()))
 }
 
 /// Search for an instance primitive matching the given signature.

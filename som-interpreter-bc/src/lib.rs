@@ -12,6 +12,8 @@ pub mod block;
 pub mod class;
 /// Facilities for compiling code into bytecode.
 pub mod compiler;
+/// Facilities for converting between Rust values and SOM values.
+pub mod convert;
 /// Facilities for disassembling bytecode.
 pub mod disassembler;
 /// Facilities for manipulating stack frames.

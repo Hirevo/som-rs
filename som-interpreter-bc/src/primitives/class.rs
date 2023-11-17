@@ -6,9 +6,11 @@ use once_cell::sync::Lazy;
 use som_gc::GcHeap;
 
 use crate::class::Class;
+use crate::convert::Primitive;
 use crate::instance::Instance;
+use crate::interner::Interned;
 use crate::interpreter::Interpreter;
-use crate::primitives::{Primitive, PrimitiveFn};
+use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::SOMValue;
 use crate::SOMRef;
@@ -43,40 +45,36 @@ fn superclass(
 }
 
 fn new(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     _: &mut Universe,
     receiver: SOMRef<Class>,
-) -> Result<(), Error> {
+) -> Result<SOMRef<Instance>, Error> {
     const SIGNATURE: &str = "Class>>#new";
 
     let instance = Instance::from_class(receiver);
     let instance = heap.allocate(RefCell::new(instance));
-    interpreter.stack.push(SOMValue::new_instance(&instance));
 
-    Ok(())
+    Ok(instance)
 }
 
 fn name(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     universe: &mut Universe,
     receiver: SOMRef<Class>,
-) -> Result<(), Error> {
+) -> Result<Interned, Error> {
     const SIGNATURE: &str = "Class>>#name";
 
-    let name = universe.intern_symbol(receiver.borrow().name());
-    interpreter.stack.push(SOMValue::new_symbol(name));
-
-    Ok(())
+    Ok(universe.intern_symbol(receiver.borrow().name()))
 }
 
 fn methods(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     _: &mut Universe,
     receiver: SOMRef<Class>,
-) -> Result<(), Error> {
+) -> Result<SOMRef<Vec<SOMValue>>, Error> {
     const SIGNATURE: &str = "Class>>#methods";
 
     let methods = receiver
@@ -86,18 +84,15 @@ fn methods(
         .map(SOMValue::new_invokable)
         .collect();
 
-    let allocated = heap.allocate(RefCell::new(methods));
-    interpreter.stack.push(SOMValue::new_array(&allocated));
-
-    Ok(())
+    Ok(heap.allocate(RefCell::new(methods)))
 }
 
 fn fields(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     _: &mut Universe,
     receiver: SOMRef<Class>,
-) -> Result<(), Error> {
+) -> Result<SOMRef<Vec<SOMValue>>, Error> {
     const SIGNATURE: &str = "Class>>#fields";
 
     let fields = receiver
@@ -108,10 +103,7 @@ fn fields(
         .map(SOMValue::new_symbol)
         .collect();
 
-    let allocated = heap.allocate(RefCell::new(fields));
-    interpreter.stack.push(SOMValue::new_array(&allocated));
-
-    Ok(())
+    Ok(heap.allocate(RefCell::new(fields)))
 }
 
 /// Search for an instance primitive matching the given signature.

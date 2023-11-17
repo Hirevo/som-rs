@@ -6,10 +6,12 @@ use anyhow::Error;
 use num_bigint::BigInt;
 use once_cell::sync::Lazy;
 
-use som_gc::GcHeap;
+use som_gc::{Gc, GcHeap};
 
+use crate::convert::{Primitive, StringLike};
+use crate::interner::Interned;
 use crate::interpreter::Interpreter;
-use crate::primitives::{Primitive, PrimitiveFn, StringLike};
+use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::SOMValue;
 
@@ -34,11 +36,11 @@ pub static CLASS_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> =
     Lazy::new(|| Box::new([]));
 
 fn length(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     universe: &mut Universe,
     receiver: StringLike,
-) -> Result<(), Error> {
+) -> Result<SOMValue, Error> {
     const SIGNATURE: &str = "String>>#length";
 
     let string = match receiver {
@@ -47,7 +49,7 @@ fn length(
     };
 
     let length = string.chars().count();
-    let length = match length.try_into() {
+    let value = match length.try_into() {
         Ok(value) => SOMValue::new_integer(value),
         Err(_) => {
             let allocated = heap.allocate(BigInt::from(length));
@@ -55,17 +57,15 @@ fn length(
         }
     };
 
-    interpreter.stack.push(length);
-
-    Ok(())
+    Ok(value)
 }
 
 fn hashcode(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     universe: &mut Universe,
     receiver: StringLike,
-) -> Result<(), Error> {
+) -> Result<i32, Error> {
     const SIGNATURE: &str = "String>>#hashcode";
 
     let string = match receiver {
@@ -77,17 +77,15 @@ fn hashcode(
     hasher.write(string.as_bytes());
     let hash = (hasher.finish() as i32).abs();
 
-    interpreter.stack.push(SOMValue::new_integer(hash));
-
-    Ok(())
+    Ok(hash)
 }
 
 fn is_letters(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     universe: &mut Universe,
     receiver: StringLike,
-) -> Result<(), Error> {
+) -> Result<bool, Error> {
     const SIGNATURE: &str = "String>>#isLetters";
 
     let string = match receiver {
@@ -95,19 +93,15 @@ fn is_letters(
         StringLike::Symbol(sym) => universe.lookup_symbol(sym),
     };
 
-    interpreter.stack.push(SOMValue::new_boolean(
-        !string.is_empty() && !string.is_empty() && string.chars().all(char::is_alphabetic),
-    ));
-
-    Ok(())
+    Ok(!string.is_empty() && !string.is_empty() && string.chars().all(char::is_alphabetic))
 }
 
 fn is_digits(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     universe: &mut Universe,
     receiver: StringLike,
-) -> Result<(), Error> {
+) -> Result<bool, Error> {
     const SIGNATURE: &str = "String>>#isDigits";
 
     let string = match receiver {
@@ -115,19 +109,15 @@ fn is_digits(
         StringLike::Symbol(sym) => universe.lookup_symbol(sym),
     };
 
-    interpreter.stack.push(SOMValue::new_boolean(
-        !string.is_empty() && string.chars().all(char::is_numeric),
-    ));
-
-    Ok(())
+    Ok(!string.is_empty() && string.chars().all(char::is_numeric))
 }
 
 fn is_whitespace(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     universe: &mut Universe,
     receiver: StringLike,
-) -> Result<(), Error> {
+) -> Result<bool, Error> {
     const SIGNATURE: &str = "String>>#isWhiteSpace";
 
     let string = match receiver {
@@ -135,20 +125,16 @@ fn is_whitespace(
         StringLike::Symbol(sym) => universe.lookup_symbol(sym),
     };
 
-    interpreter.stack.push(SOMValue::new_boolean(
-        !string.is_empty() && string.chars().all(char::is_whitespace),
-    ));
-
-    Ok(())
+    Ok(!string.is_empty() && string.chars().all(char::is_whitespace))
 }
 
 fn concatenate(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     universe: &mut Universe,
     receiver: StringLike,
     other: StringLike,
-) -> Result<(), Error> {
+) -> Result<Gc<String>, Error> {
     const SIGNATURE: &str = "String>>#concatenate:";
 
     let s1 = match receiver {
@@ -161,18 +147,15 @@ fn concatenate(
         StringLike::Symbol(sym) => universe.lookup_symbol(sym),
     };
 
-    let allocated = heap.allocate(format!("{s1}{s2}"));
-    interpreter.stack.push(SOMValue::new_string(&allocated));
-
-    Ok(())
+    Ok(heap.allocate(format!("{s1}{s2}")))
 }
 
 fn as_symbol(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     universe: &mut Universe,
     receiver: StringLike,
-) -> Result<(), Error> {
+) -> Result<Interned, Error> {
     const SIGNATURE: &str = "String>>#asSymbol";
 
     let symbol = match receiver {
@@ -180,28 +163,24 @@ fn as_symbol(
         StringLike::Symbol(symbol) => symbol,
     };
 
-    interpreter.stack.push(SOMValue::new_symbol(symbol));
-
-    Ok(())
+    Ok(symbol)
 }
 
 fn eq(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     _: &mut GcHeap,
     universe: &mut Universe,
     a: SOMValue,
     b: SOMValue,
-) -> Result<(), Error> {
+) -> Result<bool, Error> {
     const SIGNATURE: &str = "String>>#=";
 
     let Ok(a) = StringLike::try_from(a) else {
-        interpreter.stack.push(SOMValue::FALSE);
-        return Ok(());
+        return Ok(false);
     };
 
     let Ok(b) = StringLike::try_from(b) else {
-        interpreter.stack.push(SOMValue::FALSE);
-        return Ok(());
+        return Ok(false);
     };
 
     let a = match a {
@@ -214,19 +193,17 @@ fn eq(
         StringLike::Symbol(sym) => universe.lookup_symbol(sym),
     };
 
-    interpreter.stack.push(SOMValue::new_boolean(a == b));
-
-    Ok(())
+    Ok(a == b)
 }
 
 fn prim_substring_from_to(
-    interpreter: &mut Interpreter,
+    _: &mut Interpreter,
     heap: &mut GcHeap,
     universe: &mut Universe,
     receiver: StringLike,
     from: i32,
     to: i32,
-) -> Result<(), Error> {
+) -> Result<Gc<String>, Error> {
     const SIGNATURE: &str = "String>>#primSubstringFrom:to:";
 
     let from = usize::try_from(from - 1)?;
@@ -237,11 +214,7 @@ fn prim_substring_from_to(
         StringLike::Symbol(sym) => universe.lookup_symbol(sym),
     };
 
-    let string = heap.allocate(string.chars().skip(from).take(to - from).collect());
-
-    interpreter.stack.push(SOMValue::new_string(&string));
-
-    Ok(())
+    Ok(heap.allocate(string.chars().skip(from).take(to - from).collect()))
 }
 
 /// Search for an instance primitive matching the given signature.
