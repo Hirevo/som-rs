@@ -31,7 +31,7 @@ fn at(
     receiver: SOMRef<Vec<SOMValue>>,
     index: i32,
 ) -> Result<SOMValue, Error> {
-    const SIGNATURE: &str = "Array>>#at:";
+    const _: &str = "Array>>#at:";
 
     let index = usize::try_from(index - 1)?;
 
@@ -50,7 +50,7 @@ fn at_put(
     index: i32,
     value: SOMValue,
 ) -> Result<SOMRef<Vec<SOMValue>>, Error> {
-    const SIGNATURE: &str = "Array>>#at:put:";
+    const _: &str = "Array>>#at:put:";
 
     let index = usize::try_from(index - 1)?;
 
@@ -67,7 +67,7 @@ fn length(
     _: &mut Universe,
     receiver: SOMRef<Vec<SOMValue>>,
 ) -> Result<i32, Error> {
-    const SIGNATURE: &str = "Array>>#length";
+    const _: &str = "Array>>#length";
 
     receiver
         .borrow()
@@ -83,7 +83,7 @@ fn new(
     _: SOMValue,
     count: i32,
 ) -> Result<SOMRef<Vec<SOMValue>>, Error> {
-    const SIGNATURE: &str = "Array>>#new:";
+    const _: &str = "Array>>#new:";
 
     let count = usize::try_from(count)?;
     let allocated = heap.allocate(RefCell::new(vec![SOMValue::NIL; count]));

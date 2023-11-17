@@ -20,7 +20,7 @@ fn as_string(
     universe: &mut Universe,
     symbol: Interned,
 ) -> Result<Gc<String>, Error> {
-    const SIGNATURE: &str = "Symbol>>#asString";
+    const _: &str = "Symbol>>#asString";
 
     Ok(heap.allocate(universe.lookup_symbol(symbol).to_owned()))
 }

@@ -35,7 +35,7 @@ fn superclass(
     _: &mut Universe,
     receiver: SOMRef<Class>,
 ) -> Result<(), Error> {
-    const SIGNATURE: &str = "Class>>#superclass";
+    const _: &str = "Class>>#superclass";
 
     let super_class = receiver.borrow().super_class();
     let super_class = super_class.map_or(SOMValue::NIL, |it| SOMValue::new_class(&it));
@@ -50,7 +50,7 @@ fn new(
     _: &mut Universe,
     receiver: SOMRef<Class>,
 ) -> Result<SOMRef<Instance>, Error> {
-    const SIGNATURE: &str = "Class>>#new";
+    const _: &str = "Class>>#new";
 
     let instance = Instance::from_class(receiver);
     let instance = heap.allocate(RefCell::new(instance));
@@ -64,7 +64,7 @@ fn name(
     universe: &mut Universe,
     receiver: SOMRef<Class>,
 ) -> Result<Interned, Error> {
-    const SIGNATURE: &str = "Class>>#name";
+    const _: &str = "Class>>#name";
 
     Ok(universe.intern_symbol(receiver.borrow().name()))
 }
@@ -75,7 +75,7 @@ fn methods(
     _: &mut Universe,
     receiver: SOMRef<Class>,
 ) -> Result<SOMRef<Vec<SOMValue>>, Error> {
-    const SIGNATURE: &str = "Class>>#methods";
+    const _: &str = "Class>>#methods";
 
     let methods = receiver
         .borrow()
@@ -93,7 +93,7 @@ fn fields(
     _: &mut Universe,
     receiver: SOMRef<Class>,
 ) -> Result<SOMRef<Vec<SOMValue>>, Error> {
-    const SIGNATURE: &str = "Class>>#fields";
+    const _: &str = "Class>>#fields";
 
     let fields = receiver
         .borrow()

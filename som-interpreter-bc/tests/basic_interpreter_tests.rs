@@ -5,7 +5,7 @@ use som_interpreter_bc::compiler;
 use som_interpreter_bc::frame::FrameKind;
 use som_interpreter_bc::interpreter::Interpreter;
 use som_interpreter_bc::universe::Universe;
-use som_interpreter_bc::value::{SOMValue, Value};
+use som_interpreter_bc::value::SOMValue;
 use som_lexer::{Lexer, Token};
 use som_parser::lang;
 
