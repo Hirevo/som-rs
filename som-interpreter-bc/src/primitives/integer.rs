@@ -1,7 +1,7 @@
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
 use anyhow::{bail, Context, Error};
-use num_bigint::{BigInt, Sign};
+use num_bigint::{BigInt, BigUint, ToBigInt};
 use num_traits::{Signed, ToPrimitive};
 use once_cell::sync::Lazy;
 use rand::distributions::Uniform;
@@ -149,10 +149,12 @@ fn as_32bit_signed_value(
 
     let value = match receiver {
         IntegerLike::Integer(value) => value,
-        IntegerLike::BigInteger(value) => match value.to_u32_digits() {
-            (Sign::Minus, values) => -(values[0] as i32),
-            (Sign::Plus, values) | (Sign::NoSign, values) => values[0] as i32,
-        },
+        IntegerLike::BigInteger(value) => {
+            // We do this gymnastic to get the 4 lowest bytes from the two's-complement representation.
+            let mut values = value.to_signed_bytes_le();
+            values.resize(4, 0);
+            i32::from_le_bytes(values.try_into().unwrap())
+        }
     };
 
     Ok(value)
@@ -160,17 +162,27 @@ fn as_32bit_signed_value(
 
 fn as_32bit_unsigned_value(
     _: &mut Interpreter,
-    _: &mut GcHeap,
+    heap: &mut GcHeap,
     _: &mut Universe,
     receiver: IntegerLike,
-) -> Result<i32, Error> {
+) -> Result<IntegerLike, Error> {
     const _: &str = "Integer>>#as32BitUnsignedValue";
 
     let value = match receiver {
-        IntegerLike::Integer(value) => value as u32 as i32,
+        IntegerLike::Integer(value) => value as u32,
         IntegerLike::BigInteger(value) => {
-            let (_, values) = value.to_u32_digits();
-            values[0] as i32
+            // We do this gymnastic to get the 4 lowest bytes from the two's-complement representation.
+            let mut values = value.to_signed_bytes_le();
+            values.resize(4, 0);
+            u32::from_le_bytes(values.try_into().unwrap())
+        }
+    };
+
+    let value = match value.try_into() {
+        Ok(value) => IntegerLike::Integer(value),
+        Err(_) => {
+            let allocated = heap.allocate(BigInt::from(value as i64));
+            IntegerLike::BigInteger(allocated)
         }
     };
 
@@ -556,12 +568,27 @@ fn shift_left(
 ) -> Result<SOMValue, Error> {
     const _: &str = "Integer>>#<<";
 
+    // SOM's test suite are (loosely) checking that bit-shifting operations are:
+    // - logical shifts rather than arithmetic shifts
+    // - performed using 64-bit integers
+    //
+    // Since our unboxed integers are signed 32-bit integers (`i32`), we need to:
+    // - perform integer promotion to an unsigned 64-bit integer (`u64`)
+    // - perform the logical bit-shift (bitshifts on unsigned types are logical shifts in Rust)
+    // - attempt to demote it back to `i32`, otherwise we store it as a `BigInt`
+
     let value = match a {
-        IntegerLike::Integer(a) => match a.checked_shl(b as u32) {
-            Some(value) => SOMValue::new_integer(value),
-            None => demote!(heap, BigInt::from(a) << (b as usize)),
+        IntegerLike::Integer(a) => match (a as u64).checked_shl(b as u32) {
+            Some(value) => match value.try_into() {
+                Ok(value) => SOMValue::new_integer(value),
+                Err(_) => {
+                    let allocated = heap.allocate(BigInt::from(value as i64));
+                    SOMValue::new_big_integer(&allocated)
+                }
+            },
+            None => demote!(heap, BigInt::from(a) << (b as u32)),
         },
-        IntegerLike::BigInteger(a) => demote!(heap, a.as_ref() << (b as usize)),
+        IntegerLike::BigInteger(a) => demote!(heap, a.as_ref() << (b as u32)),
     };
 
     Ok(value)
@@ -576,12 +603,35 @@ fn shift_right(
 ) -> Result<SOMValue, Error> {
     const _: &str = "Integer>>#>>";
 
+    // SOM's test suite are (loosely) checking that bit-shifting operations are:
+    // - logical shifts rather than arithmetic shifts
+    // - performed using 64-bit integers
+    //
+    // Since our unboxed integers are signed 32-bit integers (`i32`), we need to:
+    // - perform integer promotion to an unsigned 64-bit integer (`u64`)
+    // - perform the logical bit-shift (bitshifts on unsigned types are logical shifts in Rust)
+    // - attempt to demote it back to `i32`, otherwise we store it as a `BigInt`
+
     let value = match a {
-        IntegerLike::Integer(a) => match a.checked_shr(b as u32) {
-            Some(value) => SOMValue::new_integer(value),
-            None => demote!(heap, BigInt::from(a) >> (b as usize)),
+        IntegerLike::Integer(a) => match (a as u64).checked_shr(b as u32) {
+            Some(value) => match value.try_into() {
+                Ok(value) => SOMValue::new_integer(value),
+                Err(_) => {
+                    let allocated = heap.allocate(BigInt::from(value as i64));
+                    SOMValue::new_big_integer(&allocated)
+                }
+            },
+            None => {
+                let uint = BigUint::from_bytes_le(&a.to_bigint().unwrap().to_signed_bytes_le());
+                let result = uint >> (b as u32);
+                demote!(heap, BigInt::from_signed_bytes_le(&result.to_bytes_le()))
+            }
         },
-        IntegerLike::BigInteger(a) => demote!(heap, a.as_ref() >> (b as usize)),
+        IntegerLike::BigInteger(a) => {
+            let uint = BigUint::from_bytes_le(&a.to_signed_bytes_le());
+            let result = uint >> (b as u32);
+            demote!(heap, BigInt::from_signed_bytes_le(&result.to_bytes_le()))
+        }
     };
 
     Ok(value)
