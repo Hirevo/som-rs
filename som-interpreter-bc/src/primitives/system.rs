@@ -15,7 +15,7 @@ use crate::interner::Interned;
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
-use crate::value::SOMValue;
+use crate::value::Value;
 use crate::SOMRef;
 
 pub static INSTANCE_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> = Lazy::new(|| {
@@ -44,7 +44,7 @@ fn load_file(
     _: &mut Interpreter,
     heap: &mut GcHeap,
     universe: &mut Universe,
-    _: SOMValue,
+    _: Value,
     path: StringLike,
 ) -> Result<Option<Gc<String>>, Error> {
     const _: &str = "System>>#loadFie:";
@@ -65,7 +65,7 @@ fn print_string(
     _: &mut Interpreter,
     _: &mut GcHeap,
     universe: &mut Universe,
-    _: SOMValue,
+    _: Value,
     string: StringLike,
 ) -> Result<System, Error> {
     const _: &str = "System>>#printString:";
@@ -85,7 +85,7 @@ fn print_newline(
     _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
-    _: SOMValue,
+    _: Value,
 ) -> Result<Nil, Error> {
     const _: &'static str = "System>>#printNewline";
 
@@ -98,7 +98,7 @@ fn error_print(
     _: &mut Interpreter,
     _: &mut GcHeap,
     universe: &mut Universe,
-    _: SOMValue,
+    _: Value,
     string: StringLike,
 ) -> Result<System, Error> {
     const _: &str = "System>>#errorPrint:";
@@ -118,7 +118,7 @@ fn error_println(
     _: &mut Interpreter,
     _: &mut GcHeap,
     universe: &mut Universe,
-    _: SOMValue,
+    _: Value,
     string: StringLike,
 ) -> Result<System, Error> {
     const _: &str = "System>>#errorPrintln:";
@@ -137,7 +137,7 @@ fn load(
     _: &mut Interpreter,
     heap: &mut GcHeap,
     universe: &mut Universe,
-    _: SOMValue,
+    _: Value,
     class_name: Interned,
 ) -> Result<SOMRef<Class>, Error> {
     const _: &str = "System>>#load:";
@@ -152,7 +152,7 @@ fn has_global(
     _: &mut Interpreter,
     _: &mut GcHeap,
     universe: &mut Universe,
-    _: SOMValue,
+    _: Value,
     name: Interned,
 ) -> Result<bool, Error> {
     const _: &str = "System>>#hasGlobal:";
@@ -164,9 +164,9 @@ fn global(
     _: &mut Interpreter,
     _: &mut GcHeap,
     universe: &mut Universe,
-    _: SOMValue,
+    _: Value,
     name: Interned,
-) -> Result<Option<SOMValue>, Error> {
+) -> Result<Option<Value>, Error> {
     const _: &str = "System>>#global:";
 
     Ok(universe.lookup_global(name))
@@ -176,10 +176,10 @@ fn global_put(
     _: &mut Interpreter,
     _: &mut GcHeap,
     universe: &mut Universe,
-    _: SOMValue,
+    _: Value,
     name: Interned,
-    value: SOMValue,
-) -> Result<Option<SOMValue>, Error> {
+    value: Value,
+) -> Result<Option<Value>, Error> {
     const _: &str = "System>>#global:put:";
 
     Ok(universe.assign_global(name, value).map(|_| value))
@@ -195,7 +195,7 @@ fn ticks(
     interpreter: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
-    _: SOMValue,
+    _: Value,
 ) -> Result<i32, Error> {
     const SIGNATURE: &str = "System>>#ticks";
 
@@ -211,7 +211,7 @@ fn time(
     interpreter: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
-    _: SOMValue,
+    _: Value,
 ) -> Result<i32, Error> {
     const SIGNATURE: &str = "System>>#time";
 
@@ -227,7 +227,7 @@ fn print_stack_trace(
     interpreter: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
-    _: SOMValue,
+    _: Value,
 ) -> Result<bool, Error> {
     const _: &str = "System>>#printStackTrace";
 
@@ -256,7 +256,7 @@ fn full_gc(
     interpreter: &mut Interpreter,
     heap: &mut GcHeap,
     universe: &mut Universe,
-    _: SOMValue,
+    _: Value,
 ) -> Result<bool, Error> {
     const _: &str = "System>>#fullGC";
 
@@ -272,7 +272,7 @@ fn gc_stats(
     _: &mut Interpreter,
     heap: &mut GcHeap,
     _: &mut Universe,
-    _: SOMValue,
+    _: Value,
 ) -> Result<(IntegerLike, IntegerLike, IntegerLike), Error> {
     const _: &str = "System>>#gcStats";
 

@@ -18,7 +18,7 @@ use som_interpreter_bc::disassembler::disassemble_method_body;
 use som_interpreter_bc::interpreter::Interpreter;
 use som_interpreter_bc::method::MethodKind;
 use som_interpreter_bc::universe::Universe;
-use som_interpreter_bc::value::SOMValue;
+use som_interpreter_bc::value::Value;
 
 #[cfg(feature = "jemalloc")]
 #[global_allocator]
@@ -131,7 +131,7 @@ fn main() -> anyhow::Result<()> {
 
     let args = std::iter::once(String::from(file_stem))
         .chain(opts.args.iter().cloned())
-        .map(|it| SOMValue::new_string(&heap.allocate(it)))
+        .map(|it| Value::new_string(&heap.allocate(it)))
         .collect();
 
     universe

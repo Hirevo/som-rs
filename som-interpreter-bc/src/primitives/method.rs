@@ -10,7 +10,7 @@ use crate::interpreter::Interpreter;
 use crate::method::Method;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
-use crate::value::SOMValue;
+use crate::value::Value;
 use crate::SOMRef;
 
 pub static INSTANCE_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> = Lazy::new(|| {
@@ -50,8 +50,8 @@ fn invoke_on_with(
     heap: &mut GcHeap,
     universe: &mut Universe,
     invokable: Gc<Method>,
-    receiver: SOMValue,
-    arguments: SOMRef<Vec<SOMValue>>,
+    receiver: Value,
+    arguments: SOMRef<Vec<Value>>,
 ) -> Result<(), Error> {
     const _: &str = "Method>>#invokeOn:with:";
 

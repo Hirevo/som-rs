@@ -12,7 +12,7 @@ use crate::frame::{Frame, FrameKind};
 use crate::interner::Interned;
 use crate::method::{Method, MethodKind};
 use crate::universe::Universe;
-use crate::value::SOMValue;
+use crate::value::Value;
 use crate::SOMRef;
 
 macro_rules! send {
@@ -101,7 +101,7 @@ pub struct Interpreter {
     /// The interpreter's stack frames.
     pub frames: Vec<SOMRef<Frame>>,
     /// The evaluation stack.
-    pub stack: Vec<SOMValue>,
+    pub stack: Vec<Value>,
     /// The time record of the interpreter's creation.
     pub start_time: Instant,
 }
@@ -137,7 +137,7 @@ impl Interpreter {
         self.frames.last()
     }
 
-    pub fn run(&mut self, heap: &mut GcHeap, universe: &mut Universe) -> Result<SOMValue, Error> {
+    pub fn run(&mut self, heap: &mut GcHeap, universe: &mut Universe) -> Result<Value, Error> {
         loop {
             let Some(frame) = self.frames.last() else {
                 heap.maybe_collect_garbage(|| {
@@ -145,7 +145,7 @@ impl Interpreter {
                     universe.trace();
                 });
 
-                return Ok(self.stack.pop().unwrap_or(SOMValue::NIL));
+                return Ok(self.stack.pop().unwrap_or(Value::NIL));
             };
 
             let (bytecode, bytecode_idx) = {
@@ -153,7 +153,7 @@ impl Interpreter {
                 let Some(bytecode) = cur_frame.get_current_bytecode() else {
                     drop(cur_frame);
                     self.pop_frame();
-                    self.stack.push(SOMValue::NIL);
+                    self.stack.push(Value::NIL);
                     continue;
                 };
                 let bytecode_idx = cur_frame.bytecode_idx;
@@ -168,7 +168,7 @@ impl Interpreter {
                         universe.trace();
                     });
 
-                    return Ok(SOMValue::NIL);
+                    return Ok(Value::NIL);
                 }
                 Bytecode::Dup => {
                     let value = self
@@ -242,7 +242,7 @@ impl Interpreter {
                         };
                         let mut block = Block::clone(&block);
                         block.frame.replace(Gc::clone(&frame));
-                        SOMValue::new_block(&heap.allocate(block))
+                        Value::new_block(&heap.allocate(block))
                     };
                     self.stack.push(value);
                 }
@@ -568,13 +568,13 @@ impl Interpreter {
             heap: &mut GcHeap,
             frame: &SOMRef<Frame>,
             literal: &Literal,
-        ) -> Result<SOMValue, Error> {
+        ) -> Result<Value, Error> {
             let value = match literal {
-                Literal::Symbol(sym) => SOMValue::new_symbol(*sym),
-                Literal::String(val) => SOMValue::new_string(val),
-                Literal::Double(val) => SOMValue::new_double(*val),
-                Literal::Integer(val) => SOMValue::new_integer(*val),
-                Literal::BigInteger(val) => SOMValue::new_big_integer(val),
+                Literal::Symbol(sym) => Value::new_symbol(*sym),
+                Literal::String(val) => Value::new_string(val),
+                Literal::Double(val) => Value::new_double(*val),
+                Literal::Integer(val) => Value::new_integer(*val),
+                Literal::BigInteger(val) => Value::new_big_integer(val),
                 Literal::Array(val) => {
                     let arr = val
                         .into_iter()
@@ -586,9 +586,9 @@ impl Interpreter {
                                 .and_then(|lit| convert_literal(heap, frame, lit))
                         })
                         .collect::<Result<Vec<_>, _>>()?;
-                    SOMValue::new_array(&heap.allocate(RefCell::new(arr)))
+                    Value::new_array(&heap.allocate(RefCell::new(arr)))
                 }
-                Literal::Block(val) => SOMValue::new_block(&val),
+                Literal::Block(val) => Value::new_block(&val),
             };
             Ok(value)
         }

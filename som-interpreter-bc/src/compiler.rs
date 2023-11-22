@@ -17,7 +17,7 @@ use crate::class::Class;
 use crate::interner::{Interned, Interner};
 use crate::method::{Method, MethodEnv, MethodKind};
 use crate::primitives;
-use crate::value::SOMValue;
+use crate::value::Value;
 use crate::SOMRef;
 
 #[derive(Debug, Clone)]
@@ -686,7 +686,7 @@ pub fn compile_class(
     static_class_mut.locals = static_class_ctxt
         .fields
         .into_iter()
-        .map(|name| (name, SOMValue::NIL))
+        .map(|name| (name, Value::NIL))
         .collect();
     static_class_mut.methods = static_class_ctxt.methods;
     drop(static_class_mut);
@@ -769,7 +769,7 @@ pub fn compile_class(
     instance_class_mut.locals = instance_class_ctxt
         .fields
         .into_iter()
-        .map(|name| (name, SOMValue::NIL))
+        .map(|name| (name, Value::NIL))
         .collect();
     instance_class_mut.methods = instance_class_ctxt.methods;
     drop(instance_class_mut);

@@ -123,18 +123,18 @@ const IS_CELL_PATTERN: u64 = CELL_BASE_TAG << TAG_SHIFT;
 
 /// Represents an SOM value.
 #[derive(Clone, Copy, Eq, Hash)]
-pub struct SOMValue {
+pub struct Value {
     /// The 64-bit value that is used to store SOM values using NaN-boxing.
     encoded: u64,
 }
 
-impl Default for SOMValue {
+impl Default for Value {
     fn default() -> Self {
         Self::NIL
     }
 }
 
-impl SOMValue {
+impl Value {
     /// Returns the tag bits of the value.
     #[inline(always)]
     pub fn tag(self) -> u64 {
@@ -240,7 +240,7 @@ impl SOMValue {
     }
     /// Returns this value as an array, if such is its type.
     #[inline(always)]
-    pub fn as_array(self) -> Option<SOMRef<Vec<SOMValue>>> {
+    pub fn as_array(self) -> Option<SOMRef<Vec<Value>>> {
         self.is_array().then(|| self.extract_gc_cell())
     }
     /// Returns this value as a block, if such is its type.
@@ -547,7 +547,7 @@ impl SOMValue {
     }
 }
 
-impl Trace for SOMValue {
+impl Trace for Value {
     fn trace(&self) {
         if !self.is_cell() {
             return;
@@ -571,14 +571,14 @@ impl Trace for SOMValue {
     }
 }
 
-impl PartialEq for SOMValue {
+impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
-        Value::from(*self).eq(&Value::from(*other))
+        ValueEnum::from(*self) == ValueEnum::from(*other)
     }
 }
 
-impl From<SOMValue> for Value {
-    fn from(value: SOMValue) -> Self {
+impl From<Value> for ValueEnum {
+    fn from(value: Value) -> Self {
         if let Some(value) = value.as_double() {
             Self::Double(value)
         } else if value.is_nil() {
@@ -611,35 +611,35 @@ impl From<SOMValue> for Value {
     }
 }
 
-impl From<Value> for SOMValue {
-    fn from(value: Value) -> Self {
+impl From<ValueEnum> for Value {
+    fn from(value: ValueEnum) -> Self {
         match value {
-            Value::Nil => Self::NIL,
-            Value::System => Self::SYSTEM,
-            Value::Boolean(value) => Self::new_boolean(value),
-            Value::Integer(value) => Self::new_integer(value),
-            Value::BigInteger(value) => Self::new_big_integer(&value),
-            Value::Double(value) => Self::new_double(value),
-            Value::Symbol(value) => Self::new_symbol(value),
-            Value::String(value) => Self::new_string(&value),
-            Value::Array(value) => Self::new_array(&value),
-            Value::Block(value) => Self::new_block(&value),
-            Value::Instance(value) => Self::new_instance(&value),
-            Value::Class(value) => Self::new_class(&value),
-            Value::Invokable(value) => Self::new_invokable(&value),
+            ValueEnum::Nil => Self::NIL,
+            ValueEnum::System => Self::SYSTEM,
+            ValueEnum::Boolean(value) => Self::new_boolean(value),
+            ValueEnum::Integer(value) => Self::new_integer(value),
+            ValueEnum::BigInteger(value) => Self::new_big_integer(&value),
+            ValueEnum::Double(value) => Self::new_double(value),
+            ValueEnum::Symbol(value) => Self::new_symbol(value),
+            ValueEnum::String(value) => Self::new_string(&value),
+            ValueEnum::Array(value) => Self::new_array(&value),
+            ValueEnum::Block(value) => Self::new_block(&value),
+            ValueEnum::Instance(value) => Self::new_instance(&value),
+            ValueEnum::Class(value) => Self::new_class(&value),
+            ValueEnum::Invokable(value) => Self::new_invokable(&value),
         }
     }
 }
 
-impl fmt::Debug for SOMValue {
+impl fmt::Debug for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        Value::from(*self).fmt(f)
+        ValueEnum::from(*self).fmt(f)
     }
 }
 
 /// Represents an SOM value.
 #[derive(Clone)]
-pub enum Value {
+pub enum ValueEnum {
     /// The **nil** value.
     Nil,
     /// The **system** value.
@@ -657,7 +657,7 @@ pub enum Value {
     /// A string value.
     String(Gc<String>),
     /// An array of values.
-    Array(SOMRef<Vec<SOMValue>>),
+    Array(SOMRef<Vec<Value>>),
     /// A block value, ready to be evaluated.
     Block(Gc<Block>),
     /// A generic (non-primitive) class instance.
@@ -668,42 +668,42 @@ pub enum Value {
     Invokable(Gc<Method>),
 }
 
-impl Trace for Value {
+impl Trace for ValueEnum {
     #[inline]
     fn trace(&self) {
         match self {
-            Value::Nil => {}
-            Value::System => {}
-            Value::Boolean(_) => {}
-            Value::Integer(_) => {}
-            Value::BigInteger(value) => {
+            ValueEnum::Nil => {}
+            ValueEnum::System => {}
+            ValueEnum::Boolean(_) => {}
+            ValueEnum::Integer(_) => {}
+            ValueEnum::BigInteger(value) => {
                 value.trace();
             }
-            Value::Double(_) => {}
-            Value::Symbol(_) => {}
-            Value::String(string) => {
+            ValueEnum::Double(_) => {}
+            ValueEnum::Symbol(_) => {}
+            ValueEnum::String(string) => {
                 string.trace();
             }
-            Value::Array(array) => {
+            ValueEnum::Array(array) => {
                 array.trace();
             }
-            Value::Block(block) => {
+            ValueEnum::Block(block) => {
                 block.trace();
             }
-            Value::Instance(instance) => {
+            ValueEnum::Instance(instance) => {
                 instance.trace();
             }
-            Value::Class(class) => {
+            ValueEnum::Class(class) => {
                 class.trace();
             }
-            Value::Invokable(method) => {
+            ValueEnum::Invokable(method) => {
                 method.trace();
             }
         }
     }
 }
 
-impl Value {
+impl ValueEnum {
     /// Get the class of the current value.
     #[inline(always)]
     pub fn class(&self, universe: &Universe) -> SOMRef<Class> {
@@ -793,7 +793,7 @@ impl Value {
     }
 }
 
-impl PartialEq for Value {
+impl PartialEq for ValueEnum {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Nil, Self::Nil) | (Self::System, Self::System) => true,
@@ -819,7 +819,7 @@ impl PartialEq for Value {
     }
 }
 
-impl fmt::Debug for Value {
+impl fmt::Debug for ValueEnum {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Nil => f.debug_tuple("Nil").finish(),

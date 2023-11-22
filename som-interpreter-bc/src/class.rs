@@ -6,7 +6,7 @@ use som_gc::{Gc, Trace};
 
 use crate::interner::Interned;
 use crate::method::Method;
-use crate::value::SOMValue;
+use crate::value::Value;
 use crate::SOMRef;
 
 /// Represents a loaded class.
@@ -19,7 +19,7 @@ pub struct Class {
     /// The superclass of this class.
     pub super_class: Option<SOMRef<Class>>,
     /// The class' locals.
-    pub locals: IndexMap<Interned, SOMValue>,
+    pub locals: IndexMap<Interned, Value>,
     /// The class' methods/invokables.
     pub methods: IndexMap<Interned, Gc<Method>>,
     /// Is this class a static one ?
@@ -76,7 +76,7 @@ impl Class {
     }
 
     /// Search for a local binding.
-    pub fn lookup_local(&self, idx: usize) -> Option<SOMValue> {
+    pub fn lookup_local(&self, idx: usize) -> Option<Value> {
         if let Some(local) = self.locals.values().nth(idx).cloned() {
             return Some(local);
         }
@@ -85,7 +85,7 @@ impl Class {
     }
 
     /// Assign a value to a local binding.
-    pub fn assign_local(&mut self, idx: usize, value: SOMValue) -> Option<()> {
+    pub fn assign_local(&mut self, idx: usize, value: Value) -> Option<()> {
         if let Some(local) = self.locals.values_mut().nth(idx) {
             *local = value;
             return Some(());

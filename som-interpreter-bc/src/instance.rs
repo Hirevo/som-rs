@@ -3,7 +3,7 @@ use std::fmt;
 use som_gc::Trace;
 
 use crate::class::Class;
-use crate::value::SOMValue;
+use crate::value::Value;
 use crate::SOMRef;
 
 /// Represents a generic (non-primitive) class instance.
@@ -12,7 +12,7 @@ pub struct Instance {
     /// The class of which this is an instance from.
     pub class: SOMRef<Class>,
     /// This instance's locals.
-    pub locals: Vec<SOMValue>,
+    pub locals: Vec<Value>,
 }
 
 impl Trace for Instance {
@@ -28,11 +28,11 @@ impl Instance {
     pub fn from_class(class: SOMRef<Class>) -> Self {
         let mut locals = Vec::new();
 
-        fn collect_locals(class: &SOMRef<Class>, locals: &mut Vec<SOMValue>) {
+        fn collect_locals(class: &SOMRef<Class>, locals: &mut Vec<Value>) {
             if let Some(class) = class.borrow().super_class() {
                 collect_locals(&class, locals);
             }
-            locals.extend(class.borrow().locals.iter().map(|_| SOMValue::NIL));
+            locals.extend(class.borrow().locals.iter().map(|_| Value::NIL));
         }
 
         collect_locals(&class, &mut locals);
@@ -53,12 +53,12 @@ impl Instance {
     }
 
     /// Search for a local binding.
-    pub fn lookup_local(&self, idx: usize) -> Option<SOMValue> {
+    pub fn lookup_local(&self, idx: usize) -> Option<Value> {
         self.locals.get(idx).cloned()
     }
 
     /// Assign a value to a local binding.
-    pub fn assign_local(&mut self, idx: usize, value: SOMValue) -> Option<()> {
+    pub fn assign_local(&mut self, idx: usize, value: Value) -> Option<()> {
         *self.locals.get_mut(idx)? = value;
         Some(())
     }

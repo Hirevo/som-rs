@@ -14,7 +14,7 @@ use crate::interpreter::Interpreter;
 use crate::method::Method;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
-use crate::value::SOMValue;
+use crate::value::Value;
 use crate::SOMRef;
 
 pub static INSTANCE_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> = Lazy::new(|| {
@@ -50,7 +50,7 @@ fn class(
     _: &mut Interpreter,
     _: &mut GcHeap,
     universe: &mut Universe,
-    receiver: SOMValue,
+    receiver: Value,
 ) -> Result<SOMRef<Class>, Error> {
     const _: &'static str = "Object>>#class";
 
@@ -61,7 +61,7 @@ fn object_size(
     _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
-    receiver: SOMValue,
+    receiver: Value,
 ) -> Result<i32, Error> {
     const SIGNATURE: &'static str = "Object>>#objectSize";
 
@@ -74,7 +74,7 @@ fn hashcode(
     _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
-    receiver: SOMValue,
+    receiver: Value,
 ) -> Result<i32, Error> {
     const _: &'static str = "Object>>#hashcode";
 
@@ -89,8 +89,8 @@ fn eq(
     _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
-    receiver: SOMValue,
-    other: SOMValue,
+    receiver: Value,
+    other: Value,
 ) -> Result<bool, Error> {
     const _: &'static str = "Object>>#==";
 
@@ -101,7 +101,7 @@ fn perform(
     interpreter: &mut Interpreter,
     heap: &mut GcHeap,
     universe: &mut Universe,
-    receiver: SOMValue,
+    receiver: Value,
     signature: Interned,
 ) -> Result<(), Error> {
     const SIGNATURE: &'static str = "Object>>#perform:";
@@ -126,9 +126,9 @@ fn perform_with_arguments(
     interpreter: &mut Interpreter,
     heap: &mut GcHeap,
     universe: &mut Universe,
-    receiver: SOMValue,
+    receiver: Value,
     signature: Interned,
-    arguments: SOMRef<Vec<SOMValue>>,
+    arguments: SOMRef<Vec<Value>>,
 ) -> Result<(), Error> {
     const SIGNATURE: &'static str = "Object>>#perform:withArguments:";
 
@@ -159,7 +159,7 @@ fn perform_in_super_class(
     interpreter: &mut Interpreter,
     heap: &mut GcHeap,
     universe: &mut Universe,
-    receiver: SOMValue,
+    receiver: Value,
     signature: Interned,
     class: SOMRef<Class>,
 ) -> Result<(), Error> {
@@ -169,13 +169,7 @@ fn perform_in_super_class(
         let signature_str = universe.lookup_symbol(signature).to_owned();
         let args = vec![receiver];
         return universe
-            .does_not_understand(
-                interpreter,
-                heap,
-                SOMValue::new_class(&class),
-                signature,
-                args,
-            )
+            .does_not_understand(interpreter, heap, Value::new_class(&class), signature, args)
             .with_context(|| {
                 format!(
                     "`{SIGNATURE}`: method `{signature_str}` not found for `{}`",
@@ -191,9 +185,9 @@ fn perform_with_arguments_in_super_class(
     interpreter: &mut Interpreter,
     heap: &mut GcHeap,
     universe: &mut Universe,
-    receiver: SOMValue,
+    receiver: Value,
     signature: Interned,
-    arguments: SOMRef<Vec<SOMValue>>,
+    arguments: SOMRef<Vec<Value>>,
     class: SOMRef<Class>,
 ) -> Result<(), Error> {
     const SIGNATURE: &'static str = "Object>>#perform:withArguments:inSuperclass:";
@@ -204,13 +198,7 @@ fn perform_with_arguments_in_super_class(
         let signature_str = universe.lookup_symbol(signature).to_owned();
         let args = std::iter::once(receiver).chain(arguments.take()).collect();
         return universe
-            .does_not_understand(
-                interpreter,
-                heap,
-                SOMValue::new_class(&class),
-                signature,
-                args,
-            )
+            .does_not_understand(interpreter, heap, Value::new_class(&class), signature, args)
             .with_context(|| {
                 format!(
                     "`{SIGNATURE}`: method `{signature_str}` not found for `{}`",
@@ -233,9 +221,9 @@ fn inst_var_at(
     _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
-    receiver: SOMValue,
+    receiver: Value,
     index: i32,
-) -> Result<Option<SOMValue>, Error> {
+) -> Result<Option<Value>, Error> {
     const _: &'static str = "Object>>#instVarAt:";
 
     let index = usize::try_from(index.saturating_sub(1))?;
@@ -247,10 +235,10 @@ fn inst_var_at_put(
     _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
-    mut receiver: SOMValue,
+    mut receiver: Value,
     index: i32,
-    value: SOMValue,
-) -> Result<Option<SOMValue>, Error> {
+    value: Value,
+) -> Result<Option<Value>, Error> {
     const _: &'static str = "Object>>#instVarAt:put:";
 
     let index = usize::try_from(index.saturating_sub(1))?;

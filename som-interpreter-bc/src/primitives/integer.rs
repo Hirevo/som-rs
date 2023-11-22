@@ -13,7 +13,7 @@ use crate::convert::{DoubleLike, IntegerLike, Primitive, StringLike};
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
-use crate::value::SOMValue;
+use crate::value::Value;
 
 pub static INSTANCE_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> = Lazy::new(|| {
     Box::new([
@@ -53,8 +53,8 @@ macro_rules! demote {
     ($heap:expr, $expr:expr) => {{
         let value = $expr;
         match value.to_i32() {
-            Some(value) => SOMValue::new_integer(value),
-            None => SOMValue::new_big_integer(&$heap.allocate(value)),
+            Some(value) => Value::new_integer(value),
+            None => Value::new_big_integer(&$heap.allocate(value)),
         }
     }};
 }
@@ -63,9 +63,9 @@ fn from_string(
     _: &mut Interpreter,
     heap: &mut GcHeap,
     universe: &mut Universe,
-    _: SOMValue,
+    _: Value,
     string: StringLike,
-) -> Result<SOMValue, Error> {
+) -> Result<Value, Error> {
     const _: &str = "Integer>>#fromString:";
 
     let string = match string {
@@ -73,10 +73,10 @@ fn from_string(
         StringLike::Symbol(sym) => universe.lookup_symbol(sym),
     };
 
-    let parsed = string.parse().map(SOMValue::new_integer).or_else(|_| {
+    let parsed = string.parse().map(Value::new_integer).or_else(|_| {
         string.parse().map(|value: BigInt| {
             let allocated = heap.allocate(value);
-            SOMValue::new_big_integer(&allocated)
+            Value::new_big_integer(&allocated)
         })
     })?;
 
@@ -195,12 +195,12 @@ fn plus(
     _: &mut Universe,
     a: DoubleLike,
     b: DoubleLike,
-) -> Result<SOMValue, Error> {
+) -> Result<Value, Error> {
     const SIGNATURE: &str = "Integer>>#+";
 
     let value = match (a, b) {
         (DoubleLike::Integer(a), DoubleLike::Integer(b)) => match a.checked_add(b) {
-            Some(value) => SOMValue::new_integer(value),
+            Some(value) => Value::new_integer(value),
             None => demote!(heap, BigInt::from(a) + BigInt::from(b)),
         },
         (DoubleLike::BigInteger(a), DoubleLike::BigInteger(b)) => {
@@ -210,12 +210,12 @@ fn plus(
         | (DoubleLike::Integer(b), DoubleLike::BigInteger(a)) => {
             demote!(heap, a.as_ref() + BigInt::from(b))
         }
-        (DoubleLike::Double(a), DoubleLike::Double(b)) => SOMValue::new_double(a + b),
+        (DoubleLike::Double(a), DoubleLike::Double(b)) => Value::new_double(a + b),
         (DoubleLike::Integer(a), DoubleLike::Double(b))
-        | (DoubleLike::Double(b), DoubleLike::Integer(a)) => SOMValue::new_double((a as f64) + b),
+        | (DoubleLike::Double(b), DoubleLike::Integer(a)) => Value::new_double((a as f64) + b),
         (DoubleLike::BigInteger(a), DoubleLike::Double(b))
         | (DoubleLike::Double(b), DoubleLike::BigInteger(a)) => match a.to_f64() {
-            Some(a) => SOMValue::new_double(a + b),
+            Some(a) => Value::new_double(a + b),
             None => panic!(
                 "'{}': `Integer` too big to be converted to `Double`",
                 SIGNATURE
@@ -232,12 +232,12 @@ fn minus(
     _: &mut Universe,
     a: DoubleLike,
     b: DoubleLike,
-) -> Result<SOMValue, Error> {
+) -> Result<Value, Error> {
     const SIGNATURE: &str = "Integer>>#-";
 
     let value = match (a, b) {
         (DoubleLike::Integer(a), DoubleLike::Integer(b)) => match a.checked_sub(b) {
-            Some(value) => SOMValue::new_integer(value),
+            Some(value) => Value::new_integer(value),
             None => demote!(heap, BigInt::from(a) - BigInt::from(b)),
         },
         (DoubleLike::BigInteger(a), DoubleLike::BigInteger(b)) => {
@@ -249,17 +249,17 @@ fn minus(
         (DoubleLike::Integer(a), DoubleLike::BigInteger(b)) => {
             demote!(heap, BigInt::from(a) - b.as_ref())
         }
-        (DoubleLike::Double(a), DoubleLike::Double(b)) => SOMValue::new_double(a - b),
+        (DoubleLike::Double(a), DoubleLike::Double(b)) => Value::new_double(a - b),
         (DoubleLike::Integer(a), DoubleLike::Double(b))
-        | (DoubleLike::Double(b), DoubleLike::Integer(a)) => SOMValue::new_double((a as f64) - b),
+        | (DoubleLike::Double(b), DoubleLike::Integer(a)) => Value::new_double((a as f64) - b),
         (DoubleLike::BigInteger(a), DoubleLike::Double(b)) => match a.to_f64() {
-            Some(a) => SOMValue::new_double(a - b),
+            Some(a) => Value::new_double(a - b),
             None => {
                 bail!("'{SIGNATURE}': `Integer` too big to be converted to `Double`");
             }
         },
         (DoubleLike::Double(a), DoubleLike::BigInteger(b)) => match b.to_f64() {
-            Some(b) => SOMValue::new_double(a - b),
+            Some(b) => Value::new_double(a - b),
             None => {
                 bail!("'{SIGNATURE}': `Integer` too big to be converted to `Double`");
             }
@@ -275,12 +275,12 @@ fn times(
     _: &mut Universe,
     a: DoubleLike,
     b: DoubleLike,
-) -> Result<SOMValue, Error> {
+) -> Result<Value, Error> {
     const SIGNATURE: &str = "Integer>>#*";
 
     let value = match (a, b) {
         (DoubleLike::Integer(a), DoubleLike::Integer(b)) => match a.checked_mul(b) {
-            Some(value) => SOMValue::new_integer(value),
+            Some(value) => Value::new_integer(value),
             None => demote!(heap, BigInt::from(a) * BigInt::from(b)),
         },
         (DoubleLike::BigInteger(a), DoubleLike::BigInteger(b)) => {
@@ -290,12 +290,12 @@ fn times(
         | (DoubleLike::Integer(b), DoubleLike::BigInteger(a)) => {
             demote!(heap, a.as_ref() * BigInt::from(b))
         }
-        (DoubleLike::Double(a), DoubleLike::Double(b)) => SOMValue::new_double(a * b),
+        (DoubleLike::Double(a), DoubleLike::Double(b)) => Value::new_double(a * b),
         (DoubleLike::Integer(a), DoubleLike::Double(b))
-        | (DoubleLike::Double(b), DoubleLike::Integer(a)) => SOMValue::new_double((a as f64) * b),
+        | (DoubleLike::Double(b), DoubleLike::Integer(a)) => Value::new_double((a as f64) * b),
         (DoubleLike::BigInteger(a), DoubleLike::Double(b))
         | (DoubleLike::Double(b), DoubleLike::BigInteger(a)) => match a.to_f64() {
-            Some(a) => SOMValue::new_double(a * b),
+            Some(a) => Value::new_double(a * b),
             None => {
                 bail!("'{SIGNATURE}': `Integer` too big to be converted to `Double`");
             }
@@ -311,12 +311,12 @@ fn divide(
     _: &mut Universe,
     a: DoubleLike,
     b: DoubleLike,
-) -> Result<SOMValue, Error> {
+) -> Result<Value, Error> {
     const SIGNATURE: &str = "Integer>>#/";
 
     let value = match (a, b) {
         (DoubleLike::Integer(a), DoubleLike::Integer(b)) => match a.checked_div(b) {
-            Some(value) => SOMValue::new_integer(value),
+            Some(value) => Value::new_integer(value),
             None => demote!(heap, BigInt::from(a) / BigInt::from(b)),
         },
         (DoubleLike::BigInteger(a), DoubleLike::BigInteger(b)) => {
@@ -328,17 +328,17 @@ fn divide(
         (DoubleLike::Integer(a), DoubleLike::BigInteger(b)) => {
             demote!(heap, BigInt::from(a) / b.as_ref())
         }
-        (DoubleLike::Double(a), DoubleLike::Double(b)) => SOMValue::new_double(a / b),
+        (DoubleLike::Double(a), DoubleLike::Double(b)) => Value::new_double(a / b),
         (DoubleLike::Integer(a), DoubleLike::Double(b))
-        | (DoubleLike::Double(b), DoubleLike::Integer(a)) => SOMValue::new_double((a as f64) / b),
+        | (DoubleLike::Double(b), DoubleLike::Integer(a)) => Value::new_double((a as f64) / b),
         (DoubleLike::BigInteger(a), DoubleLike::Double(b)) => match a.to_f64() {
-            Some(a) => SOMValue::new_double(a / b),
+            Some(a) => Value::new_double(a / b),
             None => {
                 bail!("'{SIGNATURE}': `Integer` too big to be converted to `Double`");
             }
         },
         (DoubleLike::Double(a), DoubleLike::BigInteger(b)) => match b.to_f64() {
-            Some(b) => SOMValue::new_double(a / b),
+            Some(b) => Value::new_double(a / b),
             None => {
                 bail!("'{SIGNATURE}': `Integer` too big to be converted to `Double`");
             }
@@ -388,16 +388,16 @@ fn modulo(
     _: &mut Universe,
     a: IntegerLike,
     b: i32,
-) -> Result<SOMValue, Error> {
+) -> Result<Value, Error> {
     const _: &str = "Integer>>#%";
 
     let result = match a {
         IntegerLike::Integer(a) => {
             let result = a % b;
             if result.signum() != b.signum() {
-                SOMValue::new_integer((result + b) % b)
+                Value::new_integer((result + b) % b)
             } else {
-                SOMValue::new_integer(result)
+                Value::new_integer(result)
             }
         }
         IntegerLike::BigInteger(a) => {
@@ -435,18 +435,18 @@ fn sqrt(
     heap: &mut GcHeap,
     _: &mut Universe,
     a: DoubleLike,
-) -> Result<SOMValue, Error> {
+) -> Result<Value, Error> {
     const _: &str = "Integer>>#sqrt";
 
     let value = match a {
-        DoubleLike::Double(a) => SOMValue::new_double(a.sqrt()),
+        DoubleLike::Double(a) => Value::new_double(a.sqrt()),
         DoubleLike::Integer(a) => {
             let sqrt = (a as f64).sqrt();
             let trucated = sqrt.trunc();
             if sqrt == trucated {
-                SOMValue::new_integer(trucated as i32)
+                Value::new_integer(trucated as i32)
             } else {
-                SOMValue::new_double(sqrt)
+                Value::new_double(sqrt)
             }
         }
         DoubleLike::BigInteger(a) => demote!(heap, a.sqrt()),
@@ -461,11 +461,11 @@ fn bitand(
     _: &mut Universe,
     a: IntegerLike,
     b: IntegerLike,
-) -> Result<SOMValue, Error> {
+) -> Result<Value, Error> {
     const _: &str = "Integer>>#&";
 
     let value = match (a, b) {
-        (IntegerLike::Integer(a), IntegerLike::Integer(b)) => SOMValue::new_integer(a & b),
+        (IntegerLike::Integer(a), IntegerLike::Integer(b)) => Value::new_integer(a & b),
         (IntegerLike::BigInteger(a), IntegerLike::BigInteger(b)) => {
             demote!(heap, a.as_ref() & b.as_ref())
         }
@@ -484,11 +484,11 @@ fn bitxor(
     _: &mut Universe,
     a: IntegerLike,
     b: IntegerLike,
-) -> Result<SOMValue, Error> {
+) -> Result<Value, Error> {
     const _: &str = "Integer>>#bitXor:";
 
     let value = match (a, b) {
-        (IntegerLike::Integer(a), IntegerLike::Integer(b)) => SOMValue::new_integer(a ^ b),
+        (IntegerLike::Integer(a), IntegerLike::Integer(b)) => Value::new_integer(a ^ b),
         (IntegerLike::BigInteger(a), IntegerLike::BigInteger(b)) => {
             demote!(heap, a.as_ref() ^ b.as_ref())
         }
@@ -507,20 +507,20 @@ fn lt(
     _: &mut Universe,
     a: DoubleLike,
     b: DoubleLike,
-) -> Result<SOMValue, Error> {
+) -> Result<Value, Error> {
     const SIGNATURE: &str = "Integer>>#<";
 
     let value = match (a, b) {
-        (DoubleLike::Integer(a), DoubleLike::Integer(b)) => SOMValue::new_boolean(a < b),
-        (DoubleLike::BigInteger(a), DoubleLike::BigInteger(b)) => SOMValue::new_boolean(a < b),
-        (DoubleLike::Double(a), DoubleLike::Double(b)) => SOMValue::new_boolean(a < b),
-        (DoubleLike::Integer(a), DoubleLike::Double(b)) => SOMValue::new_boolean((a as f64) < b),
-        (DoubleLike::Double(a), DoubleLike::Integer(b)) => SOMValue::new_boolean(a < (b as f64)),
+        (DoubleLike::Integer(a), DoubleLike::Integer(b)) => Value::new_boolean(a < b),
+        (DoubleLike::BigInteger(a), DoubleLike::BigInteger(b)) => Value::new_boolean(a < b),
+        (DoubleLike::Double(a), DoubleLike::Double(b)) => Value::new_boolean(a < b),
+        (DoubleLike::Integer(a), DoubleLike::Double(b)) => Value::new_boolean((a as f64) < b),
+        (DoubleLike::Double(a), DoubleLike::Integer(b)) => Value::new_boolean(a < (b as f64)),
         (DoubleLike::BigInteger(a), DoubleLike::Integer(b)) => {
-            SOMValue::new_boolean(a.as_ref() < &BigInt::from(b))
+            Value::new_boolean(a.as_ref() < &BigInt::from(b))
         }
         (DoubleLike::Integer(a), DoubleLike::BigInteger(b)) => {
-            SOMValue::new_boolean(&BigInt::from(a) < b.as_ref())
+            Value::new_boolean(&BigInt::from(a) < b.as_ref())
         }
         _ => {
             bail!("'{SIGNATURE}': wrong types");
@@ -534,8 +534,8 @@ fn eq(
     _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
-    a: SOMValue,
-    b: SOMValue,
+    a: Value,
+    b: Value,
 ) -> Result<bool, Error> {
     const _: &str = "Integer>>#=";
 
@@ -565,7 +565,7 @@ fn shift_left(
     _: &mut Universe,
     a: IntegerLike,
     b: i32,
-) -> Result<SOMValue, Error> {
+) -> Result<Value, Error> {
     const _: &str = "Integer>>#<<";
 
     // SOM's test suite are (loosely) checking that bit-shifting operations are:
@@ -580,10 +580,10 @@ fn shift_left(
     let value = match a {
         IntegerLike::Integer(a) => match (a as u64).checked_shl(b as u32) {
             Some(value) => match value.try_into() {
-                Ok(value) => SOMValue::new_integer(value),
+                Ok(value) => Value::new_integer(value),
                 Err(_) => {
                     let allocated = heap.allocate(BigInt::from(value as i64));
-                    SOMValue::new_big_integer(&allocated)
+                    Value::new_big_integer(&allocated)
                 }
             },
             None => demote!(heap, BigInt::from(a) << (b as u32)),
@@ -600,7 +600,7 @@ fn shift_right(
     _: &mut Universe,
     a: IntegerLike,
     b: i32,
-) -> Result<SOMValue, Error> {
+) -> Result<Value, Error> {
     const _: &str = "Integer>>#>>";
 
     // SOM's test suite are (loosely) checking that bit-shifting operations are:
@@ -615,10 +615,10 @@ fn shift_right(
     let value = match a {
         IntegerLike::Integer(a) => match (a as u64).checked_shr(b as u32) {
             Some(value) => match value.try_into() {
-                Ok(value) => SOMValue::new_integer(value),
+                Ok(value) => Value::new_integer(value),
                 Err(_) => {
                     let allocated = heap.allocate(BigInt::from(value as i64));
-                    SOMValue::new_big_integer(&allocated)
+                    Value::new_big_integer(&allocated)
                 }
             },
             None => {
