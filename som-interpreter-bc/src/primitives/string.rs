@@ -13,7 +13,7 @@ use crate::interner::Interned;
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
-use crate::value::SOMValue;
+use crate::value::Value;
 
 pub static INSTANCE_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> = Lazy::new(|| {
     Box::new([
@@ -40,7 +40,7 @@ fn length(
     heap: &mut GcHeap,
     universe: &mut Universe,
     receiver: StringLike,
-) -> Result<SOMValue, Error> {
+) -> Result<Value, Error> {
     const _: &str = "String>>#length";
 
     let string = match receiver {
@@ -50,10 +50,10 @@ fn length(
 
     let length = string.chars().count();
     let value = match length.try_into() {
-        Ok(value) => SOMValue::new_integer(value),
+        Ok(value) => Value::new_integer(value),
         Err(_) => {
             let allocated = heap.allocate(BigInt::from(length));
-            SOMValue::new_big_integer(&allocated)
+            Value::new_big_integer(&allocated)
         }
     };
 
@@ -170,8 +170,8 @@ fn eq(
     _: &mut Interpreter,
     _: &mut GcHeap,
     universe: &mut Universe,
-    a: SOMValue,
-    b: SOMValue,
+    a: Value,
+    b: Value,
 ) -> Result<bool, Error> {
     const _: &str = "String>>#=";
 

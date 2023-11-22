@@ -9,7 +9,7 @@ use crate::frame::FrameKind;
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
-use crate::value::SOMValue;
+use crate::value::Value;
 
 /// Primitives for the **Block** and **Block1** class.
 pub mod block1 {
@@ -89,7 +89,7 @@ pub mod block2 {
         heap: &mut GcHeap,
         _: &mut Universe,
         receiver: Gc<Block>,
-        argument: SOMValue,
+        argument: Value,
     ) -> Result<(), Error> {
         const _: &str = "Block2>>#value:";
 
@@ -133,8 +133,8 @@ pub mod block3 {
         heap: &mut GcHeap,
         _: &mut Universe,
         receiver: Gc<Block>,
-        argument1: SOMValue,
-        argument2: SOMValue,
+        argument1: Value,
+        argument2: Value,
     ) -> Result<(), Error> {
         const _: &str = "Block3>>#value:with:";
 

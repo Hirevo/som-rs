@@ -13,7 +13,7 @@ use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 // use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
-use crate::value::SOMValue;
+use crate::value::Value;
 use crate::SOMRef;
 
 #[derive(Clone)]
@@ -100,8 +100,8 @@ impl Method {
         interpreter: &mut Interpreter,
         heap: &mut GcHeap,
         universe: &mut Universe,
-        receiver: SOMValue,
-        mut args: Vec<SOMValue>,
+        receiver: Value,
+        mut args: Vec<Value>,
     ) -> Result<(), Error> {
         match &this.kind {
             MethodKind::Defined(_) => {

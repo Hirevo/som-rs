@@ -5,7 +5,7 @@ use som_interpreter_bc::compiler;
 use som_interpreter_bc::frame::FrameKind;
 use som_interpreter_bc::interpreter::Interpreter;
 use som_interpreter_bc::universe::Universe;
-use som_interpreter_bc::value::SOMValue;
+use som_interpreter_bc::value::Value;
 use som_lexer::{Lexer, Token};
 use som_parser::lang;
 
@@ -23,8 +23,8 @@ fn basic_interpreter_tests() {
 
     let mut universe = setup_universe(&mut heap);
 
-    let return_class = SOMValue::new_class(&universe.load_class(&mut heap, "Return").unwrap());
-    let compiler_simplification_class = SOMValue::new_class(
+    let return_class = Value::new_class(&universe.load_class(&mut heap, "Return").unwrap());
+    let compiler_simplification_class = Value::new_class(
         &universe
             .load_class(&mut heap, "CompilerSimplification")
             .unwrap(),
@@ -32,55 +32,55 @@ fn basic_interpreter_tests() {
 
     let method_name = universe.intern_symbol("run");
 
-    let tests: &[(&str, SOMValue)] = &[
+    let tests: &[(&str, Value)] = &[
         // {"Self", "assignSuper", 42, ProgramDefinitionError.class},
-        ("MethodCall test", SOMValue::new_integer(42)),
-        ("MethodCall test2", SOMValue::new_integer(42)),
-        ("NonLocalReturn test1", SOMValue::new_integer(42)),
-        ("NonLocalReturn test2", SOMValue::new_integer(43)),
-        ("NonLocalReturn test3", SOMValue::new_integer(3)),
-        ("NonLocalReturn test4", SOMValue::new_integer(42)),
-        ("NonLocalReturn test5", SOMValue::new_integer(22)),
-        ("Blocks testArg1", SOMValue::new_integer(42)),
-        ("Blocks testArg2", SOMValue::new_integer(77)),
-        ("Blocks testArgAndLocal", SOMValue::new_integer(8)),
-        ("Blocks testArgAndContext", SOMValue::new_integer(8)),
-        ("Blocks testEmptyZeroArg", SOMValue::new_integer(1)),
-        ("Blocks testEmptyOneArg", SOMValue::new_integer(1)),
-        ("Blocks testEmptyTwoArg", SOMValue::new_integer(1)),
+        ("MethodCall test", Value::new_integer(42)),
+        ("MethodCall test2", Value::new_integer(42)),
+        ("NonLocalReturn test1", Value::new_integer(42)),
+        ("NonLocalReturn test2", Value::new_integer(43)),
+        ("NonLocalReturn test3", Value::new_integer(3)),
+        ("NonLocalReturn test4", Value::new_integer(42)),
+        ("NonLocalReturn test5", Value::new_integer(22)),
+        ("Blocks testArg1", Value::new_integer(42)),
+        ("Blocks testArg2", Value::new_integer(77)),
+        ("Blocks testArgAndLocal", Value::new_integer(8)),
+        ("Blocks testArgAndContext", Value::new_integer(8)),
+        ("Blocks testEmptyZeroArg", Value::new_integer(1)),
+        ("Blocks testEmptyOneArg", Value::new_integer(1)),
+        ("Blocks testEmptyTwoArg", Value::new_integer(1)),
         ("Return testReturnSelf", return_class.clone()),
         ("Return testReturnSelfImplicitly", return_class.clone()),
         ("Return testNoReturnReturnsSelf", return_class.clone()),
         (
             "Return testBlockReturnsImplicitlyLastValue",
-            SOMValue::new_integer(4),
+            Value::new_integer(4),
         ),
-        ("IfTrueIfFalse test", SOMValue::new_integer(42)),
-        ("IfTrueIfFalse test2", SOMValue::new_integer(33)),
-        ("IfTrueIfFalse test3", SOMValue::new_integer(4)),
+        ("IfTrueIfFalse test", Value::new_integer(42)),
+        ("IfTrueIfFalse test2", Value::new_integer(33)),
+        ("IfTrueIfFalse test3", Value::new_integer(4)),
         (
             "CompilerSimplification testReturnConstantSymbol",
-            SOMValue::new_symbol(universe.intern_symbol("constant")),
+            Value::new_symbol(universe.intern_symbol("constant")),
         ),
         (
             "IfTrueIfFalse testIfTrueTrueResult",
-            SOMValue::new_class(&universe.integer_class()),
+            Value::new_class(&universe.integer_class()),
         ),
         (
             "IfTrueIfFalse testIfTrueFalseResult",
-            SOMValue::new_class(&universe.nil_class()),
+            Value::new_class(&universe.nil_class()),
         ),
         (
             "IfTrueIfFalse testIfFalseTrueResult",
-            SOMValue::new_class(&universe.nil_class()),
+            Value::new_class(&universe.nil_class()),
         ),
         (
             "IfTrueIfFalse testIfFalseFalseResult",
-            SOMValue::new_class(&universe.integer_class()),
+            Value::new_class(&universe.integer_class()),
         ),
         (
             "CompilerSimplification testReturnConstantInt",
-            SOMValue::new_integer(42),
+            Value::new_integer(42),
         ),
         (
             "CompilerSimplification testReturnSelf",
@@ -92,114 +92,108 @@ fn basic_interpreter_tests() {
         ),
         (
             "CompilerSimplification testReturnArgumentN",
-            SOMValue::new_integer(55),
+            Value::new_integer(55),
         ),
         (
             "CompilerSimplification testReturnArgumentA",
-            SOMValue::new_integer(44),
+            Value::new_integer(44),
         ),
         (
             "CompilerSimplification testSetField",
-            SOMValue::new_symbol(universe.intern_symbol("foo")),
+            Value::new_symbol(universe.intern_symbol("foo")),
         ),
         (
             "CompilerSimplification testGetField",
-            SOMValue::new_integer(40),
+            Value::new_integer(40),
         ),
-        ("Hash testHash", SOMValue::new_integer(444)),
-        ("Arrays testEmptyToInts", SOMValue::new_integer(3)),
-        ("Arrays testPutAllInt", SOMValue::new_integer(5)),
+        ("Hash testHash", Value::new_integer(444)),
+        ("Arrays testEmptyToInts", Value::new_integer(3)),
+        ("Arrays testPutAllInt", Value::new_integer(5)),
         (
             "Arrays testPutAllNil",
-            SOMValue::new_class(&universe.nil_class()),
+            Value::new_class(&universe.nil_class()),
         ),
-        ("Arrays testPutAllBlock", SOMValue::new_integer(3)),
-        ("Arrays testNewWithAll", SOMValue::new_integer(1)),
-        ("BlockInlining testNoInlining", SOMValue::new_integer(1)),
-        (
-            "BlockInlining testOneLevelInlining",
-            SOMValue::new_integer(1),
-        ),
+        ("Arrays testPutAllBlock", Value::new_integer(3)),
+        ("Arrays testNewWithAll", Value::new_integer(1)),
+        ("BlockInlining testNoInlining", Value::new_integer(1)),
+        ("BlockInlining testOneLevelInlining", Value::new_integer(1)),
         (
             "BlockInlining testOneLevelInliningWithLocalShadowTrue",
-            SOMValue::new_integer(2),
+            Value::new_integer(2),
         ),
         (
             "BlockInlining testOneLevelInliningWithLocalShadowFalse",
-            SOMValue::new_integer(1),
+            Value::new_integer(1),
         ),
         (
             "BlockInlining testShadowDoesntStoreWrongLocal",
-            SOMValue::new_integer(33),
+            Value::new_integer(33),
         ),
         (
             "BlockInlining testShadowDoesntReadUnrelated",
-            SOMValue::new_class(&universe.nil_class()),
+            Value::new_class(&universe.nil_class()),
         ),
         (
             "BlockInlining testBlockNestedInIfTrue",
-            SOMValue::new_integer(2),
+            Value::new_integer(2),
         ),
         (
             "BlockInlining testBlockNestedInIfFalse",
-            SOMValue::new_integer(42),
+            Value::new_integer(42),
         ),
         (
             "BlockInlining testStackDisciplineTrue",
-            SOMValue::new_integer(1),
+            Value::new_integer(1),
         ),
         (
             "BlockInlining testStackDisciplineFalse",
-            SOMValue::new_integer(2),
+            Value::new_integer(2),
         ),
         (
             "BlockInlining testDeepNestedInlinedIfTrue",
-            SOMValue::new_integer(3),
+            Value::new_integer(3),
         ),
         (
             "BlockInlining testDeepNestedInlinedIfFalse",
-            SOMValue::new_integer(42),
+            Value::new_integer(42),
         ),
         (
             "BlockInlining testDeepNestedBlocksInInlinedIfTrue",
-            SOMValue::new_integer(5),
+            Value::new_integer(5),
         ),
         (
             "BlockInlining testDeepNestedBlocksInInlinedIfFalse",
-            SOMValue::new_integer(43),
+            Value::new_integer(43),
         ),
         (
             "BlockInlining testDeepDeepNestedTrue",
-            SOMValue::new_integer(9),
+            Value::new_integer(9),
         ),
         (
             "BlockInlining testDeepDeepNestedFalse",
-            SOMValue::new_integer(43),
+            Value::new_integer(43),
         ),
         (
             "BlockInlining testToDoNestDoNestIfTrue",
-            SOMValue::new_integer(2),
+            Value::new_integer(2),
         ),
         (
             "NonLocalVars testWriteDifferentTypes",
-            SOMValue::new_double(3.75),
+            Value::new_double(3.75),
         ),
-        ("ObjectCreation test", SOMValue::new_integer(1000000)),
-        ("Regressions testSymbolEquality", SOMValue::new_integer(1)),
+        ("ObjectCreation test", Value::new_integer(1000000)),
+        ("Regressions testSymbolEquality", Value::new_integer(1)),
         (
             "Regressions testSymbolReferenceEquality",
-            SOMValue::new_integer(1),
+            Value::new_integer(1),
         ),
-        (
-            "Regressions testUninitializedLocal",
-            SOMValue::new_integer(1),
-        ),
+        ("Regressions testUninitializedLocal", Value::new_integer(1)),
         (
             "Regressions testUninitializedLocalInBlock",
-            SOMValue::new_integer(1),
+            Value::new_integer(1),
         ),
-        ("BinaryOperation test", SOMValue::new_integer(3 + 8)),
-        ("NumberOfTests numberOfTests", SOMValue::new_integer(65)),
+        ("BinaryOperation test", Value::new_integer(3 + 8)),
+        ("NumberOfTests numberOfTests", Value::new_integer(65)),
     ];
 
     for (counter, (expr, expected)) in tests.iter().enumerate() {
@@ -250,7 +244,7 @@ fn basic_interpreter_tests() {
         let kind = FrameKind::Method {
             method,
             holder: class.clone(),
-            self_value: SOMValue::new_class(&class),
+            self_value: Value::new_class(&class),
         };
         interpreter.push_frame(&mut heap, kind);
         let output = interpreter.run(&mut heap, &mut universe).unwrap();

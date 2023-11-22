@@ -12,7 +12,7 @@ use crate::interner::Interned;
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
-use crate::value::SOMValue;
+use crate::value::Value;
 use crate::SOMRef;
 
 pub static INSTANCE_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> = Lazy::new(|| {
@@ -38,7 +38,7 @@ fn superclass(
     const _: &str = "Class>>#superclass";
 
     let super_class = receiver.borrow().super_class();
-    let super_class = super_class.map_or(SOMValue::NIL, |it| SOMValue::new_class(&it));
+    let super_class = super_class.map_or(Value::NIL, |it| Value::new_class(&it));
     interpreter.stack.push(super_class);
 
     Ok(())
@@ -74,14 +74,14 @@ fn methods(
     heap: &mut GcHeap,
     _: &mut Universe,
     receiver: SOMRef<Class>,
-) -> Result<SOMRef<Vec<SOMValue>>, Error> {
+) -> Result<SOMRef<Vec<Value>>, Error> {
     const _: &str = "Class>>#methods";
 
     let methods = receiver
         .borrow()
         .methods
         .values()
-        .map(SOMValue::new_invokable)
+        .map(Value::new_invokable)
         .collect();
 
     Ok(heap.allocate(RefCell::new(methods)))
@@ -92,7 +92,7 @@ fn fields(
     heap: &mut GcHeap,
     _: &mut Universe,
     receiver: SOMRef<Class>,
-) -> Result<SOMRef<Vec<SOMValue>>, Error> {
+) -> Result<SOMRef<Vec<Value>>, Error> {
     const _: &str = "Class>>#fields";
 
     let fields = receiver
@@ -100,7 +100,7 @@ fn fields(
         .locals
         .keys()
         .copied()
-        .map(SOMValue::new_symbol)
+        .map(Value::new_symbol)
         .collect();
 
     Ok(heap.allocate(RefCell::new(fields)))

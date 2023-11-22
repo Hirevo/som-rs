@@ -10,7 +10,7 @@ use crate::convert::Primitive;
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
-use crate::value::SOMValue;
+use crate::value::Value;
 use crate::SOMRef;
 
 pub static INSTANCE_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> = Lazy::new(|| {
@@ -28,9 +28,9 @@ fn at(
     _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
-    receiver: SOMRef<Vec<SOMValue>>,
+    receiver: SOMRef<Vec<Value>>,
     index: i32,
-) -> Result<SOMValue, Error> {
+) -> Result<Value, Error> {
     const _: &str = "Array>>#at:";
 
     let index = usize::try_from(index - 1)?;
@@ -46,10 +46,10 @@ fn at_put(
     _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
-    receiver: SOMRef<Vec<SOMValue>>,
+    receiver: SOMRef<Vec<Value>>,
     index: i32,
-    value: SOMValue,
-) -> Result<SOMRef<Vec<SOMValue>>, Error> {
+    value: Value,
+) -> Result<SOMRef<Vec<Value>>, Error> {
     const _: &str = "Array>>#at:put:";
 
     let index = usize::try_from(index - 1)?;
@@ -65,7 +65,7 @@ fn length(
     _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
-    receiver: SOMRef<Vec<SOMValue>>,
+    receiver: SOMRef<Vec<Value>>,
 ) -> Result<i32, Error> {
     const _: &str = "Array>>#length";
 
@@ -80,13 +80,13 @@ fn new(
     _: &mut Interpreter,
     heap: &mut GcHeap,
     _: &mut Universe,
-    _: SOMValue,
+    _: Value,
     count: i32,
-) -> Result<SOMRef<Vec<SOMValue>>, Error> {
+) -> Result<SOMRef<Vec<Value>>, Error> {
     const _: &str = "Array>>#new:";
 
     let count = usize::try_from(count)?;
-    let allocated = heap.allocate(RefCell::new(vec![SOMValue::NIL; count]));
+    let allocated = heap.allocate(RefCell::new(vec![Value::NIL; count]));
 
     Ok(allocated)
 }

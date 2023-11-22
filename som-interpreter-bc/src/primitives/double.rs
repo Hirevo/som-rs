@@ -8,7 +8,7 @@ use crate::convert::{DoubleLike, Primitive};
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
-use crate::value::SOMValue;
+use crate::value::Value;
 
 pub static INSTANCE_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> = Lazy::new(|| {
     Box::new([
@@ -60,7 +60,7 @@ fn from_string(
     _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
-    _: SOMValue,
+    _: Value,
     string: Gc<String>,
 ) -> Result<f64, Error> {
     const SIGNATURE: &str = "Double>>#fromString:";
@@ -150,8 +150,8 @@ fn eq(
     _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
-    a: SOMValue,
-    b: SOMValue,
+    a: Value,
+    b: Value,
 ) -> Result<bool, Error> {
     const _: &str = "Double>>#=";
 
@@ -252,7 +252,7 @@ fn positive_infinity(
     _: &mut Interpreter,
     _: &mut GcHeap,
     _: &mut Universe,
-    _: SOMValue,
+    _: Value,
 ) -> Result<f64, Error> {
     const _: &str = "Double>>#positiveInfinity";
 

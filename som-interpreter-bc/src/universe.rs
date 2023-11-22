@@ -16,7 +16,7 @@ use crate::compiler;
 use crate::frame::FrameKind;
 use crate::interner::{Interned, Interner};
 use crate::interpreter::Interpreter;
-use crate::value::SOMValue;
+use crate::value::Value;
 use crate::SOMRef;
 
 /// The core classes of the SOM interpreter.
@@ -104,7 +104,7 @@ pub struct Universe {
     /// The string interner for symbols.
     pub interner: Interner,
     /// The known global bindings.
-    pub globals: HashMap<Interned, SOMValue>,
+    pub globals: HashMap<Interned, Value>,
     /// The path to search in for new classes.
     pub classpath: Vec<PathBuf>,
     /// The interpreter's core classes.
@@ -213,30 +213,30 @@ impl Universe {
         set_super_class(&false_class, &boolean_class, &metaclass_class);
 
         #[rustfmt::skip] {
-            globals.insert(interner.intern("Object"), SOMValue::new_class(&object_class));
-            globals.insert(interner.intern("Class"), SOMValue::new_class(&class_class));
-            globals.insert(interner.intern("Metaclass"), SOMValue::new_class(&metaclass_class));
-            globals.insert(interner.intern("Nil"), SOMValue::new_class(&nil_class));
-            globals.insert(interner.intern("Integer"), SOMValue::new_class(&integer_class));
-            globals.insert(interner.intern("Array"), SOMValue::new_class(&array_class));
-            globals.insert(interner.intern("Method"), SOMValue::new_class(&method_class));
-            globals.insert(interner.intern("Symbol"), SOMValue::new_class(&symbol_class));
-            globals.insert(interner.intern("Primitive"), SOMValue::new_class(&primitive_class));
-            globals.insert(interner.intern("String"), SOMValue::new_class(&string_class));
-            globals.insert(interner.intern("System"), SOMValue::new_class(&system_class));
-            globals.insert(interner.intern("Double"), SOMValue::new_class(&double_class));
-            globals.insert(interner.intern("Boolean"), SOMValue::new_class(&boolean_class));
-            globals.insert(interner.intern("True"), SOMValue::new_class(&true_class));
-            globals.insert(interner.intern("False"), SOMValue::new_class(&false_class));
-            globals.insert(interner.intern("Block"), SOMValue::new_class(&block_class));
-            globals.insert(interner.intern("Block1"), SOMValue::new_class(&block1_class));
-            globals.insert(interner.intern("Block2"), SOMValue::new_class(&block2_class));
-            globals.insert(interner.intern("Block3"), SOMValue::new_class(&block3_class));
+            globals.insert(interner.intern("Object"), Value::new_class(&object_class));
+            globals.insert(interner.intern("Class"), Value::new_class(&class_class));
+            globals.insert(interner.intern("Metaclass"), Value::new_class(&metaclass_class));
+            globals.insert(interner.intern("Nil"), Value::new_class(&nil_class));
+            globals.insert(interner.intern("Integer"), Value::new_class(&integer_class));
+            globals.insert(interner.intern("Array"), Value::new_class(&array_class));
+            globals.insert(interner.intern("Method"), Value::new_class(&method_class));
+            globals.insert(interner.intern("Symbol"), Value::new_class(&symbol_class));
+            globals.insert(interner.intern("Primitive"), Value::new_class(&primitive_class));
+            globals.insert(interner.intern("String"), Value::new_class(&string_class));
+            globals.insert(interner.intern("System"), Value::new_class(&system_class));
+            globals.insert(interner.intern("Double"), Value::new_class(&double_class));
+            globals.insert(interner.intern("Boolean"), Value::new_class(&boolean_class));
+            globals.insert(interner.intern("True"), Value::new_class(&true_class));
+            globals.insert(interner.intern("False"), Value::new_class(&false_class));
+            globals.insert(interner.intern("Block"), Value::new_class(&block_class));
+            globals.insert(interner.intern("Block1"), Value::new_class(&block1_class));
+            globals.insert(interner.intern("Block2"), Value::new_class(&block2_class));
+            globals.insert(interner.intern("Block3"), Value::new_class(&block3_class));
 
-            globals.insert(interner.intern("true"), SOMValue::new_boolean(true));
-            globals.insert(interner.intern("false"), SOMValue::new_boolean(false));
-            globals.insert(interner.intern("nil"), SOMValue::NIL);
-            globals.insert(interner.intern("system"), SOMValue::SYSTEM);
+            globals.insert(interner.intern("true"), Value::new_boolean(true));
+            globals.insert(interner.intern("false"), Value::new_boolean(false));
+            globals.insert(interner.intern("nil"), Value::NIL);
+            globals.insert(interner.intern("system"), Value::SYSTEM);
         };
 
         Ok(Self {
@@ -404,7 +404,7 @@ impl Universe {
             // }
 
             let symbol = self.intern_symbol(class.borrow().name());
-            self.globals.insert(symbol, SOMValue::new_class(&class));
+            self.globals.insert(symbol, Value::new_class(&class));
 
             return Ok(class);
         }
@@ -561,12 +561,12 @@ impl Universe {
     }
 
     /// Search for a global binding.
-    pub fn lookup_global(&self, idx: Interned) -> Option<SOMValue> {
+    pub fn lookup_global(&self, idx: Interned) -> Option<Value> {
         self.globals.get(&idx).cloned()
     }
 
     /// Assign a value to a global binding.
-    pub fn assign_global(&mut self, name: Interned, value: SOMValue) -> Option<()> {
+    pub fn assign_global(&mut self, name: Interned, value: Value) -> Option<()> {
         self.globals.insert(name, value)?;
         Some(())
     }
@@ -578,7 +578,7 @@ impl Universe {
         &mut self,
         interpreter: &mut Interpreter,
         heap: &mut GcHeap,
-        value: SOMValue,
+        value: Value,
         block: Gc<Block>,
     ) -> Option<()> {
         let method_name = self.intern_symbol("escapedBlock:");
@@ -592,7 +592,7 @@ impl Universe {
 
         let frame = interpreter.push_frame(heap, kind);
         frame.borrow_mut().args.push(value);
-        frame.borrow_mut().args.push(SOMValue::new_block(&block));
+        frame.borrow_mut().args.push(Value::new_block(&block));
 
         Some(())
     }
@@ -602,9 +602,9 @@ impl Universe {
         &mut self,
         interpreter: &mut Interpreter,
         heap: &mut GcHeap,
-        value: SOMValue,
+        value: Value,
         symbol: Interned,
-        args: Vec<SOMValue>,
+        args: Vec<Value>,
     ) -> Option<()> {
         let method_name = self.intern_symbol("doesNotUnderstand:arguments:");
         let method = value.lookup_method(self, method_name)?;
@@ -617,8 +617,8 @@ impl Universe {
 
         let frame = interpreter.push_frame(heap, kind);
         frame.borrow_mut().args.push(value);
-        frame.borrow_mut().args.push(SOMValue::new_symbol(symbol));
-        let args = SOMValue::new_array(&heap.allocate(RefCell::new(args)));
+        frame.borrow_mut().args.push(Value::new_symbol(symbol));
+        let args = Value::new_array(&heap.allocate(RefCell::new(args)));
         frame.borrow_mut().args.push(args);
 
         Some(())
@@ -629,7 +629,7 @@ impl Universe {
         &mut self,
         interpreter: &mut Interpreter,
         heap: &mut GcHeap,
-        value: SOMValue,
+        value: Value,
         name: Interned,
     ) -> Option<()> {
         let method_name = self.intern_symbol("unknownGlobal:");
@@ -643,7 +643,7 @@ impl Universe {
 
         let frame = interpreter.push_frame(heap, kind);
         frame.borrow_mut().args.push(value);
-        frame.borrow_mut().args.push(SOMValue::new_symbol(name));
+        frame.borrow_mut().args.push(Value::new_symbol(name));
 
         Some(())
     }
@@ -653,20 +653,20 @@ impl Universe {
         &mut self,
         heap: &mut GcHeap,
         interpreter: &mut Interpreter,
-        args: Vec<SOMValue>,
+        args: Vec<Value>,
     ) -> Option<()> {
         let method_name = self.interner.intern("initialize:");
-        let method = SOMValue::SYSTEM.lookup_method(self, method_name)?;
+        let method = Value::SYSTEM.lookup_method(self, method_name)?;
 
         let kind = FrameKind::Method {
             method,
             holder: self.system_class(),
-            self_value: SOMValue::SYSTEM,
+            self_value: Value::SYSTEM,
         };
 
         let frame = interpreter.push_frame(heap, kind);
-        frame.borrow_mut().args.push(SOMValue::SYSTEM);
-        let args = SOMValue::new_array(&heap.allocate(RefCell::new(args)));
+        frame.borrow_mut().args.push(Value::SYSTEM);
+        let args = Value::new_array(&heap.allocate(RefCell::new(args)));
         frame.borrow_mut().args.push(args);
 
         Some(())
