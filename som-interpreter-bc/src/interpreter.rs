@@ -1,8 +1,9 @@
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::time::Instant;
 
+use anyhow::{bail, Context, Error};
 use som_core::bytecode::Bytecode;
+use som_gc::{Gc, GcHeap, Trace};
 
 use crate::block::Block;
 use crate::class::Class;
@@ -23,6 +24,14 @@ pub struct Interpreter {
     pub start_time: Instant,
 }
 
+impl Trace for Interpreter {
+    #[inline]
+    fn trace(&self) {
+        self.frames.trace();
+        self.stack.trace();
+    }
+}
+
 impl Interpreter {
     pub fn new() -> Self {
         Self {
@@ -32,8 +41,8 @@ impl Interpreter {
         }
     }
 
-    pub fn push_frame(&mut self, kind: FrameKind) -> SOMRef<Frame> {
-        let frame = Rc::new(RefCell::new(Frame::from_kind(kind)));
+    pub fn push_frame(&mut self, heap: &mut GcHeap, kind: FrameKind) -> SOMRef<Frame> {
+        let frame = heap.allocate(RefCell::new(Frame::from_kind(kind)));
         self.frames.push(frame.clone());
         frame
     }
@@ -46,124 +55,177 @@ impl Interpreter {
         self.frames.last()
     }
 
-    pub fn run(&mut self, universe: &mut Universe) -> Option<Value> {
+    pub fn run(&mut self, heap: &mut GcHeap, universe: &mut Universe) -> Result<Value, Error> {
         loop {
-            let frame = match self.current_frame() {
-                Some(frame) => frame,
-                None => return Some(self.stack.pop().unwrap_or(Value::Nil)),
+            let Some(frame) = self.frames.last() else {
+                heap.maybe_collect_garbage(|| {
+                    self.trace();
+                    universe.trace();
+                });
+
+                return Ok(self.stack.pop().unwrap_or(Value::NIL));
             };
 
-            let bytecode_idx = frame.borrow().bytecode_idx;
-            let opt_bytecode = frame.borrow().get_current_bytecode();
-            let bytecode = match opt_bytecode {
-                Some(bytecode) => bytecode,
-                None => {
+            let (bytecode, bytecode_idx) = {
+                let mut cur_frame = frame.borrow_mut();
+                let Some(bytecode) = cur_frame.get_current_bytecode() else {
+                    drop(cur_frame);
                     self.pop_frame();
-                    self.stack.push(Value::Nil);
+                    self.stack.push(Value::NIL);
                     continue;
-                }
+                };
+                let bytecode_idx = cur_frame.bytecode_idx;
+                cur_frame.bytecode_idx += 1;
+                (bytecode, bytecode_idx)
             };
-
-            frame.borrow_mut().bytecode_idx += 1;
 
             match bytecode {
                 Bytecode::Halt => {
-                    return Some(Value::Nil);
+                    heap.maybe_collect_garbage(|| {
+                        self.trace();
+                        universe.trace();
+                    });
+
+                    return Ok(Value::NIL);
                 }
                 Bytecode::Dup => {
-                    let value = self.stack.last().cloned().unwrap();
+                    let value = self
+                        .stack
+                        .last()
+                        .cloned()
+                        .context("DUP with missing value")?;
                     self.stack.push(value);
                 }
                 Bytecode::PushLocal(up_idx, idx) => {
                     let mut from = frame.clone();
                     for _ in 0..up_idx {
                         let temp = match from.borrow().kind() {
-                            FrameKind::Block { block } => block.frame.clone().unwrap(),
+                            FrameKind::Block { block } => {
+                                block.frame.clone().context("missing block frame")?
+                            }
                             FrameKind::Method { .. } => {
-                                panic!("requested local from non-existing frame")
+                                bail!("requested local from non-existing frame");
                             }
                         };
                         from = temp;
                     }
-                    let value = from.borrow().lookup_local(idx as usize).unwrap();
+                    let value = from
+                        .borrow()
+                        .lookup_local(idx as usize)
+                        .context("PUSH_LOCAL with missing local")?;
                     self.stack.push(value);
                 }
                 Bytecode::PushArgument(up_idx, idx) => {
                     let mut from = frame.clone();
                     for _ in 0..up_idx {
                         let temp = match from.borrow().kind() {
-                            FrameKind::Block { block } => block.frame.clone().unwrap(),
+                            FrameKind::Block { block } => {
+                                block.frame.clone().context("missing block frame")?
+                            }
                             FrameKind::Method { .. } => {
-                                panic!("requested local from non-existing frame")
+                                bail!("requested local from non-existing frame");
                             }
                         };
                         from = temp;
                     }
-                    let value = from.borrow().lookup_argument(idx as usize).unwrap();
+                    let value = from
+                        .borrow()
+                        .lookup_argument(idx as usize)
+                        .context("PUSH_ARGUMENT with missing argument")?;
                     self.stack.push(value);
                 }
                 Bytecode::PushField(idx) => {
                     let holder = frame.borrow().get_method_holder();
                     let value = if holder.borrow().is_static {
-                        holder.borrow_mut().lookup_local(idx as usize).unwrap()
+                        holder
+                            .borrow_mut()
+                            .lookup_local(idx as usize)
+                            .context("PUSH_FIELD with missing field")?
                     } else {
                         let self_value = frame.borrow().get_self();
-                        self_value.lookup_local(idx as usize).unwrap()
+                        self_value
+                            .lookup_local(idx as usize)
+                            .context("PUSH_FIELD with missing field")?
                     };
                     self.stack.push(value);
                 }
                 Bytecode::PushBlock(idx) => {
-                    let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
-                    let mut block = match literal {
-                        Literal::Block(blk) => Block::clone(&blk),
-                        _ => return None,
+                    let value = {
+                        let frame_ref = frame.borrow();
+                        let literal = frame_ref
+                            .lookup_constant(idx as usize)
+                            .context("PUSH_BLOCK with missing constant")?;
+                        let Literal::Block(block) = literal else {
+                            bail!("PUSH_BLOCK with non-block literal constant");
+                        };
+                        let mut block = Block::clone(&block);
+                        block.frame.replace(Gc::clone(&frame));
+                        Value::new_block(&heap.allocate(block))
                     };
-                    block.frame.replace(Rc::clone(&frame));
-                    self.stack.push(Value::Block(Rc::new(block)));
+                    self.stack.push(value);
                 }
                 Bytecode::PushConstant(idx) => {
-                    let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
-                    let value = convert_literal(&frame, literal).unwrap();
+                    let value = {
+                        let frame_ref = frame.borrow();
+                        let literal = frame_ref
+                            .lookup_constant(idx as usize)
+                            .context("PUSH_CONSTANT with missing constant")?;
+                        convert_literal(heap, &frame, literal)?
+                    };
                     self.stack.push(value);
                 }
                 Bytecode::PushGlobal(idx) => {
-                    let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
-                    let symbol = match literal {
-                        Literal::Symbol(sym) => sym,
-                        _ => return None,
+                    let frame_ref = frame.borrow();
+                    let &Literal::Symbol(symbol) = frame_ref
+                        .lookup_constant(idx as usize)
+                        .context("PUSH_GLOBAL with missing constant")?
+                    else {
+                        bail!("PUSH_GLOBAL attempted with a non-symbol constant");
                     };
-                    if let Some(value) = universe.lookup_global(symbol) {
-                        self.stack.push(value);
-                    } else {
-                        let self_value = frame.borrow().get_self();
-                        universe.unknown_global(self, self_value, symbol).unwrap();
-                    }
+                    let Some(value) = universe.lookup_global(symbol) else {
+                        let self_value = frame_ref.get_self();
+                        drop(frame_ref);
+                        universe
+                            .unknown_global(self, heap, self_value, symbol)
+                            .context("missing `#unknownGlobal:` method")?;
+                        continue;
+                    };
+                    self.stack.push(value);
                 }
                 Bytecode::Pop => {
-                    self.stack.pop();
+                    self.stack.pop().context("POP with missing value")?;
                 }
                 Bytecode::PopLocal(up_idx, idx) => {
-                    let value = self.stack.pop().unwrap();
-                    let mut from = self.current_frame().unwrap().clone();
+                    let value = self.stack.pop().context("POP_LOCAL with missing value")?;
+                    let mut from = frame.clone();
                     for _ in 0..up_idx {
                         let temp = match from.borrow().kind() {
-                            FrameKind::Block { block } => block.frame.clone().unwrap(),
+                            FrameKind::Block { block } => {
+                                block.frame.clone().context("missing block frame")?
+                            }
                             FrameKind::Method { .. } => {
-                                panic!("requested local from non-existing frame")
+                                bail!("requested local from non-existing frame");
                             }
                         };
                         from = temp;
                     }
-                    from.borrow_mut().assign_local(idx as usize, value).unwrap();
+                    from.borrow_mut()
+                        .assign_local(idx as usize, value)
+                        .context("POP_LOCAL with missing local")?;
                 }
                 Bytecode::PopArgument(up_idx, idx) => {
-                    let value = self.stack.pop().unwrap();
-                    let mut from = self.current_frame().unwrap().clone();
+                    let value = self
+                        .stack
+                        .pop()
+                        .context("POP_ARGUMENT with missing value")?;
+                    let mut from = frame.clone();
                     for _ in 0..up_idx {
                         let temp = match from.borrow().kind() {
-                            FrameKind::Block { block } => block.frame.clone().unwrap(),
+                            FrameKind::Block { block } => {
+                                block.frame.clone().context("missing block frame")?
+                            }
                             FrameKind::Method { .. } => {
-                                panic!("requested local from non-existing frame")
+                                bail!("requested local from non-existing frame");
                             }
                         };
                         from = temp;
@@ -172,66 +234,101 @@ impl Interpreter {
                         .args
                         .get_mut(idx as usize)
                         .map(|loc| *loc = value)
-                        .unwrap();
+                        .context("POP_ARGUMENT with missing argument")?;
                 }
                 Bytecode::PopField(idx) => {
-                    let value = self.stack.pop().unwrap();
-                    let frame = self.current_frame().unwrap();
+                    let value = self.stack.pop().context("POP_FIELD with missing value")?;
                     let holder = frame.borrow().get_method_holder();
                     if holder.borrow().is_static {
                         holder
                             .borrow_mut()
                             .assign_local(idx as usize, value)
-                            .unwrap();
+                            .context("POP_FIELD with missing field")?;
                     } else {
                         let mut self_value = frame.borrow().get_self();
-                        self_value.assign_local(idx as usize, value).unwrap();
+                        self_value
+                            .assign_local(idx as usize, value)
+                            .context("POP_FIELD with missing field")?;
                     }
                 }
                 Bytecode::Send(idx) => {
-                    let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
-                    let Literal::Symbol(symbol) = literal else {
-                        return None;
+                    let &Literal::Symbol(symbol) = frame
+                        .borrow()
+                        .lookup_constant(idx as usize)
+                        .context("SEND without a signature constant")?
+                    else {
+                        bail!("SEND with a non-symbol signature constant");
                     };
-                    let signature = universe.lookup_symbol(symbol);
-                    let nb_params = nb_params(signature);
+                    let signature = universe.lookup_symbol(symbol).to_owned();
+                    let nb_params = nb_params(&signature);
                     let method = {
-                        let receiver = self.stack.iter().nth_back(nb_params)?;
+                        let receiver = self
+                            .stack
+                            .iter()
+                            .nth_back(nb_params)
+                            .context("missing SEND arguments")?;
                         let receiver_class = receiver.class(universe);
+                        // dbg!(&receiver_class);
                         resolve_method(frame, &receiver_class, symbol, bytecode_idx)
                     };
+                    // dbg!(self.stack.iter().map(|it| it.to_string(universe)).collect::<Vec<_>>());
 
-                    do_send(self, universe, method, symbol, nb_params);
+                    do_send(self, universe, heap, method, symbol, nb_params)
+                        .with_context(|| anyhow::anyhow!("error calling `{signature}`"))?;
+
+                    heap.maybe_collect_garbage(|| {
+                        self.trace();
+                        universe.trace();
+                    });
                 }
                 Bytecode::SuperSend(idx) => {
-                    let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
-                    let Literal::Symbol(symbol) = literal else {
-                        return None;
+                    let &Literal::Symbol(symbol) = frame
+                        .borrow()
+                        .lookup_constant(idx as usize)
+                        .context("SUPER_SEND without a signature constant")?
+                    else {
+                        bail!("SUPER_SEND with a non-symbol signature constant");
                     };
-                    let signature = universe.lookup_symbol(symbol);
-                    let nb_params = nb_params(signature);
+                    let signature = universe.lookup_symbol(symbol).to_owned();
+                    let nb_params = nb_params(&signature);
                     let method = {
                         let holder = frame.borrow().get_method_holder();
-                        let super_class = holder.borrow().super_class()?;
+                        let super_class = holder
+                            .borrow()
+                            .super_class()
+                            .context("SUPER_SEND without a super class")?;
+                        // dbg!(&super_class);
                         resolve_method(frame, &super_class, symbol, bytecode_idx)
                     };
+                    // dbg!(self.stack.iter().map(|it| it.to_string(universe)).collect::<Vec<_>>());
 
-                    do_send(self, universe, method, symbol, nb_params);
+                    do_send(self, universe, heap, method, symbol, nb_params)
+                        .with_context(|| anyhow::anyhow!("error calling `{signature}`"))?;
+
+                    heap.maybe_collect_garbage(|| {
+                        self.trace();
+                        universe.trace();
+                    });
                 }
                 Bytecode::ReturnLocal => {
-                    let value = self.stack.pop().unwrap();
+                    let value = self
+                        .stack
+                        .pop()
+                        .context("RETURN_LOCAL with missing value")?;
                     self.pop_frame();
                     self.stack.push(value);
                 }
                 Bytecode::ReturnNonLocal => {
-                    let value = self.stack.pop().unwrap();
-                    let frame = self.current_frame().unwrap();
-                    let method_frame = Frame::method_frame(&frame);
+                    let value = self
+                        .stack
+                        .pop()
+                        .context("RETURN_NON_LOCAL with missing value")?;
+                    let method_frame = Frame::method_frame(frame);
                     let escaped_frames = self
                         .frames
                         .iter()
                         .rev()
-                        .position(|live_frame| Rc::ptr_eq(&live_frame, &method_frame));
+                        .position(|live_frame| Gc::ptr_eq(&live_frame, &method_frame));
 
                     if let Some(count) = escaped_frames {
                         (0..count).for_each(|_| self.pop_frame());
@@ -239,19 +336,19 @@ impl Interpreter {
                         self.stack.push(value);
                     } else {
                         // Block has escaped its method frame.
-                        let instance = frame.borrow().get_self();
-                        let block = match frame.borrow().kind() {
-                            FrameKind::Block { block, .. } => block.clone(),
-                            _ => {
-                                // Should never happen, because `universe.current_frame()` would
-                                // have been equal to `universe.current_method_frame()`.
-                                panic!("A method frame has escaped itself ??");
-                            }
+                        let frame_ref = frame.borrow();
+                        let instance = frame_ref.get_self();
+                        let FrameKind::Block { block, .. } = frame_ref.kind() else {
+                            // Should never happen, because `universe.current_frame()` would
+                            // have been equal to `universe.current_method_frame()`.
+                            bail!("A method frame has escaped itself ??");
                         };
+                        let block = Gc::clone(&block);
+                        drop(frame_ref);
                         // TODO: should we call `doesNotUnderstand:` here ?
-                        universe.escaped_block(self, instance, block).expect(
-                            "A block has escaped and `escapedBlock:` is not defined on receiver",
-                        );
+                        universe
+                            .escaped_block(self, heap, instance, block.clone())
+                            .context("A block has escaped and `escapedBlock:` is not defined on receiver")?;
                     }
                 }
             }
@@ -260,53 +357,66 @@ impl Interpreter {
         fn do_send(
             interpreter: &mut Interpreter,
             universe: &mut Universe,
-            method: Option<Rc<Method>>,
+            heap: &mut GcHeap,
+            method: Option<Gc<Method>>,
             symbol: Interned,
             nb_params: usize,
-        ) {
+        ) -> Result<(), Error> {
             let Some(method) = method else {
                 let mut args = Vec::with_capacity(nb_params + 1);
 
                 for _ in 0..nb_params {
-                    let arg = interpreter.stack.pop().unwrap();
+                    let arg = interpreter
+                        .stack
+                        .pop()
+                        .context("message send with missing argument")?;
                     args.push(arg);
                 }
-                let self_value = interpreter.stack.pop().unwrap();
+                let self_value = interpreter
+                    .stack
+                    .pop()
+                    .context("message send with missing receiver")?;
 
                 args.reverse();
 
-                universe.does_not_understand(interpreter, self_value, symbol, args)
-                    .expect(
+                return universe.does_not_understand(interpreter, heap, self_value, symbol, args)
+                    .context(
                         "A message cannot be handled and `doesNotUnderstand:arguments:` is not defined on receiver"
                     );
-
-                return;
             };
 
-            match method.kind() {
+            match &method.kind {
                 MethodKind::Defined(_) => {
                     let mut args = Vec::with_capacity(nb_params + 1);
 
                     for _ in 0..nb_params {
-                        let arg = interpreter.stack.pop().unwrap();
+                        let arg = interpreter
+                            .stack
+                            .pop()
+                            .context("message send with missing argument")?;
                         args.push(arg);
                     }
-                    let self_value = interpreter.stack.pop().unwrap();
+                    let self_value = interpreter
+                        .stack
+                        .pop()
+                        .context("message send with missing receiver")?;
                     args.push(self_value.clone());
 
                     args.reverse();
 
-                    let holder = method.holder.upgrade().unwrap();
-                    let frame = interpreter.push_frame(FrameKind::Method {
-                        self_value,
-                        method,
-                        holder,
-                    });
+                    let frame = interpreter.push_frame(
+                        heap,
+                        FrameKind::Method {
+                            holder: method.holder.clone(),
+                            self_value,
+                            method,
+                        },
+                    );
                     frame.borrow_mut().args = args;
+
+                    Ok(())
                 }
-                MethodKind::Primitive(func) => {
-                    func(interpreter, universe);
-                }
+                MethodKind::Primitive(func) => func(interpreter, heap, universe),
                 MethodKind::NotImplemented(err) => {
                     let self_value = interpreter.stack.iter().nth_back(nb_params).unwrap();
                     println!(
@@ -314,7 +424,7 @@ impl Interpreter {
                         self_value.class(&universe).borrow().name(),
                         method.signature(),
                     );
-                    panic!("Primitive `#{}` not implemented", err)
+                    bail!("Primitive `#{}` not implemented", err)
                 }
             }
         }
@@ -324,7 +434,7 @@ impl Interpreter {
             class: &SOMRef<Class>,
             signature: Interned,
             bytecode_idx: usize,
-        ) -> Option<Rc<Method>> {
+        ) -> Option<Gc<Method>> {
             match frame.borrow().kind() {
                 FrameKind::Block { block } => {
                     let mut inline_cache = block.blk_info.inline_cache.borrow_mut();
@@ -335,8 +445,8 @@ impl Interpreter {
                     let maybe_found = unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
 
                     match maybe_found {
-                        Some((receiver, method)) if *receiver == class.as_ptr() => {
-                            Some(Rc::clone(method))
+                        Some((receiver, method)) if *receiver == RefCell::as_ptr(&class) => {
+                            Some(Gc::clone(method))
                         }
                         place @ None => {
                             let found = class.borrow().lookup_method(signature);
@@ -349,7 +459,7 @@ impl Interpreter {
                     }
                 }
                 FrameKind::Method { method, .. } => {
-                    if let MethodKind::Defined(env) = method.kind() {
+                    if let MethodKind::Defined(env) = &method.kind {
                         let mut inline_cache = env.inline_cache.borrow_mut();
 
                         // SAFETY: this access is actually safe because the bytecode compiler
@@ -358,8 +468,8 @@ impl Interpreter {
                         let maybe_found = unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
 
                         match maybe_found {
-                            Some((receiver, method)) if *receiver == class.as_ptr() => {
-                                Some(Rc::clone(method))
+                            Some((receiver, method)) if *receiver == RefCell::as_ptr(&class) => {
+                                Some(Gc::clone(method))
                             }
                             place @ None => {
                                 let found = class.borrow().lookup_method(signature);
@@ -377,29 +487,33 @@ impl Interpreter {
             }
         }
 
-        fn convert_literal(frame: &SOMRef<Frame>, literal: Literal) -> Option<Value> {
+        fn convert_literal(
+            heap: &mut GcHeap,
+            frame: &SOMRef<Frame>,
+            literal: &Literal,
+        ) -> Result<Value, Error> {
             let value = match literal {
-                Literal::Symbol(sym) => Value::Symbol(sym),
-                Literal::String(val) => Value::String(val),
-                Literal::Double(val) => Value::Double(val),
-                Literal::Integer(val) => Value::Integer(val),
-                Literal::BigInteger(val) => Value::BigInteger(val),
+                Literal::Symbol(sym) => Value::new_symbol(*sym),
+                Literal::String(val) => Value::new_string(val),
+                Literal::Double(val) => Value::new_double(*val),
+                Literal::Integer(val) => Value::new_integer(*val),
+                Literal::BigInteger(val) => Value::new_big_integer(val),
                 Literal::Array(val) => {
                     let arr = val
                         .into_iter()
                         .map(|idx| {
                             frame
                                 .borrow()
-                                .lookup_constant(idx as usize)
-                                .and_then(|lit| convert_literal(frame, lit))
+                                .lookup_constant(*idx as usize)
+                                .context("missing constant in array literal")
+                                .and_then(|lit| convert_literal(heap, frame, lit))
                         })
-                        .collect::<Option<Vec<_>>>()
-                        .unwrap();
-                    Value::Array(Rc::new(RefCell::new(arr)))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    Value::new_array(&heap.allocate(RefCell::new(arr)))
                 }
-                Literal::Block(val) => Value::Block(val),
+                Literal::Block(val) => Value::new_block(&val),
             };
-            Some(value)
+            Ok(value)
         }
 
         fn nb_params(signature: &str) -> usize {

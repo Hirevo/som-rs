@@ -1,97 +1,113 @@
 use std::cell::RefCell;
-use std::rc::Rc;
 
+use anyhow::Error;
+use once_cell::sync::Lazy;
+
+use som_gc::GcHeap;
+
+use crate::class::Class;
+use crate::convert::Primitive;
 use crate::instance::Instance;
+use crate::interner::Interned;
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
-use crate::{expect_args, reverse};
+use crate::SOMRef;
 
-pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
-    ("new", self::new, true),
-    ("name", self::name, true),
-    ("fields", self::fields, true),
-    ("methods", self::methods, true),
-    ("superclass", self::superclass, true),
-];
-pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
+pub static INSTANCE_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> = Lazy::new(|| {
+    Box::new({
+        [
+            ("new", self::new.into_func(), true),
+            ("name", self::name.into_func(), true),
+            ("fields", self::fields.into_func(), true),
+            ("methods", self::methods.into_func(), true),
+            ("superclass", self::superclass.into_func(), true),
+        ]
+    })
+});
+pub static CLASS_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> =
+    Lazy::new(|| Box::new([]));
 
-fn superclass(interpreter: &mut Interpreter, _: &mut Universe) {
-    const SIGNATURE: &str = "Class>>#superclass";
+fn superclass(
+    interpreter: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    receiver: SOMRef<Class>,
+) -> Result<(), Error> {
+    const _: &str = "Class>>#superclass";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::Class(class) => class,
-    ]);
+    let super_class = receiver.borrow().super_class();
+    let super_class = super_class.map_or(Value::NIL, |it| Value::new_class(&it));
+    interpreter.stack.push(super_class);
 
-    let super_class = class.borrow().super_class();
-    interpreter
-        .stack
-        .push(super_class.map(Value::Class).unwrap_or(Value::Nil));
+    Ok(())
 }
 
-fn new(interpreter: &mut Interpreter, _: &mut Universe) {
-    const SIGNATURE: &str = "Class>>#new";
+fn new(
+    _: &mut Interpreter,
+    heap: &mut GcHeap,
+    _: &mut Universe,
+    receiver: SOMRef<Class>,
+) -> Result<SOMRef<Instance>, Error> {
+    const _: &str = "Class>>#new";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::Class(class) => class,
-    ]);
+    let instance = Instance::from_class(receiver);
+    let instance = heap.allocate(RefCell::new(instance));
 
-    let instance = Instance::from_class(class);
-    let instance = Rc::new(RefCell::new(instance));
-    interpreter.stack.push(Value::Instance(instance));
+    Ok(instance)
 }
 
-fn name(interpreter: &mut Interpreter, universe: &mut Universe) {
-    const SIGNATURE: &str = "Class>>#name";
+fn name(
+    _: &mut Interpreter,
+    _: &mut GcHeap,
+    universe: &mut Universe,
+    receiver: SOMRef<Class>,
+) -> Result<Interned, Error> {
+    const _: &str = "Class>>#name";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::Class(class) => class,
-    ]);
-
-    let sym = universe.intern_symbol(class.borrow().name());
-    interpreter.stack.push(Value::Symbol(sym));
+    Ok(universe.intern_symbol(receiver.borrow().name()))
 }
 
-fn methods(interpreter: &mut Interpreter, _: &mut Universe) {
-    const SIGNATURE: &str = "Class>>#methods";
+fn methods(
+    _: &mut Interpreter,
+    heap: &mut GcHeap,
+    _: &mut Universe,
+    receiver: SOMRef<Class>,
+) -> Result<SOMRef<Vec<Value>>, Error> {
+    const _: &str = "Class>>#methods";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::Class(class) => class,
-    ]);
-
-    let methods = class
+    let methods = receiver
         .borrow()
         .methods
         .values()
-        .map(|invokable| Value::Invokable(invokable.clone()))
+        .map(Value::new_invokable)
         .collect();
 
-    interpreter
-        .stack
-        .push(Value::Array(Rc::new(RefCell::new(methods))));
+    Ok(heap.allocate(RefCell::new(methods)))
 }
 
-fn fields(interpreter: &mut Interpreter, _: &mut Universe) {
-    const SIGNATURE: &str = "Class>>#fields";
+fn fields(
+    _: &mut Interpreter,
+    heap: &mut GcHeap,
+    _: &mut Universe,
+    receiver: SOMRef<Class>,
+) -> Result<SOMRef<Vec<Value>>, Error> {
+    const _: &str = "Class>>#fields";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::Class(class) => class,
-    ]);
+    let fields = receiver
+        .borrow()
+        .locals
+        .keys()
+        .copied()
+        .map(Value::new_symbol)
+        .collect();
 
-    interpreter.stack.push(Value::Array(Rc::new(RefCell::new(
-        class
-            .borrow()
-            .locals
-            .keys()
-            .copied()
-            .map(Value::Symbol)
-            .collect(),
-    ))));
+    Ok(heap.allocate(RefCell::new(fields)))
 }
 
 /// Search for an instance primitive matching the given signature.
-pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
+pub fn get_instance_primitive(signature: &str) -> Option<&'static PrimitiveFn> {
     INSTANCE_PRIMITIVES
         .iter()
         .find(|it| it.0 == signature)
@@ -99,7 +115,7 @@ pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
 }
 
 /// Search for a class primitive matching the given signature.
-pub fn get_class_primitive(signature: &str) -> Option<PrimitiveFn> {
+pub fn get_class_primitive(signature: &str) -> Option<&'static PrimitiveFn> {
     CLASS_PRIMITIVES
         .iter()
         .find(|it| it.0 == signature)

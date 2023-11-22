@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::rc::Rc;
 
 use crate::expect_args;
@@ -59,7 +59,7 @@ fn length(_: &mut Universe, args: Vec<Value>) -> Return {
     ]);
 
     let length = values.borrow().len();
-    match i64::try_from(length) {
+    match length.try_into() {
         Ok(length) => Return::Local(Value::Integer(length)),
         Err(err) => Return::Exception(format!("'{}': {}", SIGNATURE, err)),
     }

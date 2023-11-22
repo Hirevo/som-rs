@@ -1,5 +1,5 @@
 use std::collections::hash_map::DefaultHasher;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::hash::Hasher;
 use std::rc::Rc;
 
@@ -35,7 +35,7 @@ fn length(universe: &mut Universe, args: Vec<Value>) -> Return {
         _ => return Return::Exception(format!("'{}': invalid self type", SIGNATURE)),
     };
 
-    match i64::try_from(value.chars().count()) {
+    match value.chars().count().try_into() {
         Ok(idx) => Return::Local(Value::Integer(idx)),
         Err(err) => Return::Exception(format!("'{}': {}", SIGNATURE, err)),
     }
@@ -63,7 +63,7 @@ fn hashcode(universe: &mut Universe, args: Vec<Value>) -> Return {
     //     Err(err) => Return::Exception(format!("'{}': {}", SIGNATURE, err)),
     // }
 
-    Return::Local(Value::Integer((hasher.finish() as i64).abs()))
+    Return::Local(Value::Integer((hasher.finish() as i32).abs()))
 }
 
 fn is_letters(universe: &mut Universe, args: Vec<Value>) -> Return {

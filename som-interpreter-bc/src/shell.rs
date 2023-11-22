@@ -4,6 +4,7 @@ use std::time::Instant;
 
 use anyhow::Error;
 
+use som_gc::GcHeap;
 use som_lexer::{Lexer, Token};
 use som_parser::lang;
 
@@ -11,10 +12,11 @@ use som_interpreter_bc::compiler;
 use som_interpreter_bc::frame::FrameKind;
 use som_interpreter_bc::interpreter::Interpreter;
 use som_interpreter_bc::universe::Universe;
-use som_interpreter_bc::value::Value;
+use som_interpreter_bc::value::{Value, ValueEnum};
 
 /// Launches an interactive Read-Eval-Print-Loop within the given universe.
 pub fn interactive(
+    heap: &mut GcHeap,
     interpreter: &mut Interpreter,
     universe: &mut Universe,
     verbose: bool,
@@ -27,7 +29,7 @@ pub fn interactive(
     let mut counter = 0;
     let method_name = universe.intern_symbol("run:");
     let mut line = String::new();
-    let mut last_value = Value::Nil;
+    let mut last_value = Value::NIL;
     loop {
         write!(&mut stdout, "({}) SOM Shell | ", counter)?;
         stdout.flush()?;
@@ -82,6 +84,7 @@ pub fn interactive(
 
         let object_class = universe.object_class();
         let class = match compiler::compile_class(
+            heap,
             &mut universe.interner,
             &class_def,
             Some(&object_class),
@@ -93,49 +96,50 @@ pub fn interactive(
             }
         };
         let metaclass_class = universe.metaclass_class();
-        class.borrow_mut().set_super_class(&object_class);
+        class.borrow_mut().set_super_class(object_class.clone());
         class
             .borrow()
             .class()
             .borrow_mut()
-            .set_super_class(&object_class.borrow().class());
+            .set_super_class(object_class.borrow().class().clone());
         class
             .borrow()
             .class()
             .borrow_mut()
-            .set_class(&metaclass_class);
+            .set_class(metaclass_class.clone());
 
         let method = class
             .borrow()
             .lookup_method(method_name)
             .expect("method not found ??");
         let start = Instant::now();
-        let kind = FrameKind::Method {
-            method,
-            holder: class.clone(),
-            self_value: Value::Class(class),
-        };
-        let frame = interpreter.push_frame(kind);
-        frame.borrow_mut().args.push(Value::System);
-        frame.borrow_mut().args.push(last_value.clone());
-        if let Some(value) = interpreter.run(universe) {
-            writeln!(
-                &mut stdout,
-                "returned: {} ({:?})",
-                value.to_string(&universe),
-                value
-            )?;
-            last_value = value;
-        }
-        // , |universe| {
-        //     universe
-        //         .current_frame()
-        //         .borrow_mut()
-        //         .bindings
-        //         .insert("it".into(), last_value.clone());
 
-        //     expr.evaluate(universe)
-        // });
+        let frame = interpreter.push_frame(
+            heap,
+            FrameKind::Method {
+                method,
+                holder: class.clone(),
+                self_value: Value::new_class(&class),
+            },
+        );
+        frame.borrow_mut().args.push(Value::SYSTEM);
+        frame.borrow_mut().args.push(last_value.clone());
+
+        match interpreter.run(heap, universe) {
+            Ok(value) => {
+                writeln!(
+                    &mut stdout,
+                    "returned: {} ({:?})",
+                    value.to_string(&universe),
+                    ValueEnum::from(value),
+                )?;
+                last_value = value;
+            }
+            Err(err) => {
+                writeln!(&mut stdout, "errored: {err:?}")?;
+            }
+        }
+
         let elapsed = start.elapsed();
         if verbose {
             writeln!(

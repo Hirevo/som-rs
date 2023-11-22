@@ -54,7 +54,7 @@ pub fn big_integer<'a>() -> impl Parser<String, &'a [Token]> {
     }
 }
 
-pub fn integer<'a>() -> impl Parser<i64, &'a [Token]> {
+pub fn integer<'a>() -> impl Parser<i32, &'a [Token]> {
     move |input: &'a [Token]| {
         let (sign, input) = optional(exact(Token::Minus)).parse(input)?;
         let sign = if sign.is_some() { -1 } else { 1 };

@@ -1,5 +1,7 @@
 use std::fmt;
 
+use som_gc::Trace;
+
 use crate::class::Class;
 use crate::value::Value;
 use crate::SOMRef;
@@ -13,6 +15,14 @@ pub struct Instance {
     pub locals: Vec<Value>,
 }
 
+impl Trace for Instance {
+    #[inline]
+    fn trace(&self) {
+        self.class.trace();
+        self.locals.trace();
+    }
+}
+
 impl Instance {
     /// Construct an instance for a given class.
     pub fn from_class(class: SOMRef<Class>) -> Self {
@@ -22,7 +32,7 @@ impl Instance {
             if let Some(class) = class.borrow().super_class() {
                 collect_locals(&class, locals);
             }
-            locals.extend(class.borrow().locals.iter().map(|_| Value::Nil));
+            locals.extend(class.borrow().locals.iter().map(|_| Value::NIL));
         }
 
         collect_locals(&class, &mut locals);

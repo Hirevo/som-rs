@@ -1,91 +1,98 @@
 use std::cell::RefCell;
-use std::convert::TryFrom;
-use std::rc::Rc;
+use std::convert::{TryFrom, TryInto};
 
+use anyhow::{Context, Error};
+use once_cell::sync::Lazy;
+
+use som_gc::GcHeap;
+
+use crate::convert::Primitive;
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
-use crate::{expect_args, reverse};
+use crate::SOMRef;
 
-pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
-    ("at:", self::at, true),
-    ("at:put:", self::at_put, true),
-    ("length", self::length, true),
-];
+pub static INSTANCE_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> = Lazy::new(|| {
+    Box::new([
+        ("at:", self::at.into_func(), true),
+        ("at:put:", self::at_put.into_func(), true),
+        ("length", self::length.into_func(), true),
+    ])
+});
 
-pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[("new:", self::new, true)];
+pub static CLASS_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> =
+    Lazy::new(|| Box::new([("new:", self::new.into_func(), true)]));
 
-fn at(interpreter: &mut Interpreter, _: &mut Universe) {
-    const SIGNATURE: &str = "Array>>#at:";
+fn at(
+    _: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    receiver: SOMRef<Vec<Value>>,
+    index: i32,
+) -> Result<Value, Error> {
+    const _: &str = "Array>>#at:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::Array(values) => values,
-        Value::Integer(index) => index,
-    ]);
+    let index = usize::try_from(index - 1)?;
 
-    let index = match usize::try_from(index - 1) {
-        Ok(index) => index,
-        Err(err) => panic!("'{}': {}", SIGNATURE, err),
-    };
-    let value = values.borrow().get(index).cloned().unwrap_or(Value::Nil);
-    interpreter.stack.push(value)
+    receiver
+        .borrow()
+        .get(index)
+        .cloned()
+        .context("index out of bounds")
 }
 
-fn at_put(interpreter: &mut Interpreter, _: &mut Universe) {
-    const SIGNATURE: &str = "Array>>#at:put:";
+fn at_put(
+    _: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    receiver: SOMRef<Vec<Value>>,
+    index: i32,
+    value: Value,
+) -> Result<SOMRef<Vec<Value>>, Error> {
+    const _: &str = "Array>>#at:put:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::Array(values) => values,
-        Value::Integer(index) => index,
-        value => value,
-    ]);
+    let index = usize::try_from(index - 1)?;
 
-    let index = match usize::try_from(index - 1) {
-        Ok(index) => index,
-        Err(err) => panic!("'{}': {}", SIGNATURE, err),
-    };
-    if let Some(location) = values.borrow_mut().get_mut(index) {
+    if let Some(location) = receiver.borrow_mut().get_mut(index) {
         *location = value;
     }
-    interpreter.stack.push(Value::Array(values))
+
+    Ok(receiver)
 }
 
-fn length(interpreter: &mut Interpreter, _: &mut Universe) {
-    const SIGNATURE: &str = "Array>>#length";
+fn length(
+    _: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    receiver: SOMRef<Vec<Value>>,
+) -> Result<i32, Error> {
+    const _: &str = "Array>>#length";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::Array(values) => values,
-    ]);
-
-    let length = values.borrow().len();
-    match i64::try_from(length) {
-        Ok(length) => interpreter.stack.push(Value::Integer(length)),
-        Err(err) => panic!("'{}': {}", SIGNATURE, err),
-    }
+    receiver
+        .borrow()
+        .len()
+        .try_into()
+        .context("could not convert `usize` to `i32`")
 }
 
-fn new(interpreter: &mut Interpreter, _: &mut Universe) {
-    const SIGNATURE: &str = "Array>>#new:";
+fn new(
+    _: &mut Interpreter,
+    heap: &mut GcHeap,
+    _: &mut Universe,
+    _: Value,
+    count: i32,
+) -> Result<SOMRef<Vec<Value>>, Error> {
+    const _: &str = "Array>>#new:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        _,
-        Value::Integer(count) => count,
-    ]);
+    let count = usize::try_from(count)?;
+    let allocated = heap.allocate(RefCell::new(vec![Value::NIL; count]));
 
-    match usize::try_from(count) {
-        Ok(length) => interpreter
-            .stack
-            .push(Value::Array(Rc::new(RefCell::new(vec![
-                Value::Nil;
-                length
-            ])))),
-        Err(err) => panic!("'{}': {}", SIGNATURE, err),
-    }
+    Ok(allocated)
 }
 
 /// Search for an instance primitive matching the given signature.
-pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
+pub fn get_instance_primitive(signature: &str) -> Option<&'static PrimitiveFn> {
     INSTANCE_PRIMITIVES
         .iter()
         .find(|it| it.0 == signature)
@@ -93,7 +100,7 @@ pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
 }
 
 /// Search for a class primitive matching the given signature.
-pub fn get_class_primitive(signature: &str) -> Option<PrimitiveFn> {
+pub fn get_class_primitive(signature: &str) -> Option<&'static PrimitiveFn> {
     CLASS_PRIMITIVES
         .iter()
         .find(|it| it.0 == signature)
