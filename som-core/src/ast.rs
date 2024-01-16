@@ -121,7 +121,6 @@ pub struct Body {
 /// "exit operation"     ^counter
 /// "literal"            'foo'
 /// "block"              [ :value | counter incrementBy: value ]
-/// "term"               ( counter increment )
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
@@ -139,8 +138,6 @@ pub enum Expression {
     Literal(Literal),
     /// A block (eg. `[ :value | counter incrementBy: value ]`).
     Block(Block),
-    /// A term (eg. `( counter increment )`).
-    Term(Term),
 }
 
 /// Represents a message send.

@@ -11,7 +11,7 @@ use num_bigint::BigInt;
 use som_core::ast;
 use som_core::bytecode::Bytecode;
 
-use crate::block::Block;
+use crate::block::{Block, BlockInfo};
 use crate::class::{Class, MaybeWeak};
 use crate::interner::{Interned, Interner};
 use crate::method::{Method, MethodEnv, MethodKind};
@@ -518,11 +518,12 @@ impl MethodCodegen for ast::Expression {
                 ctxt.push_instr(Bytecode::PushBlock(idx as u8));
                 Some(())
             }
-            ast::Expression::Term(term) => term
-                .body
-                .exprs
-                .iter()
-                .try_for_each(|expr| expr.codegen(ctxt)),
+            // TODO: should that go?
+            // ast::Expression::Term(term) => term
+            //     .body
+            //     .exprs
+            //     .iter()
+            //     .try_for_each(|expr| expr.codegen(ctxt)),
         }
     }
 }
@@ -552,6 +553,8 @@ impl GenCtxt for ClassGenCtxt<'_> {
 }
 
 fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Method> {
+    // println!("(method) compiling '{}' ...", defn.signature);
+
     let mut ctxt = MethodGenCtxt {
         signature: defn.signature.clone(),
         inner: BlockGenCtxt {
@@ -600,22 +603,37 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
 
             ast::MethodBody::Primitive => MethodKind::NotImplemented(defn.signature.clone()),
             ast::MethodBody::Body { .. } => {
-                let env = MethodEnv {
-                    locals: ctxt.inner.locals.iter().map(|_| Value::Nil).collect(),
-                    literals: ctxt.inner.literals.into_iter().collect(),
-                    body: ctxt.inner.body.unwrap_or_default(),
+                let locals = {
+                    let locals = std::mem::take(&mut ctxt.inner.locals);
+                    locals
+                        .into_iter()
+                        .map(|name| ctxt.intern_symbol(&name))
+                        .collect()
                 };
-                MethodKind::Defined(env)
+                let body = ctxt.inner.body.unwrap_or_default();
+                let literals = ctxt.inner.literals.into_iter().collect();
+                let inline_cache = RefCell::new(vec![None; body.len()]);
+
+                MethodKind::Defined(MethodEnv {
+                    body,
+                    locals,
+                    literals,
+                    inline_cache,
+                })
             }
         },
         holder: Weak::new(),
         signature: ctxt.signature,
     };
 
+    // println!("(method) compiled '{}' !", defn.signature);
+
     Some(method)
 }
 
 fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
+    // println!("(system) compiling block ...");
+
     let mut ctxt = BlockGenCtxt {
         outer,
         args: defn.parameters.iter().cloned().collect(),
@@ -635,13 +653,31 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
     }
     // ctxt.remove_dup_popx_pop_sequences();
 
-    let block = Block {
-        frame: None,
-        locals: ctxt.locals.into_iter().map(|_| Value::Nil).collect(),
-        literals: ctxt.literals.into_iter().collect(),
-        body: ctxt.body.unwrap_or_default(),
-        nb_params: ctxt.args.len()
+    let frame = None;
+    let locals = {
+        let locals = std::mem::take(&mut ctxt.locals);
+        locals
+            .into_iter()
+            .map(|name| ctxt.intern_symbol(&name))
+            .collect()
     };
+    let literals = ctxt.literals.into_iter().collect();
+    let body = ctxt.body.unwrap_or_default();
+    let nb_params = ctxt.args.len();
+    let inline_cache = RefCell::new(vec![None; body.len()]);
+
+    let block = Block {
+        frame,
+        blk_info: Rc::new(BlockInfo {
+            locals,
+            literals,
+            body,
+            nb_params,
+            inline_cache,
+        }),
+    };
+
+    // println!("(system) compiled block !");
 
     Some(block)
 }
@@ -810,6 +846,12 @@ pub fn compile_class(
         .collect();
     instance_class_mut.methods = instance_class_ctxt.methods;
     drop(instance_class_mut);
+
+    // for method in instance_class.borrow().methods.values() {
+    //     println!("{}", method);
+    // }
+
+    // println!("compiled '{}' !", defn.name);
 
     Some(instance_class)
 }

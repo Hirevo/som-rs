@@ -81,7 +81,6 @@ impl Evaluate for ast::Expression {
                     universe.unknown_global(self_value, name.as_str())
                 })
                 .unwrap_or_else(|| Return::Exception(format!("variable '{}' not found", name))),
-            Self::Term(term) => term.evaluate(universe),
             Self::Message(msg) => msg.evaluate(universe),
         }
     }

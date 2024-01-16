@@ -6,9 +6,11 @@ use std::usize;
 use som_core::bytecode::Bytecode;
 
 use crate::block::Block;
+use crate::class::Class;
 use crate::compiler::Literal;
 use crate::frame::{Frame, FrameKind};
-use crate::method::MethodKind;
+use crate::interner::Interned;
+use crate::method::{Method, MethodKind};
 use crate::universe::Universe;
 use crate::value::Value;
 use crate::SOMRef;
@@ -228,6 +230,7 @@ impl Interpreter {
                 None => return Some(self.stack.pop().unwrap_or(Value::Nil)),
             };
 
+            let bytecode_idx = frame.borrow().bytecode_idx;
             let opt_bytecode = frame.borrow().get_current_bytecode();
             let bytecode = match opt_bytecode {
                 Some(bytecode) => bytecode,
@@ -238,30 +241,7 @@ impl Interpreter {
                 }
             };
 
-            // TODO remove this debug
-            // if &frame.borrow().get_method().signature == "initialize:" {
-            //     println!("bp");
-            //     // match &frame.borrow().kind {
-            //     //     FrameKind::Method { holder, method, .. } => match method.kind() {
-            //     //         MethodKind::Defined(env) => {
-            //     //             dbg!(&holder);
-            //     //             dbg!(&env.body);
-            //     //         },
-            //     //         MethodKind::Primitive(_) => {},
-            //     //         MethodKind::NotImplemented(_) => {},
-            //     //     },
-            //     //     FrameKind::Block { block, .. } => {},
-            //     // };
-            // }
-
-            // dbg!(&frame.borrow().get_method().signature);
-            // if &frame.borrow().get_method().signature == "resolve:" {
-            //     println!("cur bc: {}", bytecode);
-            //     print!("");
-            // }
-
             frame.borrow_mut().bytecode_idx += 1;
-            // dbg!(&frame.borrow().get_method().signature);
 
             match bytecode {
                 Bytecode::Dup => {
@@ -312,7 +292,7 @@ impl Interpreter {
                         Literal::Block(blk) => Block::clone(&blk),
                         _ => panic!("PushBlock expected a block, but got another invalid literal"),
                     };
-                    block.frame.replace(Rc::clone(frame));
+                    block.frame.replace(Rc::clone(&frame));
                     self.stack.push(Value::Block(Rc::new(block)));
                 }
                 Bytecode::PushConstant(idx) => {
@@ -531,6 +511,126 @@ impl Interpreter {
             }
         }
 
+        fn do_send(
+            interpreter: &mut Interpreter,
+            universe: &mut Universe,
+            method: Option<Rc<Method>>,
+            symbol: Interned,
+            nb_params: usize,
+        ) {
+            let Some(method) = method else {
+                let mut args = Vec::with_capacity(nb_params + 1);
+
+                for _ in 0..nb_params {
+                    let arg = interpreter.stack.pop().unwrap();
+                    args.push(arg);
+                }
+                let self_value = interpreter.stack.pop().unwrap();
+
+                args.reverse();
+
+                universe.does_not_understand(interpreter, self_value, symbol, args)
+                    .expect(
+                        "A message cannot be handled and `doesNotUnderstand:arguments:` is not defined on receiver"
+                    );
+
+                return;
+            };
+
+            match method.kind() {
+                MethodKind::Defined(_) => {
+                    let mut args = Vec::with_capacity(nb_params + 1);
+
+                    for _ in 0..nb_params {
+                        let arg = interpreter.stack.pop().unwrap();
+                        args.push(arg);
+                    }
+                    let self_value = interpreter.stack.pop().unwrap();
+                    args.push(self_value.clone());
+
+                    args.reverse();
+
+                    let holder = method.holder.upgrade().unwrap();
+                    let frame = interpreter.push_frame(FrameKind::Method {
+                        self_value,
+                        method,
+                        holder,
+                    });
+                    frame.borrow_mut().args = args;
+                }
+                MethodKind::Primitive(func) => {
+                    func(interpreter, universe);
+                }
+                MethodKind::NotImplemented(err) => {
+                    let self_value = interpreter.stack.iter().nth_back(nb_params).unwrap();
+                    println!(
+                        "{}>>#{}",
+                        self_value.class(&universe).borrow().name(),
+                        method.signature(),
+                    );
+                    panic!("Primitive `#{}` not implemented", err)
+                }
+            }
+        }
+
+        fn resolve_method(
+            frame: &SOMRef<Frame>,
+            class: &SOMRef<Class>,
+            signature: Interned,
+            bytecode_idx: usize,
+        ) -> Option<Rc<Method>> {
+            match frame.borrow().kind() {
+                FrameKind::Block { block } => {
+                    let mut inline_cache = block.blk_info.inline_cache.borrow_mut();
+
+                    // SAFETY: this access is actually safe because the bytecode compiler
+                    // makes sure the cache has as many entries as there are bytecode instructions,
+                    // therefore we can avoid doing any redundant bounds checks here.
+                    let maybe_found = unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
+
+                    match maybe_found {
+                        Some((receiver, method)) if *receiver == class.as_ptr() => {
+                            Some(Rc::clone(method))
+                        }
+                        place @ None => {
+                            let found = class.borrow().lookup_method(signature);
+                            *place = found
+                                .clone()
+                                .map(|method| (class.as_ptr() as *const _, method));
+                            found
+                        }
+                        _ => class.borrow().lookup_method(signature),
+                    }
+                }
+                FrameKind::Method { method, .. } => {
+                    if let MethodKind::Defined(env) = method.kind() {
+                        let mut inline_cache = env.inline_cache.borrow_mut();
+
+                        // SAFETY: this access is actually safe because the bytecode compiler
+                        // makes sure the cache has as many entries as there are bytecode instructions,
+                        // therefore we can avoid doing any redundant bounds checks here.
+                        let maybe_found = unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
+
+                        match maybe_found {
+                            Some((receiver, method)) if *receiver == class.as_ptr() => {
+                                Some(Rc::clone(method))
+                            }
+                            place @ None => {
+                                let found = class.borrow().lookup_method(signature);
+                                *place = found
+                                    .clone()
+                                    .map(|method| (class.as_ptr() as *const _, method));
+                                found
+                            }
+                            _ => class.borrow().lookup_method(signature),
+                        }
+                    } else {
+                        class.borrow().lookup_method(signature)
+                    }
+                }
+            }
+        }
+
         fn convert_literal(frame: &SOMRef<Frame>, literal: Literal) -> Option<Value> {
             let value = match literal {
                 Literal::Symbol(sym) => Value::Symbol(sym),
@@ -554,6 +654,13 @@ impl Interpreter {
                 Literal::Block(val) => Value::Block(val),
             };
             Some(value)
+        }
+
+        fn nb_params(signature: &str) -> usize {
+            match signature.chars().nth(0) {
+                Some(ch) if !ch.is_alphabetic() => 1,
+                _ => signature.chars().filter(|ch| *ch == ':').count(),
+            }
         }
     }
 }

@@ -44,23 +44,19 @@ impl Lexer {
         let mut output = String::new();
         self.chars.pop()?;
         loop {
-            let ch = self.chars.pop()?;
-            match ch {
+            match self.chars.pop()? {
                 '\'' => break Some(output),
-                '\\' => {
-                    let ch = self.chars.pop()?;
-                    match ch {
-                        't' => output.push('\t'),
-                        'b' => output.push('\x08'),
-                        'n' => output.push('\n'),
-                        'r' => output.push('\r'),
-                        'f' => output.push('\x12'),
-                        '\'' => output.push('\''),
-                        '\\' => output.push('\\'),
-                        '0' => output.push('\0'),
-                        _ => {}
-                    }
-                }
+                '\\' => match self.chars.pop()? {
+                    't' => output.push('\t'),
+                    'b' => output.push('\x08'),
+                    'n' => output.push('\n'),
+                    'r' => output.push('\r'),
+                    'f' => output.push('\x12'),
+                    '\'' => output.push('\''),
+                    '\\' => output.push('\\'),
+                    '0' => output.push('\0'),
+                    _ => {}
+                },
                 ch => output.push(ch),
             }
         }
@@ -88,26 +84,23 @@ impl Lexer {
         let length = iter.take_while(|ch| Lexer::is_operator(*ch)).count();
         match length {
             0 => None,
-            1 => {
-                let ch = self.chars.pop()?;
-                match ch {
-                    '~' => Some(Token::Not),
-                    '&' => Some(Token::And),
-                    '|' => Some(Token::Or),
-                    '*' => Some(Token::Star),
-                    '/' => Some(Token::Div),
-                    '\\' => Some(Token::Mod),
-                    '+' => Some(Token::Plus),
-                    '=' => Some(Token::Equal),
-                    '>' => Some(Token::More),
-                    '<' => Some(Token::Less),
-                    ',' => Some(Token::Comma),
-                    '@' => Some(Token::At),
-                    '%' => Some(Token::Per),
-                    '-' => Some(Token::Minus),
-                    _ => None,
-                }
-            }
+            1 => match self.chars.pop()? {
+                '~' => Some(Token::Not),
+                '&' => Some(Token::And),
+                '|' => Some(Token::Or),
+                '*' => Some(Token::Star),
+                '/' => Some(Token::Div),
+                '\\' => Some(Token::Mod),
+                '+' => Some(Token::Plus),
+                '=' => Some(Token::Equal),
+                '>' => Some(Token::More),
+                '<' => Some(Token::Less),
+                ',' => Some(Token::Comma),
+                '@' => Some(Token::At),
+                '%' => Some(Token::Per),
+                '-' => Some(Token::Minus),
+                _ => None,
+            },
             length => {
                 let mut operator = String::with_capacity(length);
                 for _ in 0..length {
@@ -116,6 +109,46 @@ impl Lexer {
                 Some(Token::OperatorSequence(operator))
             }
         }
+    }
+
+    fn lex_symbol(&mut self) -> Option<String> {
+        let mut symbol = String::new();
+
+        'outer: loop {
+            match self.chars.pop() {
+                Some(ch) if ch.is_alphabetic() => {
+                    symbol.push(ch);
+                }
+                Some(ch) => {
+                    self.chars.push(ch);
+                    break;
+                }
+                None => {
+                    break;
+                }
+            }
+
+            loop {
+                match self.chars.pop() {
+                    Some(ch) if ch.is_alphanumeric() || ch == '_' => {
+                        symbol.push(ch);
+                    }
+                    Some(':') => {
+                        symbol.push(':');
+                        break;
+                    }
+                    Some(ch) => {
+                        self.chars.push(ch);
+                        break 'outer;
+                    }
+                    None => {
+                        break 'outer;
+                    }
+                }
+            }
+        }
+
+        (!symbol.is_empty()).then_some(symbol)
     }
 
     fn is_operator(ch: char) -> bool {
@@ -176,14 +209,8 @@ impl Iterator for Lexer {
                         Some(Token::NewArray)
                     }
                     Some(ch) if ch.is_alphabetic() => {
-                        let len = iter
-                            .take_while(|ch| ch.is_alphabetic() || matches!(*ch, ':' | '_'))
-                            .count();
-                        let mut symbol = String::with_capacity(len);
                         self.chars.pop()?;
-                        for _ in 0..len {
-                            symbol.push(self.chars.pop()?);
-                        }
+                        let symbol = self.lex_symbol()?;
                         Some(Token::LitSymbol(symbol))
                     }
                     Some(ch) if Lexer::is_operator(ch) => {
