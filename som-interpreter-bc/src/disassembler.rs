@@ -23,9 +23,6 @@ fn disassemble_body(
         print!("{padding} {0}", bytecode.padded_name());
 
         match bytecode {
-            Bytecode::Halt => {
-                println!();
-            }
             Bytecode::Dup => {
                 println!();
             }
@@ -97,7 +94,7 @@ fn disassemble_body(
                 // };
                 // println!(" (`{0}`)", universe.lookup_symbol(argument));
             }
-            Bytecode::Send(idx) | Bytecode::SuperSend(idx) => {
+            Bytecode::SendN(idx) | Bytecode::SuperSendN(idx) => {
                 print!(" {idx}");
                 let Some(Literal::Symbol(signature)) = current.resolve_literal(idx) else {
                     println!(" (invalid signature)");
@@ -110,7 +107,8 @@ fn disassemble_body(
             }
             Bytecode::ReturnNonLocal => {
                 println!();
-            }
+            },
+            _ => todo!() // evil, I know. I'm lazy
         }
     }
 }
