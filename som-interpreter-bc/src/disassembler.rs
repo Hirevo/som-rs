@@ -58,7 +58,15 @@ fn disassemble_body(
                 disassemble_body(universe, class, level + 1, env);
                 env.pop();
             }
-            Bytecode::PushConstant(idx) => {
+            Bytecode::PushConstant0 | Bytecode::PushConstant1 | Bytecode::PushConstant2 | Bytecode::PushConstant(_) => {
+                let idx = match bytecode {
+                    Bytecode::PushConstant0 => 0,
+                    Bytecode::PushConstant1 => 1,
+                    Bytecode::PushConstant2 => 2,
+                    Bytecode::PushConstant(idx) => idx,
+                    _ => panic!("Unreachable.")
+                };
+
                 print!(" {idx}");
                 let Some(literal) = current.resolve_literal(idx) else {
                     println!(" (invalid constant)");
@@ -116,7 +124,6 @@ fn disassemble_body(
                 println!("{}", idx);
             }
             Bytecode::Push0 | Bytecode::Push1 | Bytecode::PushNil => {println!();}
-            Bytecode::PushConstant0 | Bytecode::PushConstant1 | Bytecode::PushConstant2=> {println!(" (TODO)")}
         }
     }
 }
