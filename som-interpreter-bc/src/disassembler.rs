@@ -19,8 +19,9 @@ fn disassemble_body(
 ) {
     let padding = "  |".repeat(level);
     let current = env.last().copied().unwrap();
-    for bytecode in current.get_body().into_iter().copied() {
-        print!("{padding} {0}", bytecode.padded_name());
+    for (idx, bytecode) in current.get_body().into_iter().copied().enumerate() {
+        print!("{idx} {padding} {0}", bytecode.padded_name());
+        // print!("{padding} {0}", bytecode.padded_name());
 
         match bytecode {
             Bytecode::Dup => {
@@ -94,21 +95,28 @@ fn disassemble_body(
                 // };
                 // println!(" (`{0}`)", universe.lookup_symbol(argument));
             }
-            Bytecode::SendN(idx) | Bytecode::SuperSendN(idx) => {
+            Bytecode::Send1(idx) | Bytecode::Send2(idx) | Bytecode::Send3(idx) | Bytecode::SendN(idx) |
+            Bytecode::SuperSend1(idx) | Bytecode::SuperSend2(idx) | Bytecode::SuperSend3(idx) | Bytecode::SuperSendN(idx) => {
                 print!(" {idx}");
                 let Some(Literal::Symbol(signature)) = current.resolve_literal(idx) else {
                     println!(" (invalid signature)");
                     continue;
                 };
                 println!(" (#{0})", universe.lookup_symbol(*signature));
-            }
+            },
             Bytecode::ReturnLocal => {
                 println!();
             }
             Bytecode::ReturnNonLocal => {
                 println!();
             },
-            _ => todo!() // evil, I know. I'm lazy
+            Bytecode::Jump(idx) | Bytecode::JumpBackward(idx) |
+            Bytecode::JumpOnFalsePop(idx) | Bytecode::JumpOnTruePop(idx) |
+            Bytecode::JumpOnFalseTopNil(idx) | Bytecode::JumpOnTrueTopNil(idx) => {
+                println!("{}", idx);
+            }
+            Bytecode::Push0 | Bytecode::Push1 | Bytecode::PushNil => {println!();}
+            Bytecode::PushConstant0 | Bytecode::PushConstant1 | Bytecode::PushConstant2=> {println!(" (TODO)")}
         }
     }
 }
