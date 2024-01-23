@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
+use som_core::ast;
 
 use som_core::bytecode::Bytecode;
 
@@ -27,7 +28,9 @@ pub struct Block {
     /// Reference to the captured stack frame.
     pub frame: Option<SOMRef<Frame>>,
     pub blk_info: Rc<BlockInfo>,
-}
+    // OLarose: not a fan... but it's needed when inlining to be able to recreate a working version of the block from the original AST
+    // (see PushBlock in inliner)
+    pub ast_body: ast::Block, }
 
 impl Block {
     /// Get the block's class.

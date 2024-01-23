@@ -631,7 +631,7 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
     Some(method)
 }
 
-fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
+pub(crate) fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
     // println!("(system) compiling block ...");
 
     let mut ctxt = BlockGenCtxt {
@@ -675,6 +675,7 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
             nb_params,
             inline_cache,
         }),
+        ast_body: defn.clone() // not a fan of this, only needed during parsing and cloning feels needless... TODO
     };
 
     // println!("(system) compiled block !");

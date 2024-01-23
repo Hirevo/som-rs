@@ -1,7 +1,8 @@
+use std::rc::Rc;
 use som_core::ast;
 use som_core::bytecode::Bytecode;
-use crate::block::BlockInfo;
-use crate::compiler::{InnerGenCtxt, Literal};
+use crate::block::{BlockInfo};
+use crate::compiler::{compile_block, InnerGenCtxt, Literal};
 use crate::compiler::MethodCodegen;
 use crate::inliner::JumpType::{JumpOnFalse, JumpOnTrue};
 
@@ -9,8 +10,6 @@ pub enum JumpType {
     JumpOnFalse,
     JumpOnTrue
 }
-
-static mut has_been_accessed: bool = false;
 
 // TODO some of those should return Result types and throw errors instead, most likely.
 pub trait PrimMessageInliner {
@@ -26,8 +25,8 @@ pub trait PrimMessageInliner {
 impl PrimMessageInliner for ast::Expression {
     fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()> {
         match message.signature.as_str() {
-            "ifTrue:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnFalse),
-            // "ifFalse:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnTrue),
+            // "ifTrue:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnFalse),
+            "ifFalse2:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnTrue),
             // "ifTrue:ifFalse:" => self.inline_if_true_if_false(ctxt, message, JumpOnFalse),
             // "ifFalse:ifTrue:" => self.inline_if_true_if_false(ctxt, message, JumpOnTrue),
             // "whileTrue:" => self.inline_while(ctxt, message, JumpOnFalse),
@@ -38,8 +37,7 @@ impl PrimMessageInliner for ast::Expression {
     }
 
     fn inline_compiled_block(&self, ctxt: &mut dyn InnerGenCtxt, block: &BlockInfo) -> Option<()> {
-        // TODO uncomment
-        for block_local_intern_id in &block.locals {
+        for _block_local_intern_id in &block.locals {
             panic!("we don't handle block locals yet!");
             // ctxt.push_local(ctxt.lookup_symbol(block_local_intern_id));
         }
@@ -50,7 +48,7 @@ impl PrimMessageInliner for ast::Expression {
                 match block_bc {
                     Bytecode::PushLocal(up_idx, idx) => ctxt.push_instr(Bytecode::PushLocal(*up_idx - 1, *idx)),
                     Bytecode::PopLocal(up_idx, idx) => ctxt.push_instr(Bytecode::PopLocal(*up_idx - 1, *idx)),
-                    Bytecode::PushArgument(up_idx, idx) => ctxt.push_instr(Bytecode::PushArgument(*up_idx - 1, *idx)),
+                    Bytecode::PushArgument(up_idx, idx) => ctxt.push_instr(Bytecode::PushArgument(*up_idx - 1, *idx)), // not 100% sure i need to adjust the up_idx there and for pop
                     Bytecode::PopArgument(up_idx, idx) => ctxt.push_instr(Bytecode::PopArgument(*up_idx - 1, *idx)),
                     Bytecode::Send1(lit_idx) | Bytecode::Send2(lit_idx) |
                     Bytecode::Send3(lit_idx) | Bytecode::SendN(lit_idx) => {
@@ -69,16 +67,16 @@ impl PrimMessageInliner for ast::Expression {
                             _ => panic!("Unexpected block literal type, not yet implemented")
                         }
                     },
-                    // Bytecode::PushBlock(block_idx) => {
-                    // match block.literals.get(*block_idx as usize)? {
-                    //     Literal::Block(inner_block) => {
-                    //         let new_block = compile_block(ctxt.as_gen_ctxt(), &inner_block.ast_body)?;
-                    //         let idx = ctxt.push_literal(Literal::Block(Rc::new(new_block)));
-                    //         ctxt.push_instr(Bytecode::PushBlock(idx as u8));
-                    //     },
-                    //     _ => panic!("PushBlock not actually pushing a block somehow")
-                    // };
-                    // },
+                    Bytecode::PushBlock(block_idx) => {
+                        match block.literals.get(*block_idx as usize)? {
+                            Literal::Block(inner_block) => {
+                                let new_block = compile_block(ctxt.as_gen_ctxt(), &inner_block.ast_body)?;
+                                let idx = ctxt.push_literal(Literal::Block(Rc::from(new_block)));
+                                ctxt.push_instr(Bytecode::PushBlock(idx as u8));
+                            },
+                            _ => panic!("PushBlock not actually pushing a block somehow")
+                        };
+                    },
                     Bytecode::PushGlobal(global_idx) => {
                         match block.literals.get(*global_idx as usize)? {
                             lit => {
@@ -120,8 +118,18 @@ impl PrimMessageInliner for ast::Expression {
                             }
                         };
                     },
-                    Bytecode::ReturnNonLocal => {ctxt.push_instr(Bytecode::ReturnLocal)},
-                    _ => ctxt.push_instr(*block_bc)
+                    Bytecode::ReturnNonLocal => ctxt.push_instr(Bytecode::ReturnLocal),
+                    Bytecode::ReturnLocal => panic!("Uh, that's a thing?"),
+                    // For jumps, we just need to adjust their offsets based on when we started inlining the block. probably.
+                    Bytecode::Jump(idx) => ctxt.push_instr(Bytecode::Jump(idx + ctxt.get_cur_instr_idx())),
+                    Bytecode::JumpBackward(idx) => ctxt.push_instr(Bytecode::JumpBackward(idx + ctxt.get_cur_instr_idx())),
+                    Bytecode::JumpOnTruePop(idx) => ctxt.push_instr(Bytecode::JumpOnTruePop(idx + ctxt.get_cur_instr_idx())),
+                    Bytecode::JumpOnFalsePop(idx) => ctxt.push_instr(Bytecode::JumpOnFalsePop(idx + ctxt.get_cur_instr_idx())),
+                    Bytecode::JumpOnTrueTopNil(idx) => {
+                        ctxt.push_instr(Bytecode::JumpOnTrueTopNil(idx + ctxt.get_cur_instr_idx()))
+                    },
+                    Bytecode::JumpOnFalseTopNil(idx) => ctxt.push_instr(Bytecode::JumpOnFalseTopNil(idx + ctxt.get_cur_instr_idx())),
+                    _ => ctxt.push_instr(*block_bc) // I *think* the rest are all fine..
                 }
             }
         }
@@ -130,7 +138,7 @@ impl PrimMessageInliner for ast::Expression {
     }
 
     #[allow(dead_code)]
-    fn inline_expr(&self, ctxt: &mut dyn InnerGenCtxt, block_expr: &ast::Expression) -> Option<()> {
+    fn inline_expr(&self, _ctxt: &mut dyn InnerGenCtxt, _block_expr: &ast::Expression) -> Option<()> {
         todo!();
         // match block_expr {
         //     ast::Expression::Block(block) => self.inline_compiled_block(ctxt, block),
@@ -165,7 +173,7 @@ impl PrimMessageInliner for ast::Expression {
         // shouldn't break anything, probably
 //        ctxt.remove_literal(block_idx as usize);
 //         dbg!(&cond_block_ref.as_ref().blk_info.body);
-
+        
         self.inline_compiled_block(ctxt, cond_block_ref.as_ref().blk_info.as_ref());
 
         // dbg!(ctxt.get_instructions());
@@ -173,6 +181,7 @@ impl PrimMessageInliner for ast::Expression {
 //        // todo i think Recurse took a big hit when i started inlining any expression instead of just blocks. needs investigating
 //         self.inline_expr(ctxt, message.values.get(0)?);
         ctxt.backpatch_jump_to_current(jump_idx);
+        // ctxt.backpatch_jump_to_current(jump_idx + nbr_instrs_inlined);
 
         return Some(());
     }

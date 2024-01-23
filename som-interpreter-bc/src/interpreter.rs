@@ -230,7 +230,6 @@ impl Interpreter {
                 None => return Some(self.stack.pop().unwrap_or(Value::Nil)),
             };
 
-            let bytecode_idx = frame.borrow().bytecode_idx;
             let opt_bytecode = frame.borrow().get_current_bytecode();
             let bytecode = match opt_bytecode {
                 Some(bytecode) => bytecode,
@@ -511,6 +510,8 @@ impl Interpreter {
             }
         }
 
+        // TODO: check why this is unused
+        #[allow(dead_code)]
         fn do_send(
             interpreter: &mut Interpreter,
             universe: &mut Universe,
@@ -573,6 +574,8 @@ impl Interpreter {
             }
         }
 
+        // TODO: check why this is unused
+        #[allow(dead_code)]
         fn resolve_method(
             frame: &SOMRef<Frame>,
             class: &SOMRef<Class>,
@@ -656,6 +659,8 @@ impl Interpreter {
             Some(value)
         }
 
+        // TODO: check why this is unused
+        #[allow(dead_code)]
         fn nb_params(signature: &str) -> usize {
             match signature.chars().nth(0) {
                 Some(ch) if !ch.is_alphabetic() => 1,
