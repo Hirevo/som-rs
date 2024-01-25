@@ -1,4 +1,6 @@
 use std::rc::Rc;
+use rand::distributions::Alphanumeric;
+use rand::Rng;
 use som_core::ast;
 use som_core::bytecode::Bytecode;
 use crate::block::{BlockInfo};
@@ -28,7 +30,7 @@ impl PrimMessageInliner for ast::Expression {
         match message.signature.as_str() {
             "ifTrue:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnFalse),
             "ifFalse:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnTrue),
-            "ifTrue:ifFalse:" => self.inline_if_true_if_false(ctxt, message, JumpOnFalse),
+            // "ifTrue:ifFalse:" => self.inline_if_true_if_false(ctxt, message, JumpOnFalse),
             // "ifFalse:ifTrue:" => self.inline_if_true_if_false(ctxt, message, JumpOnTrue),
             // "whileTrue:" => self.inline_while(ctxt, message, JumpOnFalse),
             // "whileFalse:" => self.inline_while(ctxt, message, JumpOnTrue),
@@ -38,9 +40,18 @@ impl PrimMessageInliner for ast::Expression {
     }
 
     fn inline_compiled_block(&self, ctxt: &mut dyn InnerGenCtxt, block: &BlockInfo) -> Option<()> {
-        for _block_local_intern_id in &block.locals {
-            panic!("we don't handle block locals yet!");
-            // ctxt.push_local(ctxt.lookup_symbol(block_local_intern_id));
+        let nbr_locals_pre_inlining = ctxt.get_nbr_locals();
+
+        for block_local_intern_id in &block.locals {
+            let symbol_str= ctxt.lookup_symbol(*block_local_intern_id);
+            // TODO this is a very ugly, very temporary thing
+            // TODO but it is also hilarious though. I can't believe this works
+            let random_string: String = rand::thread_rng()
+                .sample_iter(&Alphanumeric)
+                .take(3)
+                .map(char::from)
+                .collect();
+            ctxt.push_local(String::from(symbol_str) + random_string.as_str());
         }
 
         let idx_start_inlining = ctxt.get_cur_instr_idx();
@@ -50,14 +61,14 @@ impl PrimMessageInliner for ast::Expression {
             for block_bc in body {
                 match block_bc {
                     Bytecode::PushLocal(up_idx, idx) => {
-                        match up_idx { // todo: is there more logic to put there?
-                            0 => ctxt.push_instr(Bytecode::PushLocal(*up_idx, *idx)),
+                        match up_idx {
+                            0 => ctxt.push_instr(Bytecode::PushLocal(*up_idx, nbr_locals_pre_inlining as u8 + *idx)),
                             1.. => ctxt.push_instr(Bytecode::PushLocal(*up_idx - 1, *idx))
                         }
                     },
                     Bytecode::PopLocal(up_idx, idx) => {
                         match up_idx {
-                            0 => ctxt.push_instr(Bytecode::PopLocal(*up_idx, *idx)),
+                            0 => ctxt.push_instr(Bytecode::PopLocal(*up_idx, nbr_locals_pre_inlining as u8 + *idx)),
                             1.. => ctxt.push_instr(Bytecode::PopLocal(*up_idx - 1, *idx))
                         }
                     },
@@ -236,44 +247,38 @@ impl PrimMessageInliner for ast::Expression {
         return Some(());
     }
 
-    fn inline_while(&self, _ctxt: &mut dyn InnerGenCtxt, _message: &ast::Message, _jump_type: JumpType) -> Option<()> {
-        todo!("make it use the new inlining function");
-        // if message.values.len() != 1  {
-        //     return None;
-        // }
-        //
-        // if message.values.len() != 1 || !matches!(message.values.get(0)?, ast::Expression::Block(_)) {
-        //     return None;
-        // }
-        //
-        // ctxt.pop_instr(); // we remove the PUSH_BLOCK
-        //
-        // let idx_before_condition = ctxt.get_cur_instr_idx();
-        //
-        // self.inline_expr(ctxt, message.receiver.as_ref());
-        //
-        // let cond_jump_idx = ctxt.get_cur_instr_idx();
-        // match jump_type {
-        //     JumpOnFalse => ctxt.push_instr(Bytecode::JumpOnFalsePop(0)),
-        //     JumpOnTrue => ctxt.push_instr(Bytecode::JumpOnTruePop(0))
-        // }
-        //
-        // self.inline_expr(ctxt, message.values.get(0).unwrap());
-        //
-        // // we push a POP, unless the body of the loop is empty.
-        // match message.values.get(0).unwrap() {
-        //     ast::Expression::Block(block)  => {
-        //         if block.body.exprs.len() != 0 {
-        //             ctxt.push_instr(Bytecode::Pop);
-        //         }
-        //     },
-        //     _ => {}
-        // };
-        //
-        // ctxt.push_instr(Bytecode::JumpBackward(ctxt.get_cur_instr_idx() - idx_before_condition));
-        // ctxt.backpatch_jump_to_current(cond_jump_idx);
-        // ctxt.push_instr(Bytecode::PushNil);
-        //
-        // return Some(());
+    fn inline_while(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, jump_type: JumpType) -> Option<()> {
+        if message.values.len() != 1 || !matches!(message.values.get(0)?, ast::Expression::Block(_)) || !matches!(ctxt.get_instructions().last() , Some(Bytecode::PushBlock(_))) {
+            return None;
+        }
+
+        let idx_before_condition = ctxt.get_cur_instr_idx();
+
+        self.inline_last_push_block_bc(ctxt);
+
+        let cond_jump_idx = ctxt.get_cur_instr_idx();
+        match jump_type {
+            JumpOnFalse => ctxt.push_instr(Bytecode::JumpOnFalsePop(0)),
+            JumpOnTrue => ctxt.push_instr(Bytecode::JumpOnTruePop(0))
+        }
+
+        message.values.get(0)?.codegen(ctxt)?;
+        self.inline_last_push_block_bc(ctxt);
+
+        // we push a POP, unless the body of the loop is empty.
+        match message.values.get(0).unwrap() {
+            ast::Expression::Block(block)  => {
+                if block.body.exprs.len() != 0 {
+                    ctxt.push_instr(Bytecode::Pop);
+                }
+            },
+            _ => {}
+        };
+
+        ctxt.push_instr(Bytecode::JumpBackward(ctxt.get_cur_instr_idx() - idx_before_condition));
+        ctxt.backpatch_jump_to_current(cond_jump_idx);
+        ctxt.push_instr(Bytecode::PushNil);
+
+        return Some(());
     }
 }

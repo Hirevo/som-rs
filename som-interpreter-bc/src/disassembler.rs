@@ -20,7 +20,8 @@ fn disassemble_body(
     let padding = "  |".repeat(level);
     let current = env.last().copied().unwrap();
     for (idx, bytecode) in current.get_body().into_iter().copied().enumerate() {
-        print!("{idx} {padding} {0}", bytecode.padded_name());
+        let extra_spaces_nbr = if idx >= 100 { 0 } else if (10..=99).contains(&idx) { 1 } else { 2 };
+        print!("{idx} {0} {padding} {1}", " ".repeat(extra_spaces_nbr), bytecode.padded_name());
         // print!("{padding} {0}", bytecode.padded_name());
 
         match bytecode {

@@ -92,6 +92,7 @@ pub enum FoundVar {
 pub trait GenCtxt {
     fn find_var(&mut self, name: &str) -> Option<FoundVar>;
     fn intern_symbol(&mut self, name: &str) -> Interned;
+    fn lookup_symbol(&self, id: Interned) -> &str;
     fn class_name(&self) -> &str;
 }
 
@@ -102,6 +103,7 @@ pub trait InnerGenCtxt: GenCtxt {
     fn get_instructions(&self) -> &Vec<Bytecode>;
     fn push_arg(&mut self, name: String) -> usize;
     fn push_local(&mut self, name: String) -> usize;
+    fn get_nbr_locals(&self) -> usize;
     fn get_literal(&self, idx: usize) -> Option<&Literal>; // is this needed?
     fn push_literal(&mut self, literal: Literal) -> usize;
     fn remove_literal(&mut self, idx: usize) -> Option<Literal>;
@@ -139,6 +141,10 @@ impl GenCtxt for BlockGenCtxt<'_> {
 
     fn intern_symbol(&mut self, name: &str) -> Interned {
         self.outer.intern_symbol(name)
+    }
+
+    fn lookup_symbol(&self, id: Interned) -> &str {
+        self.outer.lookup_symbol(id)
     }
 
     fn class_name(&self) -> &str {
@@ -275,6 +281,10 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
                 }
             ).collect::<Vec<Bytecode>>());
     }
+
+    fn get_nbr_locals(&self) -> usize {
+        self.locals.len()
+    }
 }
 
 struct MethodGenCtxt<'a> {
@@ -291,6 +301,10 @@ impl GenCtxt for MethodGenCtxt<'_> {
 
     fn intern_symbol(&mut self, name: &str) -> Interned {
         self.inner.intern_symbol(name)
+    }
+
+    fn lookup_symbol(&self, id: Interned) -> &str {
+        self.inner.lookup_symbol(id)
     }
 
     fn class_name(&self) -> &str {
@@ -350,6 +364,10 @@ impl InnerGenCtxt for MethodGenCtxt<'_> {
 
     fn remove_dup_popx_pop_sequences(&mut self) {
         self.inner.remove_dup_popx_pop_sequences();
+    }
+
+    fn get_nbr_locals(&self) -> usize {
+        self.inner.get_nbr_locals()
     }
 }
 
@@ -545,6 +563,10 @@ impl GenCtxt for ClassGenCtxt<'_> {
 
     fn intern_symbol(&mut self, name: &str) -> Interned {
         self.interner.intern(name)
+    }
+
+    fn lookup_symbol(&self, id: Interned) -> &str {
+        self.interner.lookup(id)
     }
 
     fn class_name(&self) -> &str {
