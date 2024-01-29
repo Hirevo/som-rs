@@ -7,6 +7,7 @@ use std::rc::{Rc, Weak};
 
 use indexmap::{IndexMap, IndexSet};
 use num_bigint::BigInt;
+use rand::Rng;
 
 use som_core::ast;
 use som_core::bytecode::Bytecode;
@@ -94,6 +95,7 @@ pub trait GenCtxt {
     fn intern_symbol(&mut self, name: &str) -> Interned;
     fn lookup_symbol(&self, id: Interned) -> &str;
     fn class_name(&self) -> &str;
+    fn current_scope(&self) -> usize;
 }
 
 pub trait InnerGenCtxt: GenCtxt {
@@ -102,7 +104,7 @@ pub trait InnerGenCtxt: GenCtxt {
     fn pop_instr(&mut self);
     fn get_instructions(&self) -> &Vec<Bytecode>;
     fn push_arg(&mut self, name: String) -> usize;
-    fn push_local(&mut self, name: String) -> usize;
+    fn push_local(&mut self, name: String, original_scope: usize) -> usize;
     fn get_nbr_locals(&self) -> usize;
     fn get_literal(&self, idx: usize) -> Option<&Literal>; // is this needed?
     fn push_literal(&mut self, literal: Literal) -> usize;
@@ -116,9 +118,10 @@ pub trait InnerGenCtxt: GenCtxt {
 struct BlockGenCtxt<'a> {
     pub outer: &'a mut dyn GenCtxt,
     pub args: IndexSet<String>,
-    pub locals: IndexSet<String>,
+    pub locals: IndexSet<(String, usize)>,
     pub literals: IndexSet<Literal>,
     pub body: Option<Vec<Bytecode>>,
+    pub scope: usize,
 }
 
 impl GenCtxt for BlockGenCtxt<'_> {
@@ -127,8 +130,13 @@ impl GenCtxt for BlockGenCtxt<'_> {
             "super" => "self",
             name => name,
         };
-        (self.locals.get_index_of(name))
+
+        // first check the locals in this scope, then check the locals that were inlined into the scope (i.e. have a different original scope)
+        // needed because when you inline a block, it can contain some PUSH_BLOCKs where we recompile the block, therefore scope info gets out of whack
+        // it's not a great solution, pretty slow. a better one would be that when we recompile the blocks, we adjust their bytecode directly which -should- circumvent the issue?
+        (self.locals.iter().position(|(local_name, local_scope)| { local_name == name && (*local_scope == self.current_scope()) }))
             .map(|idx| FoundVar::Local(0, idx as u8))
+            .or_else(|| self.locals.iter().position(|(local_name, _)| local_name == name).map(|idx| FoundVar::Local(0, idx as u8)))
             .or_else(|| (self.args.get_index_of(name)).map(|idx| FoundVar::Argument(0, idx as u8)))
             .or_else(|| {
                 self.outer.find_var(name).map(|found| match found {
@@ -149,6 +157,10 @@ impl GenCtxt for BlockGenCtxt<'_> {
 
     fn class_name(&self) -> &str {
         self.outer.class_name()
+    }
+
+    fn current_scope(&self) -> usize {
+        self.scope
     }
 }
 
@@ -175,8 +187,8 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
         idx
     }
 
-    fn push_local(&mut self, name: String) -> usize {
-        let (idx, _) = self.locals.insert_full(name);
+    fn push_local(&mut self, name: String, original_scope: usize) -> usize {
+        let (idx, _) = self.locals.insert_full((name, original_scope));
         idx
     }
 
@@ -310,6 +322,10 @@ impl GenCtxt for MethodGenCtxt<'_> {
     fn class_name(&self) -> &str {
         self.inner.class_name()
     }
+
+    fn current_scope(&self) -> usize {
+        self.inner.current_scope()
+    }
 }
 
 impl InnerGenCtxt for MethodGenCtxt<'_> {
@@ -334,8 +350,8 @@ impl InnerGenCtxt for MethodGenCtxt<'_> {
         self.inner.push_arg(name)
     }
 
-    fn push_local(&mut self, name: String) -> usize {
-        self.inner.push_local(name)
+    fn push_local(&mut self, name: String, original_scope: usize) -> usize {
+        self.inner.push_local(name, original_scope)
     }
 
     fn push_literal(&mut self, literal: Literal) -> usize {
@@ -572,6 +588,10 @@ impl GenCtxt for ClassGenCtxt<'_> {
     fn class_name(&self) -> &str {
         self.name.as_str()
     }
+
+    fn current_scope(&self) -> usize {
+        panic!("Asking for the current scope of a class, and not a block/method, makes little sense.")
+    }
 }
 
 fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Method> {
@@ -588,10 +608,11 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
             },
             locals: match &defn.body {
                 ast::MethodBody::Primitive => IndexSet::new(),
-                ast::MethodBody::Body { locals, .. } => locals.iter().cloned().collect(),
+                ast::MethodBody::Body { locals, .. } => locals.iter().cloned().map(|s| (s, 0)).collect(),
             },
             literals: IndexSet::new(),
             body: None,
+            scope: 0
         },
     };
 
@@ -629,7 +650,7 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
                     let locals = std::mem::take(&mut ctxt.inner.locals);
                     locals
                         .into_iter()
-                        .map(|name| ctxt.intern_symbol(&name))
+                        .map(|(name, _)| ctxt.intern_symbol(&name))
                         .collect()
                 };
                 let body = ctxt.inner.body.unwrap_or_default();
@@ -656,12 +677,16 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
 pub(crate) fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
     // println!("(system) compiling block ...");
 
+    let mut rand_thread = rand::thread_rng();
+    // let block_scope = outer.current_scope() + 1;
+    let block_scope = rand_thread.gen();
     let mut ctxt = BlockGenCtxt {
         outer,
         args: defn.parameters.iter().cloned().collect(),
-        locals: defn.locals.iter().cloned().collect(),
+        locals: defn.locals.iter().cloned().map(|s| (s, block_scope)).collect(),
         literals: IndexSet::new(),
         body: None,
+        scope: block_scope
     };
 
     let splitted = defn.body.exprs.split_last();
@@ -680,7 +705,7 @@ pub(crate) fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Optio
         let locals = std::mem::take(&mut ctxt.locals);
         locals
             .into_iter()
-            .map(|name| ctxt.intern_symbol(&name))
+            .map(|(name, _)| ctxt.intern_symbol(&name))
             .collect()
     };
     let literals = ctxt.literals.into_iter().collect();

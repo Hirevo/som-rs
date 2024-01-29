@@ -1,5 +1,4 @@
 use std::rc::Rc;
-use rand::distributions::Alphanumeric;
 use rand::Rng;
 use som_core::ast;
 use som_core::bytecode::Bytecode;
@@ -42,19 +41,17 @@ impl PrimMessageInliner for ast::Expression {
     fn inline_compiled_block(&self, ctxt: &mut dyn InnerGenCtxt, block: &BlockInfo) -> Option<()> {
         let nbr_locals_pre_inlining = ctxt.get_nbr_locals();
 
+        let mut rand_thread = rand::thread_rng();
+        let og_scope = rand_thread.gen(); // does this matter? should it be the exact same as the original compiled block? i'm thinking it's fine
         for block_local_intern_id in &block.locals {
-            let symbol_str= ctxt.lookup_symbol(*block_local_intern_id);
-            // TODO this is a very ugly, very temporary thing
-            // TODO but it is also hilarious though. I can't believe this works
-            let random_string: String = rand::thread_rng()
-                .sample_iter(&Alphanumeric)
-                .take(3)
-                .map(char::from)
-                .collect();
-            ctxt.push_local(String::from(symbol_str) + random_string.as_str());
+            let symbol_str = ctxt.lookup_symbol(*block_local_intern_id);
+            // ctxt.push_local(String::from(symbol_str), ctxt.current_scope() + 1);
+            ctxt.push_local(String::from(symbol_str), og_scope);
         }
 
-        let idx_start_inlining = ctxt.get_cur_instr_idx();
+        // dbg!(&block.body);
+
+        // let idx_start_inlining = ctxt.get_cur_instr_idx();
 
         // last is always ReturnLocal, so it gets ignored
         if let Some((_, body)) = block.body.split_last() {
@@ -94,8 +91,11 @@ impl PrimMessageInliner for ast::Expression {
                     Bytecode::PushBlock(block_idx) => {
                         match block.literals.get(*block_idx as usize)? {
                             Literal::Block(inner_block) => {
+                                // dbg!(&inner_block.ast_body);
+                                // dbg!(&inner_block.blk_info.body);
                                 let new_block = compile_block(ctxt.as_gen_ctxt(), &inner_block.ast_body)?;
                                 let idx = ctxt.push_literal(Literal::Block(Rc::from(new_block)));
+                                // dbg!(idx);
                                 ctxt.push_instr(Bytecode::PushBlock(idx as u8));
                             },
                             _ => panic!("PushBlock not actually pushing a block somehow")
@@ -153,14 +153,15 @@ impl PrimMessageInliner for ast::Expression {
                         // }
                         ctxt.push_instr(Bytecode::ReturnNonLocal)
                     },
-                    Bytecode::ReturnLocal => {},//panic!("Is that a thing? If so, just ignore it."),
-                    // For jumps, we just need to adjust their offsets based on when we started inlining the block. probably.
-                    Bytecode::Jump(idx) => ctxt.push_instr(Bytecode::Jump(idx + idx_start_inlining)),
-                    Bytecode::JumpBackward(idx) => ctxt.push_instr(Bytecode::JumpBackward(idx + idx_start_inlining)),
-                    Bytecode::JumpOnTruePop(idx) => ctxt.push_instr(Bytecode::JumpOnTruePop(idx + idx_start_inlining)),
-                    Bytecode::JumpOnFalsePop(idx) => ctxt.push_instr(Bytecode::JumpOnFalsePop(idx + idx_start_inlining)),
-                    Bytecode::JumpOnTrueTopNil(idx) => ctxt.push_instr(Bytecode::JumpOnTrueTopNil(idx + idx_start_inlining)),
-                    Bytecode::JumpOnFalseTopNil(idx) => ctxt.push_instr(Bytecode::JumpOnFalseTopNil(idx + idx_start_inlining)),
+                    Bytecode::ReturnLocal => {}, //panic!("Is that a thing? If so, just ignore it."),
+                    // todo: hmm... do we? if so, add these to the _ case i guess.
+                    // Bytecode::Jump(idx) => ctxt.push_instr(Bytecode::Jump(idx + idx_start_inlining)),
+                    Bytecode::Jump(idx) => ctxt.push_instr(Bytecode::Jump(*idx)),
+                    Bytecode::JumpBackward(idx) => ctxt.push_instr(Bytecode::JumpBackward(*idx)),
+                    Bytecode::JumpOnTruePop(idx) => ctxt.push_instr(Bytecode::JumpOnTruePop(*idx)),
+                    Bytecode::JumpOnFalsePop(idx) => ctxt.push_instr(Bytecode::JumpOnFalsePop(*idx)),
+                    Bytecode::JumpOnTrueTopNil(idx) => ctxt.push_instr(Bytecode::JumpOnTrueTopNil(*idx)),
+                    Bytecode::JumpOnFalseTopNil(idx) => ctxt.push_instr(Bytecode::JumpOnFalseTopNil(*idx)),
                     _ => ctxt.push_instr(*block_bc) // I *think* the rest are all fine..
                 }
             }
@@ -172,7 +173,7 @@ impl PrimMessageInliner for ast::Expression {
     fn inline_last_push_block_bc(&self, ctxt: &mut dyn InnerGenCtxt) -> Option<()> {
         let block1_idx = match ctxt.get_instructions().last()? {
             Bytecode::PushBlock(val) => *val,
-            _ => panic!("function expects last bytecode to be a block.")
+            _ => panic!("function expects last bytecode to be a PUSH_BLOCK.")
         };
         ctxt.pop_instr(); // removing the PUSH_BLOCK
 
@@ -183,7 +184,10 @@ impl PrimMessageInliner for ast::Expression {
         // shouldn't break anything, probably
         // ctxt.remove_literal(block_idx as usize);
 
-        self.inline_compiled_block(ctxt, cond_block_ref.as_ref().blk_info.as_ref())
+        match self.inline_compiled_block(ctxt, cond_block_ref.as_ref().blk_info.as_ref()) {
+            None => panic!("Inlining a compiled block failed!"),
+            _ => Some(())
+        }
     }
 
     fn inline_if_true_or_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, jump_type: JumpType) -> Option<()> {
