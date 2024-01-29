@@ -17,8 +17,6 @@ pub trait PrimMessageInliner {
     fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()>;
     fn inline_compiled_block(&self, ctxt: &mut dyn InnerGenCtxt, block: &BlockInfo) -> Option<()>;
     fn inline_last_push_block_bc(&self, ctxt: &mut dyn InnerGenCtxt) -> Option<()>;
-    // fn inline_expr(&self, ctxt: &mut dyn InnerGenCtxt, block: &ast::Expression) -> Option<()>;
-
     fn inline_if_true_or_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, jump_type: JumpType) -> Option<()>;
     fn inline_if_true_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, jump_type: JumpType) -> Option<()>;
     fn inline_while(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, jump_type: JumpType) -> Option<()>;
@@ -31,8 +29,8 @@ impl PrimMessageInliner for ast::Expression {
             "ifFalse:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnTrue),
             "ifTrue:ifFalse:" => self.inline_if_true_if_false(ctxt, message, JumpOnFalse),
             "ifFalse:ifTrue:" => self.inline_if_true_if_false(ctxt, message, JumpOnTrue),
-            // "whileTrue:" => self.inline_while(ctxt, message, JumpOnFalse),
-            // "whileFalse:" => self.inline_while(ctxt, message, JumpOnTrue),
+            "whileTrue:" => self.inline_while(ctxt, message, JumpOnFalse),
+            "whileFalse:" => self.inline_while(ctxt, message, JumpOnTrue),
             // TODO: [or, and]
             _ => None
         }
@@ -279,7 +277,7 @@ impl PrimMessageInliner for ast::Expression {
             _ => {}
         };
 
-        ctxt.push_instr(Bytecode::JumpBackward(ctxt.get_cur_instr_idx() - idx_before_condition));
+        ctxt.push_instr(Bytecode::JumpBackward(ctxt.get_cur_instr_idx() - idx_before_condition + 1));
         ctxt.backpatch_jump_to_current(cond_jump_idx);
         ctxt.push_instr(Bytecode::PushNil);
 
