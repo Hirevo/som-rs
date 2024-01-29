@@ -169,18 +169,17 @@ impl PrimMessageInliner for ast::Expression {
     }
 
     fn inline_last_push_block_bc(&self, ctxt: &mut dyn InnerGenCtxt) -> Option<()> {
-        let block1_idx = match ctxt.get_instructions().last()? {
+        let block_idx = match ctxt.get_instructions().last()? {
             Bytecode::PushBlock(val) => *val,
             _ => panic!("function expects last bytecode to be a PUSH_BLOCK.")
         };
         ctxt.pop_instr(); // removing the PUSH_BLOCK
 
-        let cond_block_ref = match ctxt.get_literal(block1_idx as usize)? {
+        let cond_block_ref = match ctxt.get_literal(block_idx as usize)? {
             Literal::Block(val) => val.clone(),
             _ => return None
         };
-        // shouldn't break anything, probably
-        // ctxt.remove_literal(block_idx as usize);
+        ctxt.remove_literal(block_idx as usize);
 
         match self.inline_compiled_block(ctxt, cond_block_ref.as_ref().blk_info.as_ref()) {
             None => panic!("Inlining a compiled block failed!"),
