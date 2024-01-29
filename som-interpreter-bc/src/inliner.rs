@@ -29,8 +29,8 @@ impl PrimMessageInliner for ast::Expression {
         match message.signature.as_str() {
             "ifTrue:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnFalse),
             "ifFalse:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnTrue),
-            // "ifTrue:ifFalse:" => self.inline_if_true_if_false(ctxt, message, JumpOnFalse),
-            // "ifFalse:ifTrue:" => self.inline_if_true_if_false(ctxt, message, JumpOnTrue),
+            "ifTrue:ifFalse:" => self.inline_if_true_if_false(ctxt, message, JumpOnFalse),
+            "ifFalse:ifTrue:" => self.inline_if_true_if_false(ctxt, message, JumpOnTrue),
             // "whileTrue:" => self.inline_while(ctxt, message, JumpOnFalse),
             // "whileFalse:" => self.inline_while(ctxt, message, JumpOnTrue),
             // TODO: [or, and]
@@ -42,7 +42,7 @@ impl PrimMessageInliner for ast::Expression {
         let nbr_locals_pre_inlining = ctxt.get_nbr_locals();
 
         let mut rand_thread = rand::thread_rng();
-        let og_scope = rand_thread.gen(); // does this matter? should it be the exact same as the original compiled block? i'm thinking it's fine
+        let og_scope = rand_thread.gen(); // does this matter? should it be the exact same as the original compiled block? i'm thinking it's fine like this?
         for block_local_intern_id in &block.locals {
             let symbol_str = ctxt.lookup_symbol(*block_local_intern_id);
             // ctxt.push_local(String::from(symbol_str), ctxt.current_scope() + 1);
