@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use som_core::ast;
 
 use crate::class::Class;
@@ -5,11 +6,17 @@ use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::{SOMRef, SOMWeakRef};
 
+#[derive(Clone)]
+pub enum MethodNode {
+    Generic(ast::MethodDef),
+    Cached(CachedMethodNode)
+}
+
 /// The kind of a class method.
 #[derive(Clone)]
 pub enum MethodKind {
     /// A user-defined method from the AST.
-    Defined(ast::MethodDef),
+    Defined(MethodNode),
     /// An interpreter primitive.
     Primitive(PrimitiveFn),
     /// A non-implemented primitive.
@@ -21,6 +28,14 @@ impl MethodKind {
     pub fn is_primitive(&self) -> bool {
         matches!(self, Self::Primitive(_))
     }
+}
+
+#[derive(Clone)]
+pub struct CachedMethodNode {
+    pub holder: SOMRef<Class>,
+    pub method: Rc<Method>,
+    _next: Rc<CachedMethodNode>,
+    // next in the inline cache
 }
 
 /// Represents a class method.
