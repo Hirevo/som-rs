@@ -47,7 +47,7 @@ benchmark-y1:
     - lz4 -d som-interpreter-bc.lz4 ./target/release/som-interpreter-bc
 
     # Run Benchmarks
-    - rebench --experiment="CI ID $CI_PIPELINE_ID" --branch="$CI_COMMIT_REF_NAME" -c rebench.conf m:yuria
+    - rebench --experiment="CI ID $CI_PIPELINE_ID" --branch="$CI_COMMIT_REF_NAME" -c rebench.conf
 
 report-completion:
   stage: benchmark-completion
