@@ -31,8 +31,8 @@ build-and-test-interpreters:
     - |
       sftp tmp-artifacts << EOF
         -mkdir incoming/${CI_PIPELINE_ID}/
-        put ${PROJECT_FOLDER}/som-interpreter-ast.lz4 incoming/${CI_PIPELINE_ID}/
-        put ${PROJECT_FOLDER}/som-interpreter-bc.lz4 incoming/${CI_PIPELINE_ID}/
+        put som-interpreter-ast.lz4 incoming/${CI_PIPELINE_ID}/
+        put som-interpreter-bc.lz4 incoming/${CI_PIPELINE_ID}/
       EOF
 
 benchmark-y1:
@@ -42,8 +42,9 @@ benchmark-y1:
     - sftp tmp-artifacts:incoming/${CI_PIPELINE_ID}/som-interpreter-ast.lz4
     - sftp tmp-artifacts:incoming/${CI_PIPELINE_ID}/som-interpreter-bc.lz4
 
-    - lz4 -d som-interpreter-ast.lz4 som-interpreter-ast
-    - lz4 -d som-interpreter-bc.lz4 som-interpreter-bc
+    # force because it already exists. which means this is possibly a very useless operation.
+    - lz4 -df som-interpreter-ast.lz4 som-interpreter-ast
+    - lz4 -df som-interpreter-bc.lz4 som-interpreter-bc
 
     # Run Benchmarks
     - rebench --experiment="CI ID $CI_PIPELINE_ID" --branch="$CI_COMMIT_REF_NAME" -c rebench.conf m:yuria
