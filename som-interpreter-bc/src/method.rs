@@ -133,7 +133,6 @@ impl fmt::Display for Method {
                         Bytecode::PushBlock(idx) => {
                             write!(f, "index: {}", idx)?;
                         }
-                        Bytecode::PushConstant0 | Bytecode::PushConstant1 | Bytecode::PushConstant2 => {}
                         Bytecode::PushConstant(idx) => {
                             write!(f, "index: {}, ", idx)?;
                             let constant = &env.literals[*idx as usize];
@@ -152,9 +151,6 @@ impl fmt::Display for Method {
                         Bytecode::PushGlobal(idx) => {
                             write!(f, "index: {}", idx)?;
                         }
-                        Bytecode::Push0 => {}
-                        Bytecode::Push1 => {}
-                        Bytecode::PushNil => {}
                         Bytecode::Pop => {}
                         Bytecode::PopLocal(up_idx, idx) => {
                             write!(f, "local: {}, context: {}", idx, up_idx)?;
@@ -165,16 +161,10 @@ impl fmt::Display for Method {
                         Bytecode::PopField(idx) => {
                             write!(f, "index: {}", idx)?;
                         }
-                        Bytecode::Send1(idx) |
-                        Bytecode::Send2(idx) |
-                        Bytecode::Send3(idx) |
-                        Bytecode::SendN(idx) => {
+                        Bytecode::Send(idx) => {
                             write!(f, "index: {}", idx)?;
                         }
-                        Bytecode::SuperSend1(idx) |
-                        Bytecode::SuperSend2(idx) |
-                        Bytecode::SuperSend3(idx) |
-                        Bytecode::SuperSendN(idx) => {
+                        Bytecode::SuperSend(idx) => {
                             write!(f, "index: {}", idx)?;
                         }
                         Bytecode::ReturnLocal => {}

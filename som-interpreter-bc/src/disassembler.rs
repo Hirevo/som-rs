@@ -25,6 +25,9 @@ fn disassemble_body(
         // print!("{padding} {0}", bytecode.padded_name());
 
         match bytecode {
+            Bytecode::Halt => {
+                println!();
+            }
             Bytecode::Dup => {
                 println!();
             }
@@ -59,15 +62,7 @@ fn disassemble_body(
                 disassemble_body(universe, class, level + 1, env);
                 env.pop();
             }
-            Bytecode::PushConstant0 | Bytecode::PushConstant1 | Bytecode::PushConstant2 | Bytecode::PushConstant(_) => {
-                let idx = match bytecode {
-                    Bytecode::PushConstant0 => 0,
-                    Bytecode::PushConstant1 => 1,
-                    Bytecode::PushConstant2 => 2,
-                    Bytecode::PushConstant(idx) => idx,
-                    _ => panic!("Unreachable.")
-                };
-
+            Bytecode::PushConstant(idx) => {
                 print!(" {idx}");
                 let Some(literal) = current.resolve_literal(idx) else {
                     println!(" (invalid constant)");
@@ -104,8 +99,7 @@ fn disassemble_body(
                 // };
                 // println!(" (`{0}`)", universe.lookup_symbol(argument));
             }
-            Bytecode::Send1(idx) | Bytecode::Send2(idx) | Bytecode::Send3(idx) | Bytecode::SendN(idx) |
-            Bytecode::SuperSend1(idx) | Bytecode::SuperSend2(idx) | Bytecode::SuperSend3(idx) | Bytecode::SuperSendN(idx) => {
+            Bytecode::Send(idx) | Bytecode::SuperSend(idx) => {
                 print!(" {idx}");
                 let Some(Literal::Symbol(signature)) = current.resolve_literal(idx) else {
                     println!(" (invalid signature)");
@@ -124,7 +118,6 @@ fn disassemble_body(
             Bytecode::JumpOnFalseTopNil(idx) | Bytecode::JumpOnTrueTopNil(idx) => {
                 println!("{}", idx);
             }
-            Bytecode::Push0 | Bytecode::Push1 | Bytecode::PushNil => {println!();}
         }
     }
 }

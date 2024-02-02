@@ -15,9 +15,6 @@ use crate::universe::Universe;
 use crate::value::Value;
 use crate::SOMRef;
 
-const INT_0: Value = Value::Integer(0);
-const INT_1: Value = Value::Integer(1);
-
 pub struct Interpreter {
     /// The interpreter's stack frames.
     pub frames: Vec<SOMRef<Frame>>,
@@ -71,6 +68,9 @@ impl Interpreter {
             frame.borrow_mut().bytecode_idx += 1;
 
             match bytecode {
+                Bytecode::Halt => {
+                    return Some(Value::Nil);
+                }
                 Bytecode::Dup => {
                     let value = self.stack.last().cloned().unwrap();
                     self.stack.push(value);
@@ -127,21 +127,6 @@ impl Interpreter {
                     let value = convert_literal(frame, literal).unwrap(); // TODO there may be a way to avoid converting the literal to a value?
                     self.stack.push(value);
                 }
-                Bytecode::PushConstant0 => {
-                    let literal = frame.borrow().lookup_constant(0).unwrap();
-                    let value = convert_literal(frame, literal).unwrap(); // duplication removable but see above to do, which may need to be handled first
-                    self.stack.push(value);
-                }
-                Bytecode::PushConstant1 => {
-                    let literal = frame.borrow().lookup_constant(1).unwrap();
-                    let value = convert_literal(frame, literal).unwrap();
-                    self.stack.push(value);
-                }
-                Bytecode::PushConstant2 => {
-                    let literal = frame.borrow().lookup_constant(2).unwrap();
-                    let value = convert_literal(frame, literal).unwrap();
-                    self.stack.push(value);
-                }
                 Bytecode::PushGlobal(idx) => {
                     let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
                     let symbol = match literal {
@@ -154,15 +139,6 @@ impl Interpreter {
                         let self_value = frame.borrow().get_self();
                         universe.unknown_global(self, self_value, symbol).unwrap();
                     }
-                }
-                Bytecode::Push0 => {
-                    self.stack.push(INT_0);
-                }
-                Bytecode::Push1 => {
-                    self.stack.push(INT_1);
-                }
-                Bytecode::PushNil => {
-                    self.stack.push(Value::Nil);
                 }
                 Bytecode::Pop => {
                     self.stack.pop();
@@ -213,29 +189,35 @@ impl Interpreter {
                         self_value.assign_local(idx as usize, value).unwrap();
                     }
                 }
-                Bytecode::Send1(idx) => {
-                    send(self, idx, Some(1), bytecode_idx, frame.clone(), universe);
+                Bytecode::Send(idx) => {
+                    let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
+                    let Literal::Symbol(symbol) = literal else {
+                        return None;
+                    };
+                    let signature = universe.lookup_symbol(symbol);
+                    let nb_params = nb_params(signature);
+                    let method = {
+                        let receiver = self.stack.iter().nth_back(nb_params)?;
+                        let receiver_class = receiver.class(universe);
+                        resolve_method(frame, &receiver_class, symbol, bytecode_idx)
+                    };
+
+                    do_send(self, universe, method, symbol, nb_params);
                 }
-                Bytecode::Send2(idx) => {
-                    send(self, idx, Some(2), bytecode_idx, frame.clone(), universe);
-                }
-                Bytecode::Send3(idx) => {
-                    send(self, idx, Some(3), bytecode_idx, frame.clone(), universe);
-                }
-                Bytecode::SendN(idx) => {
-                    send(self, idx, None, bytecode_idx, frame.clone(), universe);
-                }
-                Bytecode::SuperSend1(idx) => {
-                    super_send(self, idx, Some(1), bytecode_idx, frame.clone(), universe);
-                }
-                Bytecode::SuperSend2(idx) => {
-                    super_send(self, idx, Some(2), bytecode_idx, frame.clone(), universe);
-                }
-                Bytecode::SuperSend3(idx) => {
-                    super_send(self, idx, Some(3), bytecode_idx, frame.clone(), universe);
-                }
-                Bytecode::SuperSendN(idx) => {
-                    super_send(self, idx, None, bytecode_idx, frame.clone(), universe);
+                Bytecode::SuperSend(idx) => {
+                    let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
+                    let Literal::Symbol(symbol) = literal else {
+                        return None;
+                    };
+                    let signature = universe.lookup_symbol(symbol);
+                    let nb_params = nb_params(signature);
+                    let method = {
+                        let holder = frame.borrow().get_method_holder();
+                        let super_class = holder.borrow().super_class()?;
+                        resolve_method(frame, &super_class, symbol, bytecode_idx)
+                    };
+
+                    do_send(self, universe, method, symbol, nb_params);
                 },
                 Bytecode::ReturnLocal => {
                     let value = self.stack.pop().unwrap();
@@ -336,45 +318,6 @@ impl Interpreter {
                     }
                 },
             }
-        }
-
-        fn send(interpreter: &mut Interpreter, idx: u8, nb_params_opt: Option<usize>, bytecode_idx: usize, frame: Rc<RefCell<Frame>>, universe: &mut Universe) {
-            let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
-            let Literal::Symbol(symbol) = literal else {
-                panic!("Not a symbol");
-            };
-            let signature = universe.lookup_symbol(symbol);
-            let nb_params = match nb_params_opt {
-                Some(x) => x,
-                None => nb_params(signature)
-            };
-
-            let method = {
-                let receiver = interpreter.stack.iter().nth_back(nb_params).unwrap();
-                let receiver_class = receiver.class(universe);
-                resolve_method(&frame, &receiver_class, symbol, bytecode_idx)
-            };
-
-            do_send(interpreter, universe, method, symbol, nb_params);
-        }
-
-        fn super_send(interpreter: &mut Interpreter, idx: u8, nb_params_opt: Option<usize>, bytecode_idx: usize, frame: Rc<RefCell<Frame>>, universe: &mut Universe) {
-            let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
-            let Literal::Symbol(symbol) = literal else {
-                panic!("Not a symbol")
-            };
-            let signature = universe.lookup_symbol(symbol);
-            let nb_params = match nb_params_opt {
-                Some(x) => x,
-                None => nb_params(signature)
-            };
-            let method = {
-                let holder = frame.borrow().get_method_holder();
-                let super_class = holder.borrow().super_class().unwrap();
-                resolve_method(&frame, &super_class, symbol, bytecode_idx)
-            };
-
-            do_send(interpreter, universe, method, symbol, nb_params);
         }
 
         pub fn do_send(

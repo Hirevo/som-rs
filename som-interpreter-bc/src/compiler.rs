@@ -413,14 +413,9 @@ impl MethodCodegen for ast::Expression {
                     }
                     Some(FoundVar::Field(idx)) => ctxt.push_instr(Bytecode::PushField(idx)),
                     None => {
-                        match name.as_str() {
-                            "nil" => ctxt.push_instr(Bytecode::PushNil),
-                            _ => {
-                                let name = ctxt.intern_symbol(name);
-                                let idx = ctxt.push_literal(Literal::Symbol(name));
-                                ctxt.push_instr(Bytecode::PushGlobal(idx as u8));
-                            }
-                        }
+                        let name = ctxt.intern_symbol(name);
+                        let idx = ctxt.push_literal(Literal::Symbol(name));
+                        ctxt.push_instr(Bytecode::PushGlobal(idx as u8));
                     }
                 }
                 Some(())
@@ -457,28 +452,12 @@ impl MethodCodegen for ast::Expression {
                     .try_for_each(|value|
                         value.codegen(ctxt)
                     )?;
-
-                let nb_params = match message.signature.chars().nth(0) {
-                    Some(ch) if !ch.is_alphabetic() => 1,
-                    _ => message.signature.chars().filter(|ch| *ch == ':').count(),
-                };
-
                 let sym = ctxt.intern_symbol(message.signature.as_str());
                 let idx = ctxt.push_literal(Literal::Symbol(sym));
                 if super_send {
-                    match nb_params {
-                        1 => ctxt.push_instr(Bytecode::SuperSend1(idx as u8)),
-                        2 => ctxt.push_instr(Bytecode::SuperSend2(idx as u8)),
-                        3 => ctxt.push_instr(Bytecode::SuperSend3(idx as u8)),
-                        _ => ctxt.push_instr(Bytecode::SuperSendN(idx as u8))
-                    }
+                    ctxt.push_instr(Bytecode::SuperSend(idx as u8))
                 } else {
-                    match nb_params {
-                        1 => ctxt.push_instr(Bytecode::Send1(idx as u8)),
-                        2 => ctxt.push_instr(Bytecode::Send2(idx as u8)),
-                        3 => ctxt.push_instr(Bytecode::Send3(idx as u8)),
-                        _ => ctxt.push_instr(Bytecode::SendN(idx as u8))
-                    }
+                    ctxt.push_instr(Bytecode::Send(idx as u8))
                 }
                 Some(())
             }
@@ -492,9 +471,9 @@ impl MethodCodegen for ast::Expression {
                 let sym = ctxt.intern_symbol(message.op.as_str());
                 let idx = ctxt.push_literal(Literal::Symbol(sym));
                 if super_send {
-                    ctxt.push_instr(Bytecode::Send1(idx as u8));
+                    ctxt.push_instr(Bytecode::Send(idx as u8));
                 } else {
-                    ctxt.push_instr(Bytecode::Send1(idx as u8));
+                    ctxt.push_instr(Bytecode::Send(idx as u8));
                 }
                 Some(())
             }
@@ -527,20 +506,8 @@ impl MethodCodegen for ast::Expression {
                 }
 
                 let literal = convert_literal(ctxt, literal);
-
-                match literal {
-                    Literal::Integer(0) => ctxt.push_instr(Bytecode::Push0),
-                    Literal::Integer(1) => ctxt.push_instr(Bytecode::Push1),
-                    _ => {
-                        let idx = ctxt.push_literal(literal);
-                        match idx {
-                            0 => ctxt.push_instr(Bytecode::PushConstant0),
-                            1 => ctxt.push_instr(Bytecode::PushConstant1),
-                            2 => ctxt.push_instr(Bytecode::PushConstant2),
-                            _ => ctxt.push_instr(Bytecode::PushConstant(idx as u8))
-                        }
-                    }
-                }
+                let idx = ctxt.push_literal(literal);
+                ctxt.push_instr(Bytecode::PushConstant(idx as u8));
 
                 Some(())
             }

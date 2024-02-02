@@ -69,19 +69,12 @@ impl PrimMessageInliner for ast::Expression {
                     },
                     Bytecode::PushArgument(up_idx, idx) => ctxt.push_instr(Bytecode::PushArgument(*up_idx - 1, *idx)), // not 100% sure i need to adjust the up_idx there and for pop
                     Bytecode::PopArgument(up_idx, idx) => ctxt.push_instr(Bytecode::PopArgument(*up_idx - 1, *idx)),
-                    Bytecode::Send1(lit_idx) | Bytecode::Send2(lit_idx) |
-                    Bytecode::Send3(lit_idx) | Bytecode::SendN(lit_idx) => {
+                    Bytecode::Send(lit_idx) => {
                         match block.literals.get(*lit_idx as usize)? {
                             Literal::Symbol(interned) => {
                                 // does this push duplicate literals? I think it doesn't?
                                 let idx = ctxt.push_literal(Literal::Symbol(*interned));
-                                match block_bc {
-                                    Bytecode::Send1(_) => ctxt.push_instr(Bytecode::Send1(idx as u8)),
-                                    Bytecode::Send2(_) => ctxt.push_instr(Bytecode::Send2(idx as u8)),
-                                    Bytecode::Send3(_) => ctxt.push_instr(Bytecode::Send3(idx as u8)),
-                                    Bytecode::SendN(_) => ctxt.push_instr(Bytecode::SendN(idx as u8)),
-                                    _ => panic!("Unreachable branch")
-                                }
+                                ctxt.push_instr(Bytecode::Send(idx as u8));
                             },
                             _ => panic!("Unexpected block literal type, not yet implemented")
                         }
@@ -111,32 +104,7 @@ impl PrimMessageInliner for ast::Expression {
                         match block.literals.get(*constant_idx as usize)? {
                             lit => {
                                 let lit_idx = ctxt.push_literal(lit.clone());
-                                match lit_idx {
-                                    0 => ctxt.push_instr(Bytecode::PushConstant0),
-                                    1 => ctxt.push_instr(Bytecode::PushConstant1),
-                                    2 => ctxt.push_instr(Bytecode::PushConstant2),
-                                    _ => ctxt.push_instr(Bytecode::PushConstant(lit_idx as u8))
-                                }
-                            }
-                        };
-                    },
-                    Bytecode::PushConstant0 | Bytecode::PushConstant1 | Bytecode::PushConstant2 => {
-                        let constant_idx: usize = match block_bc {
-                            Bytecode::PushConstant0 => 0,
-                            Bytecode::PushConstant1 => 1,
-                            Bytecode::PushConstant2 => 2,
-                            _ => panic!("Unreachable")
-                        };
-
-                        match block.literals.get(constant_idx)? {
-                            lit => {
-                                let lit_idx = ctxt.push_literal(lit.clone());
-                                match lit_idx {
-                                    0 => ctxt.push_instr(Bytecode::PushConstant0),
-                                    1 => ctxt.push_instr(Bytecode::PushConstant1),
-                                    2 => ctxt.push_instr(Bytecode::PushConstant2),
-                                    _ => ctxt.push_instr(Bytecode::PushConstant(lit_idx as u8))
-                                }
+                                ctxt.push_instr(Bytecode::PushConstant(lit_idx as u8));
                             }
                         };
                     },
@@ -278,7 +246,11 @@ impl PrimMessageInliner for ast::Expression {
 
         ctxt.push_instr(Bytecode::JumpBackward(ctxt.get_cur_instr_idx() - idx_before_condition + 1));
         ctxt.backpatch_jump_to_current(cond_jump_idx);
-        ctxt.push_instr(Bytecode::PushNil);
+
+        // that's a PushNil with the specialized bytecode, which is prettier.
+        let name = ctxt.intern_symbol("nil");
+        let idx = ctxt.push_literal(Literal::Symbol(name));
+        ctxt.push_instr(Bytecode::PushGlobal(idx as u8));
 
         return Some(());
     }
