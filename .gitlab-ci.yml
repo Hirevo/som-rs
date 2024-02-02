@@ -1,0 +1,56 @@
+stages:
+  - build-test
+  - benchmark
+  - benchmark-completion
+
+#variables:
+
+before_script:
+  - git submodule update --init
+
+build-and-test-interpreters:
+  stage: build-test
+  tags: [yuria]
+  script:
+    # Setup
+    - cargo clean
+    - cargo build --release
+
+    # Unit Tests
+#    - PYTHONPATH=src python3 -m pytest
+#    - ./som.sh -cp Smalltalk TestSuite/TestHarness.som
+
+    # Interpreter
+#    - $RPYTHON --batch src/main_rpython.py
+#    - ./som-bc-interp -cp Smalltalk TestSuite/TestHarness.som
+
+    # Package and Upload
+    - lz4 ./target/release/som-interpreter-ast som-interpreter-ast.lz4
+    - lz4 ./target/release/som-interpreter-bc som-interpreter-bc.lz4
+
+    - |
+      sftp tmp-artifacts << EOF
+        -mkdir incoming/${CI_PIPELINE_ID}/
+        put som-interpreter-ast.lz4 incoming/${CI_PIPELINE_ID}/
+        put som-interpreter-bc.lz4 incoming/${CI_PIPELINE_ID}/
+      EOF
+
+benchmark-y1:
+  stage: benchmark
+  tags: [yuria]
+  script:
+    - sftp tmp-artifacts:incoming/${CI_PIPELINE_ID}/som-interpreter-ast.lz4
+    - sftp tmp-artifacts:incoming/${CI_PIPELINE_ID}/som-interpreter-bc.lz4
+
+    - mkdir -p ./target/release
+    - lz4 -d som-interpreter-ast.lz4 ./target/release/som-interpreter-ast
+    - lz4 -d som-interpreter-bc.lz4 ./target/release/som-interpreter-bc
+
+    # Run Benchmarks
+    - rebench --experiment="CI ID $CI_PIPELINE_ID" --branch="$CI_COMMIT_REF_NAME" -c rebench.conf
+
+report-completion:
+  stage: benchmark-completion
+  tags: [yuria]
+  script:
+    - rebench --experiment="CI ID $CI_PIPELINE_ID" --report-completion rebench.conf
