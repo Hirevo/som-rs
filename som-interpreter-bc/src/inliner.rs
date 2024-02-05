@@ -6,6 +6,7 @@ use crate::block::{BlockInfo};
 use crate::compiler::{compile_block, InnerGenCtxt, Literal};
 use crate::compiler::MethodCodegen;
 use crate::inliner::JumpType::{JumpOnFalse, JumpOnTrue};
+use crate::inliner::OrAndChoice::{Or, And};
 
 pub enum JumpType {
     JumpOnFalse,
@@ -37,9 +38,9 @@ impl PrimMessageInliner for ast::Expression {
             "ifFalse:ifTrue:" => self.inline_if_true_if_false(ctxt, message, JumpOnTrue),
             "whileTrue:" => self.inline_while(ctxt, message, JumpOnFalse),
             "whileFalse:" => self.inline_while(ctxt, message, JumpOnTrue),
-            "or:" => self.inline_or_and(ctxt, message, OrAndChoice::Or),
-            "and:" => self.inline_or_and(ctxt, message, OrAndChoice::And),
-            // TODO: to:do
+            "or:" => self.inline_or_and(ctxt, message, Or),
+            "and:" => self.inline_or_and(ctxt, message, And),
+            // TODO: to:do, maybe others i'm forgetting
             _ => None
         }
     }
