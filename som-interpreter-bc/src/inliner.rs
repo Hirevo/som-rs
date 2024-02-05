@@ -12,6 +12,11 @@ pub enum JumpType {
     JumpOnTrue
 }
 
+pub enum OrAndChoice {
+    Or,
+    And
+}
+
 // TODO some of those should return Result types and throw errors instead, most likely.
 pub trait PrimMessageInliner {
     fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message) -> Option<()>;
@@ -20,6 +25,7 @@ pub trait PrimMessageInliner {
     fn inline_if_true_or_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, jump_type: JumpType) -> Option<()>;
     fn inline_if_true_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, jump_type: JumpType) -> Option<()>;
     fn inline_while(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, jump_type: JumpType) -> Option<()>;
+    fn inline_or_and(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, or_and_choice: OrAndChoice) -> Option<()>;
 }
 
 impl PrimMessageInliner for ast::Expression {
@@ -31,7 +37,9 @@ impl PrimMessageInliner for ast::Expression {
             "ifFalse:ifTrue:" => self.inline_if_true_if_false(ctxt, message, JumpOnTrue),
             "whileTrue:" => self.inline_while(ctxt, message, JumpOnFalse),
             "whileFalse:" => self.inline_while(ctxt, message, JumpOnTrue),
-            // TODO: [or, and]
+            "or:" => self.inline_or_and(ctxt, message, OrAndChoice::Or),
+            "and:" => self.inline_or_and(ctxt, message, OrAndChoice::And),
+            // TODO: to:do
             _ => None
         }
     }
@@ -43,13 +51,8 @@ impl PrimMessageInliner for ast::Expression {
         let og_scope = rand_thread.gen(); // does this matter? should it be the exact same as the original compiled block? i'm thinking it's fine like this?
         for block_local_intern_id in &block.locals {
             let symbol_str = ctxt.lookup_symbol(*block_local_intern_id);
-            // ctxt.push_local(String::from(symbol_str), ctxt.current_scope() + 1);
             ctxt.push_local(String::from(symbol_str), og_scope);
         }
-
-        // dbg!(&block.body);
-
-        // let idx_start_inlining = ctxt.get_cur_instr_idx();
 
         // last is always ReturnLocal, so it gets ignored
         if let Some((_, body)) = block.body.split_last() {
@@ -82,11 +85,8 @@ impl PrimMessageInliner for ast::Expression {
                     Bytecode::PushBlock(block_idx) => {
                         match block.literals.get(*block_idx as usize)? {
                             Literal::Block(inner_block) => {
-                                // dbg!(&inner_block.ast_body);
-                                // dbg!(&inner_block.blk_info.body);
                                 let new_block = compile_block(ctxt.as_gen_ctxt(), &inner_block.ast_body)?;
                                 let idx = ctxt.push_literal(Literal::Block(Rc::from(new_block)));
-                                // dbg!(idx);
                                 ctxt.push_instr(Bytecode::PushBlock(idx as u8));
                             },
                             _ => panic!("PushBlock not actually pushing a block somehow")
@@ -111,7 +111,7 @@ impl PrimMessageInliner for ast::Expression {
                     Bytecode::ReturnNonLocal => {
                         // TODO; if the new context level is 0 (check prev bytecode emitted?), gotta emit a RETURNLOCAL instead!
                         // as far as i understand... this still works? and is just slower? TODO fix though obviously
-                        // dbg!("wow");
+
                         // dbg!(&ctxt.get_instructions().last());
                         // match ctxt.get_instructions().last().unwrap() {
                         //     Bytecode::PushGlobal(_) => ctxt.push_instr(Bytecode::ReturnLocal),
@@ -119,7 +119,7 @@ impl PrimMessageInliner for ast::Expression {
                         // }
                         ctxt.push_instr(Bytecode::ReturnNonLocal)
                     },
-                    Bytecode::ReturnLocal => {}, //panic!("Is that a thing? If so, just ignore it."),
+                    Bytecode::ReturnLocal => {},
                     // todo: hmm... do we? if so, add these to the _ case i guess.
                     // Bytecode::Jump(idx) => ctxt.push_instr(Bytecode::Jump(idx + idx_start_inlining)),
                     Bytecode::Jump(idx) => ctxt.push_instr(Bytecode::Jump(*idx)),
@@ -179,7 +179,7 @@ impl PrimMessageInliner for ast::Expression {
 //         self.inline_expr(ctxt, message.values.get(0)?);
         ctxt.backpatch_jump_to_current(jump_idx);
 
-        return Some(());
+        Some(())
     }
 
     fn inline_if_true_if_false(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, jump_type: JumpType) -> Option<()> {
@@ -213,7 +213,7 @@ impl PrimMessageInliner for ast::Expression {
 
         ctxt.backpatch_jump_to_current(middle_jump_idx);
 
-        return Some(());
+        Some(())
     }
 
     fn inline_while(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, jump_type: JumpType) -> Option<()> {
@@ -252,6 +252,38 @@ impl PrimMessageInliner for ast::Expression {
         let idx = ctxt.push_literal(Literal::Symbol(name));
         ctxt.push_instr(Bytecode::PushGlobal(idx as u8));
 
-        return Some(());
+        Some(())
+    }
+
+    fn inline_or_and(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message, or_and_choice: OrAndChoice) -> Option<()> {
+        if message.values.len() != 1 || !matches!(message.values.get(0)?, ast::Expression::Block(_)) {
+            return None;
+        }
+
+        let skip_cond_jump_idx = ctxt.get_cur_instr_idx();
+
+        match or_and_choice {
+            OrAndChoice::Or => ctxt.push_instr(Bytecode::JumpOnTrueTopNil(0)),
+            OrAndChoice::And => ctxt.push_instr(Bytecode::JumpOnFalseTopNil(0))
+        }
+
+        message.values.get(0)?.codegen(ctxt)?;
+        self.inline_last_push_block_bc(ctxt);
+
+        let skip_return_true_idx = ctxt.get_cur_instr_idx();
+        ctxt.push_instr(Bytecode::Jump(0));
+
+        ctxt.backpatch_jump_to_current(skip_cond_jump_idx);
+
+        let name = match or_and_choice {
+            OrAndChoice::Or => ctxt.intern_symbol("true"),
+            OrAndChoice::And => ctxt.intern_symbol("false")
+        };
+        let idx = ctxt.push_literal(Literal::Symbol(name));
+        ctxt.push_instr(Bytecode::PushGlobal(idx as u8));
+
+        ctxt.backpatch_jump_to_current(skip_return_true_idx);
+
+        Some(())
     }
 }
