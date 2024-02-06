@@ -38,7 +38,7 @@ impl PrimMessageInliner for ast::Expression {
             "ifFalse:ifTrue:" => self.inline_if_true_if_false(ctxt, message, JumpOnTrue),
             "whileTrue:" => self.inline_while(ctxt, message, JumpOnFalse),
             "whileFalse:" => self.inline_while(ctxt, message, JumpOnTrue),
-            "or:" => self.inline_or_and(ctxt, message, Or),
+            // "or:" => self.inline_or_and(ctxt, message, Or),
             // "and:" => self.inline_or_and(ctxt, message, And),
             // TODO: to:do, maybe others i'm forgetting
             _ => None
@@ -264,8 +264,8 @@ impl PrimMessageInliner for ast::Expression {
         let skip_cond_jump_idx = ctxt.get_cur_instr_idx();
 
         match or_and_choice {
-            OrAndChoice::Or => ctxt.push_instr(Bytecode::JumpOnTrueTopNil(0)),
-            OrAndChoice::And => ctxt.push_instr(Bytecode::JumpOnFalseTopNil(0))
+            Or => ctxt.push_instr(Bytecode::JumpOnTrueTopNil(0)),
+            And => ctxt.push_instr(Bytecode::JumpOnFalseTopNil(0))
         }
 
         message.values.get(0)?.codegen(ctxt)?;
@@ -277,8 +277,8 @@ impl PrimMessageInliner for ast::Expression {
         ctxt.backpatch_jump_to_current(skip_cond_jump_idx);
 
         let name = match or_and_choice {
-            OrAndChoice::Or => ctxt.intern_symbol("true"),
-            OrAndChoice::And => ctxt.intern_symbol("false")
+            Or => ctxt.intern_symbol("true"),
+            And => ctxt.intern_symbol("false")
         };
         let idx = ctxt.push_literal(Literal::Symbol(name));
         ctxt.push_instr(Bytecode::PushGlobal(idx as u8));
