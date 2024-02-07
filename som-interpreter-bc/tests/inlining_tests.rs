@@ -202,3 +202,41 @@ fn or_and_inlining_ok() {
         Bytecode::ReturnNonLocal
     ]);
 }
+
+#[test]
+fn inlining_pyramid() {
+    let class_txt = "Foo = ( run = (
+        | a b c d e f g |
+        ^ (a ifTrue: [b ifTrue: [c ifTrue: [d ifTrue: [e ifTrue: [f ifTrue: [g]]]]]])
+    ))
+    ";
+
+    let class_txt2 = "Foo = ( run = (
+        | a |
+        ^ (a ifTrue: [| b | b ifTrue: [| c | c ifTrue: [| d | d ifTrue: [| e | e ifTrue: [| f | f ifTrue: [| g | g]]]]]])
+    ))
+    ";
+
+    let bytecodes = get_bytecodes_from_method(class_txt, "run");
+    let bytecodes2 = get_bytecodes_from_method(class_txt2, "run");
+
+    let expected_bc = &[
+        Bytecode::PushLocal(0, 0),
+        Bytecode::JumpOnFalseTopNil(12),
+        Bytecode::PushLocal(0, 1),
+        Bytecode::JumpOnFalseTopNil(10),
+        Bytecode::PushLocal(0, 2),
+        Bytecode::JumpOnFalseTopNil(8),
+        Bytecode::PushLocal(0, 3),
+        Bytecode::JumpOnFalseTopNil(6),
+        Bytecode::PushLocal(0, 4),
+        Bytecode::JumpOnFalseTopNil(4),
+        Bytecode::PushLocal(0, 5),
+        Bytecode::JumpOnFalseTopNil(2),
+        Bytecode::PushLocal(0, 6),
+        Bytecode::ReturnNonLocal
+    ];
+
+    expect_bytecode_sequence(&bytecodes, expected_bc);
+    expect_bytecode_sequence(&bytecodes2, expected_bc);
+}
