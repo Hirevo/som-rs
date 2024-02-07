@@ -170,4 +170,35 @@ fn while_true_false_inlining_ok() {
     ])
 }
 
-// TODO or, and
+#[test]
+fn or_and_inlining_ok() {
+    let class_txt = "Foo = ( run = (
+        ^ (true or: [ false ])
+    ))
+    ";
+
+    let bytecodes = get_bytecodes_from_method(class_txt, "run");
+    expect_bytecode_sequence(&bytecodes, &[
+        Bytecode::PushGlobal(0),
+        Bytecode::JumpOnTruePop(3),
+        Bytecode::PushGlobal(1),
+        Bytecode::Jump(2),
+        Bytecode::PushGlobal(0),
+        Bytecode::ReturnNonLocal
+    ]);
+
+    let class_txt2 = "Foo = ( run = (
+        ^ (true and: [ false ])
+    ))
+    ";
+
+    let bytecodes = get_bytecodes_from_method(class_txt2, "run");
+    expect_bytecode_sequence(&bytecodes, &[
+        Bytecode::PushGlobal(0),
+        Bytecode::JumpOnFalsePop(3),
+        Bytecode::PushGlobal(1),
+        Bytecode::Jump(2),
+        Bytecode::PushGlobal(1),
+        Bytecode::ReturnNonLocal
+    ]);
+}

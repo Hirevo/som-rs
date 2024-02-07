@@ -38,8 +38,8 @@ impl PrimMessageInliner for ast::Expression {
             "ifFalse:ifTrue:" => self.inline_if_true_if_false(ctxt, message, JumpOnTrue),
             "whileTrue:" => self.inline_while(ctxt, message, JumpOnFalse),
             "whileFalse:" => self.inline_while(ctxt, message, JumpOnTrue),
-            // "or:" => self.inline_or_and(ctxt, message, Or),
-            // "and:" => self.inline_or_and(ctxt, message, And),
+            "or:" => self.inline_or_and(ctxt, message, Or),
+            "and:" => self.inline_or_and(ctxt, message, And),
             // TODO: to:do, maybe others i'm forgetting
             _ => None
         }
@@ -264,8 +264,8 @@ impl PrimMessageInliner for ast::Expression {
         let skip_cond_jump_idx = ctxt.get_cur_instr_idx();
 
         match or_and_choice {
-            Or => ctxt.push_instr(Bytecode::JumpOnTrueTopNil(0)),
-            And => ctxt.push_instr(Bytecode::JumpOnFalseTopNil(0))
+            Or => ctxt.push_instr(Bytecode::JumpOnTruePop(0)),
+            And => ctxt.push_instr(Bytecode::JumpOnFalsePop(0))
         }
 
         message.values.get(0)?.codegen(ctxt)?;
