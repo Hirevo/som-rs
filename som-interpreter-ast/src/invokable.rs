@@ -6,7 +6,7 @@ use crate::block::Block;
 use crate::evaluate::Evaluate;
 use crate::frame::Frame;
 use crate::frame::FrameKind;
-use crate::method::{CachedMethodNode, Method, MethodKind, MethodNode};
+use crate::method::{Method, MethodKind};
 use crate::universe::Universe;
 use crate::value::Value;
 use crate::SOMRef;
@@ -26,45 +26,8 @@ pub enum Return {
 
 /// The trait for invoking methods and primitives.
 pub trait Invoke {
-    /// Invoke within() the given universe and with the given arguments.
+    /// Invoke within the given universe and with the given arguments.
     fn invoke(&self, universe: &mut Universe, args: Vec<Value>) -> Return;
-}
-
-impl Invoke for MethodNode {
-    fn invoke(&self, universe: &mut Universe, args: Vec<Value>) -> Return {
-        match self {
-            MethodNode::Generic(method_def) => method_def.invoke(universe, args),
-            MethodNode::Cached(cached_method) => cached_method.invoke(universe, args)
-        }
-    }
-}
-
-impl Invoke for CachedMethodNode {
-    fn invoke(&self, universe: &mut Universe, args: Vec<Value>) -> Return {
-        let (self_value, params) = {
-            let mut iter = args.into_iter();
-            let receiver = match iter.next() {
-                Some(receiver) => receiver,
-                None => {
-                    return Return::Exception("missing receiver for invocation".to_string())
-                }
-            };
-            (receiver, iter.collect::<Vec<_>>())
-        };
-        if self_value.class(universe).as_ptr() != self.holder.as_ptr() {
-            todo!("should be replaced with a generic dispatch node instead (inline caching is only one element at the moment")
-        }
-        
-        let signature = universe.intern_symbol(&self.method.signature);
-        universe.with_frame(
-            FrameKind::Method {
-                holder: self.holder.clone(),
-                signature,
-                self_value,
-            },
-            |universe| self.method.invoke(universe, params),
-        )
-    }
 }
 
 impl Invoke for Method {
@@ -99,7 +62,6 @@ impl Invoke for Method {
                     },
                     |universe| method.invoke(universe, params),
                 )
-                // TODO self.replace_with_cached_node_yaddi_yadda()
             }
             MethodKind::Primitive(func) => func(universe, args),
             MethodKind::NotImplemented(name) => {
