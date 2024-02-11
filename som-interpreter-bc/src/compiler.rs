@@ -281,16 +281,16 @@ impl MethodCodegen for ast::Expression {
                 let idx = ctxt.push_literal(Literal::Symbol(sym));
                 if super_send {
                     match nb_params {
-                        1 => ctxt.push_instr(Bytecode::SuperSend1(idx as u8)), // TODO: are those supersends all actually used in practice, really?
-                        2 => ctxt.push_instr(Bytecode::SuperSend2(idx as u8)),
-                        3 => ctxt.push_instr(Bytecode::SuperSend3(idx as u8)),
+                        0 => ctxt.push_instr(Bytecode::SuperSend1(idx as u8)), // TODO: are those supersends all actually used in practice, really?
+                        1 => ctxt.push_instr(Bytecode::SuperSend2(idx as u8)),
+                        2 => ctxt.push_instr(Bytecode::SuperSend3(idx as u8)),
                         _ => ctxt.push_instr(Bytecode::SuperSendN(idx as u8))
                     }
                 } else {
                     match nb_params {
-                        1 => ctxt.push_instr(Bytecode::Send1(idx as u8)),
-                        2 => ctxt.push_instr(Bytecode::Send2(idx as u8)),
-                        3 => ctxt.push_instr(Bytecode::Send3(idx as u8)),
+                        0 => ctxt.push_instr(Bytecode::Send1(idx as u8)),
+                        1 => ctxt.push_instr(Bytecode::Send2(idx as u8)),
+                        2 => ctxt.push_instr(Bytecode::Send3(idx as u8)),
                         _ => ctxt.push_instr(Bytecode::SendN(idx as u8))
                     }
                 }

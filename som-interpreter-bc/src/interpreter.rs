@@ -261,25 +261,25 @@ impl Interpreter {
                     }
                 }
                 Bytecode::Send1(idx) => {
-                    send!{self, universe, frame, idx, Some(1), bytecode_idx}
+                    send!{self, universe, frame, idx, Some(0), bytecode_idx} // Send1 => receiver + 0 args, so we pass Some(0)
                 }
                 Bytecode::Send2(idx) => {
-                    send!{self, universe, frame, idx, Some(2), bytecode_idx}
+                    send!{self, universe, frame, idx, Some(1), bytecode_idx}
                 }
                 Bytecode::Send3(idx) => {
-                    send!{self, universe, frame, idx, Some(3), bytecode_idx}
+                    send!{self, universe, frame, idx, Some(2), bytecode_idx}
                 }
                 Bytecode::SendN(idx) => {
                     send!{self, universe, frame, idx, None, bytecode_idx}
                 }
                 Bytecode::SuperSend1(idx) => {
-                    super_send!{self, universe, frame, idx, Some(1), bytecode_idx}
+                    super_send!{self, universe, frame, idx, Some(0), bytecode_idx}
                 }
                 Bytecode::SuperSend2(idx) => {
-                    super_send!{self, universe, frame, idx, Some(2), bytecode_idx}
+                    super_send!{self, universe, frame, idx, Some(1), bytecode_idx}
                 }
                 Bytecode::SuperSend3(idx) => {
-                    super_send!{self, universe, frame, idx, Some(3), bytecode_idx}
+                    super_send!{self, universe, frame, idx, Some(2), bytecode_idx}
                 }
                 Bytecode::SuperSendN(idx) => {
                     super_send!{self, universe, frame, idx, None, bytecode_idx}
