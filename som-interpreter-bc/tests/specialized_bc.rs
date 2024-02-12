@@ -61,21 +61,42 @@ fn push_0_1_nil_bytecodes() {
     ";
 
     let bytecodes = get_bytecodes_from_method(class_txt, "run");
-
-    // TODO i want to remove those redundant ops, modify parser for that
-    dbg!(&bytecodes);
     expect_bytecode_sequence(&bytecodes, &[
         Push0,
-        Dup,
         PopLocal(0, 0),
-        Pop,
         Push1,
-        Dup,
         PopLocal(0, 1),
-        Pop,
         PushNil,
-        Dup,
+        PopLocal(0, 2)
+    ]);
+}
+
+#[test]
+fn push_constant_bytecodes() {
+    let class_txt = "Foo = ( run = (
+        | a b c d e f |
+        a := 'abc'.
+        b := 'def'.
+        c := 'ghi'.
+        d := 'abc'.
+        e := 'def'.
+        f := 'ghi'.
+    ))
+    ";
+
+    let bytecodes = get_bytecodes_from_method(class_txt, "run");
+    expect_bytecode_sequence(&bytecodes, &[
+        PushConstant0,
+        PopLocal(0, 0),
+        PushConstant1,
+        PopLocal(0, 1),
+        PushConstant2,
         PopLocal(0, 2),
-        Pop,
+        PushConstant0,
+        PopLocal(0, 3),
+        PushConstant1,
+        PopLocal(0, 4),
+        PushConstant2,
+        PopLocal(0, 5)
     ]);
 }

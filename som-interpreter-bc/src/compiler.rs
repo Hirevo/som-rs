@@ -100,6 +100,7 @@ trait InnerGenCtxt: GenCtxt {
     fn push_arg(&mut self, name: String) -> usize;
     fn push_local(&mut self, name: String) -> usize;
     fn push_literal(&mut self, literal: Literal) -> usize;
+    fn remove_dup_popx_pop_sequences(&mut self);
 }
 
 struct BlockGenCtxt<'a> {
@@ -161,6 +162,36 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
         let (idx, _) = self.literals.insert_full(literal);
         idx
     }
+
+    fn remove_dup_popx_pop_sequences(&mut self) {
+        if self.body.is_none() || self.body.as_ref().unwrap().len() < 3 {
+            return;
+        }
+
+        let mut indices_to_remove: Vec<usize> = vec![];
+
+        for (idx, bytecode_win) in self.body.as_ref().unwrap().windows(3).enumerate() {
+            if matches!(bytecode_win[0], Bytecode::Dup) &&
+                matches!(bytecode_win[1], Bytecode::PopField(..) | Bytecode::PopLocal(..) | Bytecode::PopArgument(..)) &&
+                matches!(bytecode_win[2], Bytecode::Pop) {
+                indices_to_remove.push(idx);
+                indices_to_remove.push(idx + 2);
+            }
+        }
+
+        if indices_to_remove.is_empty() {
+            return;
+        }
+
+        self.body = Some(self.body.as_ref().unwrap().iter().enumerate()
+            .filter_map(|(idx, bc)|
+                if indices_to_remove.contains(&idx) {
+                    None
+                } else {
+                    Some(bc.clone())
+                }
+            ).collect::<Vec<Bytecode>>());
+    }
 }
 
 struct MethodGenCtxt<'a> {
@@ -203,6 +234,10 @@ impl InnerGenCtxt for MethodGenCtxt<'_> {
 
     fn push_literal(&mut self, literal: Literal) -> usize {
         self.inner.push_literal(literal)
+    }
+
+    fn remove_dup_popx_pop_sequences(&mut self) {
+        self.inner.remove_dup_popx_pop_sequences()
     }
 }
 
@@ -438,6 +473,7 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
             ctxt.push_instr(Bytecode::ReturnLocal);
         }
     }
+    ctxt.remove_dup_popx_pop_sequences();
 
     let method = Method {
         kind: match &defn.body {
