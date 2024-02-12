@@ -10,7 +10,7 @@ before_script:
 
 build-and-test-interpreters:
   stage: build-test
-  tags: [yuria]
+  tags: [yuria2]
   script:
     # Setup
     - cargo clean
@@ -37,9 +37,9 @@ build-and-test-interpreters:
         put som-interpreter-bc.lz4 incoming/${CI_PIPELINE_ID}/
       EOF
 
-benchmark-y1:
+benchmark-y2:
   stage: benchmark
-  tags: [yuria]
+  tags: [yuria2]
   script:
     - sftp tmp-artifacts:incoming/${CI_PIPELINE_ID}/som-interpreter-ast.lz4
     - sftp tmp-artifacts:incoming/${CI_PIPELINE_ID}/som-interpreter-bc.lz4
@@ -53,7 +53,7 @@ benchmark-y1:
 
 report-completion:
   stage: benchmark-completion
-  tags: [yuria]
+  tags: [yuria2]
   script:
     - rebench --experiment="CI ID $CI_PIPELINE_ID" --report-completion rebench.conf
 
