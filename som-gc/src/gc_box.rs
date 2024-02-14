@@ -1,15 +1,11 @@
 use std::cell::Cell;
 use std::ops::{Deref, DerefMut};
-use std::ptr::NonNull;
-
-use crate::Trace;
 
 /// Represents a value, as it is stored within the GC.
 #[repr(C)]
 pub(crate) struct GcBox<T: ?Sized> {
     /// Pointer to next value in the GC chain.  
     pub(crate) marked: Cell<bool>,
-    pub(crate) next: Option<NonNull<GcBox<dyn Trace + 'static>>>,
     pub(crate) value: T,
 }
 
@@ -19,7 +15,6 @@ impl<T> GcBox<T> {
     pub fn new(value: T) -> Self {
         Self {
             marked: Cell::new(false),
-            next: None,
             value,
         }
     }
@@ -50,7 +45,6 @@ impl<T: Default> Default for GcBox<T> {
     fn default() -> Self {
         Self {
             marked: Cell::new(false),
-            next: None,
             value: T::default(),
         }
     }
