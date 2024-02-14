@@ -18,7 +18,7 @@ pub struct BlockInfo {
     pub literals: Vec<Literal>,
     pub body: Vec<Bytecode>,
     pub nb_params: usize,
-    pub inline_cache: RefCell<Vec<Option<(*const Class, Gc<Method>)>>>,
+    pub inline_cache: RefCell<Vec<Option<(*const RefCell<Class>, Gc<Method>)>>>,
 }
 
 /// Represents an executable block.
