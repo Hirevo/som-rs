@@ -19,7 +19,7 @@ pub struct MethodEnv {
     pub locals: Vec<Interned>,
     pub literals: Vec<Literal>,
     pub body: Vec<Bytecode>,
-    pub inline_cache: RefCell<Vec<Option<(*const Class, Gc<Method>)>>>,
+    pub inline_cache: RefCell<Vec<Option<(*const RefCell<Class>, Gc<Method>)>>>,
 }
 
 /// The kind of a class method.

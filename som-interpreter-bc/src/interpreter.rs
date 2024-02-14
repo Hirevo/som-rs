@@ -448,14 +448,12 @@ impl Interpreter {
                     let maybe_found = unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
 
                     match maybe_found {
-                        Some((receiver, method)) if *receiver == RefCell::as_ptr(&class) => {
+                        Some((receiver, method)) if *receiver == Gc::as_ptr(class) => {
                             Some(Gc::clone(method))
                         }
                         place @ None => {
                             let found = class.borrow().lookup_method(signature);
-                            *place = found
-                                .clone()
-                                .map(|method| (class.as_ptr() as *const _, method));
+                            *place = found.clone().map(|method| (Gc::as_ptr(class), method));
                             found
                         }
                         _ => class.borrow().lookup_method(signature),
@@ -471,14 +469,12 @@ impl Interpreter {
                         let maybe_found = unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
 
                         match maybe_found {
-                            Some((receiver, method)) if *receiver == RefCell::as_ptr(&class) => {
+                            Some((receiver, method)) if *receiver == Gc::as_ptr(class) => {
                                 Some(Gc::clone(method))
                             }
                             place @ None => {
                                 let found = class.borrow().lookup_method(signature);
-                                *place = found
-                                    .clone()
-                                    .map(|method| (class.as_ptr() as *const _, method));
+                                *place = found.clone().map(|method| (Gc::as_ptr(class), method));
                                 found
                             }
                             _ => class.borrow().lookup_method(signature),
