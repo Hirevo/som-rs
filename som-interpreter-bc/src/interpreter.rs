@@ -1,8 +1,8 @@
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::time::Instant;
 
 use som_core::bytecode::Bytecode;
+use som_gc::{Gc, GcHeap, Trace};
 
 use crate::block::Block;
 use crate::class::Class;
@@ -23,6 +23,14 @@ pub struct Interpreter {
     pub start_time: Instant,
 }
 
+impl Trace for Interpreter {
+    #[inline]
+    fn trace(&self) {
+        self.frames.trace();
+        self.stack.trace();
+    }
+}
+
 impl Interpreter {
     pub fn new() -> Self {
         Self {
@@ -32,8 +40,8 @@ impl Interpreter {
         }
     }
 
-    pub fn push_frame(&mut self, kind: FrameKind) -> SOMRef<Frame> {
-        let frame = Rc::new(RefCell::new(Frame::from_kind(kind)));
+    pub fn push_frame(&mut self, heap: &mut GcHeap, kind: FrameKind) -> SOMRef<Frame> {
+        let frame = heap.allocate(RefCell::new(Frame::from_kind(kind)));
         self.frames.push(frame.clone());
         frame
     }
@@ -46,28 +54,37 @@ impl Interpreter {
         self.frames.last()
     }
 
-    pub fn run(&mut self, universe: &mut Universe) -> Option<Value> {
+    pub fn run(&mut self, heap: &mut GcHeap, universe: &mut Universe) -> Option<Value> {
         loop {
-            let frame = match self.current_frame() {
-                Some(frame) => frame,
-                None => return Some(self.stack.pop().unwrap_or(Value::Nil)),
+            let Some(frame) = self.current_frame() else {
+                heap.maybe_collect_garbage(|| {
+                    self.trace();
+                    universe.trace();
+                });
+
+                return Some(self.stack.pop().unwrap_or(Value::Nil));
             };
 
-            let bytecode_idx = frame.borrow().bytecode_idx;
-            let opt_bytecode = frame.borrow().get_current_bytecode();
-            let bytecode = match opt_bytecode {
-                Some(bytecode) => bytecode,
-                None => {
-                    self.pop_frame();
-                    self.stack.push(Value::Nil);
-                    continue;
-                }
+            let mut cur_frame = frame.borrow_mut();
+            let Some(bytecode) = cur_frame.get_current_bytecode() else {
+                drop(cur_frame);
+                self.pop_frame();
+                self.stack.push(Value::Nil);
+                continue;
             };
 
-            frame.borrow_mut().bytecode_idx += 1;
+            let bytecode_idx = cur_frame.bytecode_idx;
+            cur_frame.bytecode_idx += 1;
+
+            drop(cur_frame);
 
             match bytecode {
                 Bytecode::Halt => {
+                    heap.maybe_collect_garbage(|| {
+                        self.trace();
+                        universe.trace();
+                    });
+
                     return Some(Value::Nil);
                 }
                 Bytecode::Dup => {
@@ -118,12 +135,12 @@ impl Interpreter {
                         Literal::Block(blk) => Block::clone(&blk),
                         _ => return None,
                     };
-                    block.frame.replace(Rc::clone(&frame));
-                    self.stack.push(Value::Block(Rc::new(block)));
+                    block.frame.replace(Gc::clone(&frame));
+                    self.stack.push(Value::Block(heap.allocate(block)));
                 }
                 Bytecode::PushConstant(idx) => {
                     let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
-                    let value = convert_literal(&frame, literal).unwrap();
+                    let value = convert_literal(heap, &frame, literal).unwrap();
                     self.stack.push(value);
                 }
                 Bytecode::PushGlobal(idx) => {
@@ -136,7 +153,9 @@ impl Interpreter {
                         self.stack.push(value);
                     } else {
                         let self_value = frame.borrow().get_self();
-                        universe.unknown_global(self, self_value, symbol).unwrap();
+                        universe
+                            .unknown_global(self, heap, self_value, symbol)
+                            .unwrap();
                     }
                 }
                 Bytecode::Pop => {
@@ -201,7 +220,12 @@ impl Interpreter {
                         resolve_method(frame, &receiver_class, symbol, bytecode_idx)
                     };
 
-                    do_send(self, universe, method, symbol, nb_params);
+                    do_send(self, universe, heap, method, symbol, nb_params);
+
+                    heap.maybe_collect_garbage(|| {
+                        self.trace();
+                        universe.trace();
+                    });
                 }
                 Bytecode::SuperSend(idx) => {
                     let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
@@ -216,7 +240,12 @@ impl Interpreter {
                         resolve_method(frame, &super_class, symbol, bytecode_idx)
                     };
 
-                    do_send(self, universe, method, symbol, nb_params);
+                    do_send(self, universe, heap, method, symbol, nb_params);
+
+                    heap.maybe_collect_garbage(|| {
+                        self.trace();
+                        universe.trace();
+                    });
                 }
                 Bytecode::ReturnLocal => {
                     let value = self.stack.pop().unwrap();
@@ -231,7 +260,7 @@ impl Interpreter {
                         .frames
                         .iter()
                         .rev()
-                        .position(|live_frame| Rc::ptr_eq(&live_frame, &method_frame));
+                        .position(|live_frame| Gc::ptr_eq(&live_frame, &method_frame));
 
                     if let Some(count) = escaped_frames {
                         (0..count).for_each(|_| self.pop_frame());
@@ -249,7 +278,7 @@ impl Interpreter {
                             }
                         };
                         // TODO: should we call `doesNotUnderstand:` here ?
-                        universe.escaped_block(self, instance, block).expect(
+                        universe.escaped_block(self, heap, instance, block).expect(
                             "A block has escaped and `escapedBlock:` is not defined on receiver",
                         );
                     }
@@ -260,7 +289,8 @@ impl Interpreter {
         fn do_send(
             interpreter: &mut Interpreter,
             universe: &mut Universe,
-            method: Option<Rc<Method>>,
+            heap: &mut GcHeap,
+            method: Option<Gc<Method>>,
             symbol: Interned,
             nb_params: usize,
         ) {
@@ -275,7 +305,7 @@ impl Interpreter {
 
                 args.reverse();
 
-                universe.does_not_understand(interpreter, self_value, symbol, args)
+                universe.does_not_understand(interpreter, heap, self_value, symbol, args)
                     .expect(
                         "A message cannot be handled and `doesNotUnderstand:arguments:` is not defined on receiver"
                     );
@@ -283,7 +313,7 @@ impl Interpreter {
                 return;
             };
 
-            match method.kind() {
+            match &method.kind {
                 MethodKind::Defined(_) => {
                     let mut args = Vec::with_capacity(nb_params + 1);
 
@@ -296,16 +326,18 @@ impl Interpreter {
 
                     args.reverse();
 
-                    let holder = method.holder.upgrade().unwrap();
-                    let frame = interpreter.push_frame(FrameKind::Method {
-                        self_value,
-                        method,
-                        holder,
-                    });
+                    let frame = interpreter.push_frame(
+                        heap,
+                        FrameKind::Method {
+                            holder: method.holder.clone(),
+                            self_value,
+                            method,
+                        },
+                    );
                     frame.borrow_mut().args = args;
                 }
                 MethodKind::Primitive(func) => {
-                    func(interpreter, universe);
+                    func(interpreter, heap, universe);
                 }
                 MethodKind::NotImplemented(err) => {
                     let self_value = interpreter.stack.iter().nth_back(nb_params).unwrap();
@@ -324,7 +356,7 @@ impl Interpreter {
             class: &SOMRef<Class>,
             signature: Interned,
             bytecode_idx: usize,
-        ) -> Option<Rc<Method>> {
+        ) -> Option<Gc<Method>> {
             match frame.borrow().kind() {
                 FrameKind::Block { block } => {
                     let mut inline_cache = block.blk_info.inline_cache.borrow_mut();
@@ -335,21 +367,19 @@ impl Interpreter {
                     let maybe_found = unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
 
                     match maybe_found {
-                        Some((receiver, method)) if *receiver == class.as_ptr() => {
-                            Some(Rc::clone(method))
+                        Some((receiver, method)) if *receiver == Gc::as_ptr(class) => {
+                            Some(Gc::clone(method))
                         }
                         place @ None => {
                             let found = class.borrow().lookup_method(signature);
-                            *place = found
-                                .clone()
-                                .map(|method| (class.as_ptr() as *const _, method));
+                            *place = found.clone().map(|method| (Gc::as_ptr(class), method));
                             found
                         }
                         _ => class.borrow().lookup_method(signature),
                     }
                 }
                 FrameKind::Method { method, .. } => {
-                    if let MethodKind::Defined(env) = method.kind() {
+                    if let MethodKind::Defined(env) = &method.kind {
                         let mut inline_cache = env.inline_cache.borrow_mut();
 
                         // SAFETY: this access is actually safe because the bytecode compiler
@@ -358,14 +388,12 @@ impl Interpreter {
                         let maybe_found = unsafe { inline_cache.get_unchecked_mut(bytecode_idx) };
 
                         match maybe_found {
-                            Some((receiver, method)) if *receiver == class.as_ptr() => {
-                                Some(Rc::clone(method))
+                            Some((receiver, method)) if *receiver == Gc::as_ptr(class) => {
+                                Some(Gc::clone(method))
                             }
                             place @ None => {
                                 let found = class.borrow().lookup_method(signature);
-                                *place = found
-                                    .clone()
-                                    .map(|method| (class.as_ptr() as *const _, method));
+                                *place = found.clone().map(|method| (Gc::as_ptr(class), method));
                                 found
                             }
                             _ => class.borrow().lookup_method(signature),
@@ -377,7 +405,11 @@ impl Interpreter {
             }
         }
 
-        fn convert_literal(frame: &SOMRef<Frame>, literal: Literal) -> Option<Value> {
+        fn convert_literal(
+            heap: &mut GcHeap,
+            frame: &SOMRef<Frame>,
+            literal: Literal,
+        ) -> Option<Value> {
             let value = match literal {
                 Literal::Symbol(sym) => Value::Symbol(sym),
                 Literal::String(val) => Value::String(val),
@@ -391,11 +423,11 @@ impl Interpreter {
                             frame
                                 .borrow()
                                 .lookup_constant(idx as usize)
-                                .and_then(|lit| convert_literal(frame, lit))
+                                .and_then(|lit| convert_literal(heap, frame, lit))
                         })
                         .collect::<Option<Vec<_>>>()
                         .unwrap();
-                    Value::Array(Rc::new(RefCell::new(arr)))
+                    Value::Array(heap.allocate(RefCell::new(arr)))
                 }
                 Literal::Block(val) => Value::Block(val),
             };

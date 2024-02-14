@@ -1,7 +1,8 @@
 use std::collections::hash_map::DefaultHasher;
 use std::convert::TryFrom;
 use std::hash::Hasher;
-use std::rc::Rc;
+
+use som_gc::GcHeap;
 
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
@@ -22,7 +23,7 @@ pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
 ];
 pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
 
-fn length(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn length(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "String>>#length";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -41,7 +42,7 @@ fn length(interpreter: &mut Interpreter, universe: &mut Universe) {
     }
 }
 
-fn hashcode(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn hashcode(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "String>>#hashcode";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -68,7 +69,7 @@ fn hashcode(interpreter: &mut Interpreter, universe: &mut Universe) {
         .push(Value::Integer((hasher.finish() as i64).abs()))
 }
 
-fn is_letters(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn is_letters(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "String>>#isLetters";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -86,7 +87,7 @@ fn is_letters(interpreter: &mut Interpreter, universe: &mut Universe) {
     ))
 }
 
-fn is_digits(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn is_digits(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "String>>#isDigits";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -104,7 +105,7 @@ fn is_digits(interpreter: &mut Interpreter, universe: &mut Universe) {
     ))
 }
 
-fn is_whitespace(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn is_whitespace(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "String>>#isWhiteSpace";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -122,7 +123,7 @@ fn is_whitespace(interpreter: &mut Interpreter, universe: &mut Universe) {
     ))
 }
 
-fn concatenate(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn concatenate(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "String>>#concatenate:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -143,10 +144,10 @@ fn concatenate(interpreter: &mut Interpreter, universe: &mut Universe) {
 
     interpreter
         .stack
-        .push(Value::String(Rc::new(format!("{}{}", s1, s2))))
+        .push(Value::String(heap.allocate(format!("{}{}", s1, s2))))
 }
 
-fn as_symbol(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn as_symbol(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "String>>#asSymbol";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -162,7 +163,7 @@ fn as_symbol(interpreter: &mut Interpreter, universe: &mut Universe) {
     }
 }
 
-fn eq(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn eq(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "String>>#=";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -191,7 +192,11 @@ fn eq(interpreter: &mut Interpreter, universe: &mut Universe) {
     interpreter.stack.push(Value::Boolean(s1 == s2))
 }
 
-fn prim_substring_from_to(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn prim_substring_from_to(
+    interpreter: &mut Interpreter,
+    heap: &mut GcHeap,
+    universe: &mut Universe,
+) {
     const SIGNATURE: &str = "String>>#primSubstringFrom:to:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -206,7 +211,7 @@ fn prim_substring_from_to(interpreter: &mut Interpreter, universe: &mut Universe
         (_, _, _) => panic!("'{}': wrong types", SIGNATURE),
     };
 
-    let string = Rc::new(value.chars().skip(from).take(to - from).collect());
+    let string = heap.allocate(value.chars().skip(from).take(to - from).collect());
 
     interpreter.stack.push(Value::String(string))
 }

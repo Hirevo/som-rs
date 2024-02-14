@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use som_gc::GcHeap;
 use som_interpreter_bc::compiler;
 use som_interpreter_bc::frame::FrameKind;
 use som_interpreter_bc::interpreter::Interpreter;
@@ -8,21 +9,26 @@ use som_interpreter_bc::value::Value;
 use som_lexer::{Lexer, Token};
 use som_parser::lang;
 
-fn setup_universe() -> Universe {
+fn setup_universe(heap: &mut GcHeap) -> Universe {
     let classpath = vec![
         PathBuf::from("../core-lib/Smalltalk"),
         PathBuf::from("../core-lib/TestSuite/BasicInterpreterTests"),
     ];
-    Universe::with_classpath(classpath).expect("could not setup test universe")
+    Universe::with_classpath(heap, classpath).expect("could not setup test universe")
 }
 
 #[test]
 fn basic_interpreter_tests() {
-    let mut universe = setup_universe();
+    let mut heap = GcHeap::new();
 
-    let return_class = Value::Class(universe.load_class("Return").unwrap());
-    let compiler_simplification_class =
-        Value::Class(universe.load_class("CompilerSimplification").unwrap());
+    let mut universe = setup_universe(&mut heap);
+
+    let return_class = Value::Class(universe.load_class(&mut heap, "Return").unwrap());
+    let compiler_simplification_class = Value::Class(
+        universe
+            .load_class(&mut heap, "CompilerSimplification")
+            .unwrap(),
+    );
 
     let method_name = universe.intern_symbol("run");
 
@@ -176,23 +182,27 @@ fn basic_interpreter_tests() {
         let class_def = som_parser::apply(lang::class_def(), tokens.as_slice()).unwrap();
 
         let object_class = universe.object_class();
-        let class =
-            compiler::compile_class(&mut universe.interner, &class_def, Some(&object_class));
+        let class = compiler::compile_class(
+            &mut heap,
+            &mut universe.interner,
+            &class_def,
+            Some(&object_class),
+        );
         assert!(class.is_some(), "could not compile test expression");
         let class = class.unwrap();
 
         let metaclass_class = universe.metaclass_class();
-        class.borrow_mut().set_super_class(&object_class);
+        class.borrow_mut().set_super_class(object_class.clone());
         class
             .borrow()
             .class()
             .borrow_mut()
-            .set_super_class(&object_class.borrow().class());
+            .set_super_class(object_class.borrow().class().clone());
         class
             .borrow()
             .class()
             .borrow_mut()
-            .set_class(&metaclass_class);
+            .set_class(metaclass_class.clone());
 
         let method = class
             .borrow()
@@ -203,8 +213,8 @@ fn basic_interpreter_tests() {
             holder: class.clone(),
             self_value: Value::Class(class),
         };
-        interpreter.push_frame(kind);
-        if let Some(output) = interpreter.run(&mut universe) {
+        interpreter.push_frame(&mut heap, kind);
+        if let Some(output) = interpreter.run(&mut heap, &mut universe) {
             assert_eq!(&output, expected, "unexpected test output value");
         }
     }

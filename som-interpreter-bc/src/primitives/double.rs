@@ -1,6 +1,6 @@
-use std::rc::Rc;
-
 use num_traits::ToPrimitive;
+
+use som_gc::GcHeap;
 
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
@@ -50,7 +50,7 @@ macro_rules! promote {
     };
 }
 
-fn from_string(interpreter: &mut Interpreter, _: &mut Universe) {
+fn from_string(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#fromString:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -64,7 +64,7 @@ fn from_string(interpreter: &mut Interpreter, _: &mut Universe) {
     }
 }
 
-fn as_string(interpreter: &mut Interpreter, _: &mut Universe) {
+fn as_string(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#asString";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -75,10 +75,10 @@ fn as_string(interpreter: &mut Interpreter, _: &mut Universe) {
 
     interpreter
         .stack
-        .push(Value::String(Rc::new(value.to_string())));
+        .push(Value::String(heap.allocate(value.to_string())));
 }
 
-fn as_integer(interpreter: &mut Interpreter, _: &mut Universe) {
+fn as_integer(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#asInteger";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -88,7 +88,7 @@ fn as_integer(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Integer(value.trunc() as i64));
 }
 
-fn sqrt(interpreter: &mut Interpreter, _: &mut Universe) {
+fn sqrt(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#sqrt";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -100,7 +100,7 @@ fn sqrt(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Double(value.sqrt()));
 }
 
-fn round(interpreter: &mut Interpreter, _: &mut Universe) {
+fn round(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#round";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -112,7 +112,7 @@ fn round(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Double(value.round()));
 }
 
-fn cos(interpreter: &mut Interpreter, _: &mut Universe) {
+fn cos(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#cos";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -124,7 +124,7 @@ fn cos(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Double(value.cos()));
 }
 
-fn sin(interpreter: &mut Interpreter, _: &mut Universe) {
+fn sin(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#sin";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -136,7 +136,7 @@ fn sin(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Double(value.sin()));
 }
 
-fn eq(interpreter: &mut Interpreter, _: &mut Universe) {
+fn eq(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#=";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -149,7 +149,7 @@ fn eq(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Boolean(a == b));
 }
 
-fn lt(interpreter: &mut Interpreter, _: &mut Universe) {
+fn lt(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#<";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -163,7 +163,7 @@ fn lt(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Boolean(a < b));
 }
 
-fn plus(interpreter: &mut Interpreter, _: &mut Universe) {
+fn plus(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#+";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -177,7 +177,7 @@ fn plus(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Double(a + b));
 }
 
-fn minus(interpreter: &mut Interpreter, _: &mut Universe) {
+fn minus(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#-";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -191,7 +191,7 @@ fn minus(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Double(a - b));
 }
 
-fn times(interpreter: &mut Interpreter, _: &mut Universe) {
+fn times(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#*";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -205,7 +205,7 @@ fn times(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Double(a * b));
 }
 
-fn divide(interpreter: &mut Interpreter, _: &mut Universe) {
+fn divide(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#//";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -219,7 +219,7 @@ fn divide(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Double(a / b));
 }
 
-fn modulo(interpreter: &mut Interpreter, _: &mut Universe) {
+fn modulo(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#%";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -233,7 +233,7 @@ fn modulo(interpreter: &mut Interpreter, _: &mut Universe) {
     interpreter.stack.push(Value::Double(a % b));
 }
 
-fn positive_infinity(interpreter: &mut Interpreter, _: &mut Universe) {
+fn positive_infinity(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Double>>#positiveInfinity";
 
     expect_args!(SIGNATURE, interpreter, [_]);

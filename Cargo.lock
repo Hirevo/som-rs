@@ -274,6 +274,10 @@ name = "som-core"
 version = "0.1.0"
 
 [[package]]
+name = "som-gc"
+version = "0.1.0"
+
+[[package]]
 name = "som-interpreter-ast"
 version = "0.1.0"
 dependencies = [
@@ -300,6 +304,7 @@ dependencies = [
  "num-traits",
  "rand",
  "som-core",
+ "som-gc",
  "som-lexer",
  "som-parser-symbols",
  "structopt",

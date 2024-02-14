@@ -100,11 +100,7 @@ impl Hash for Block {
 
 impl Hash for Method {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
-        if let Some(holder) = self.holder().upgrade() {
-            holder.borrow().hash(hasher);
-        } else {
-            hasher.write(b"??");
-        }
+        self.holder.borrow().hash(hasher);
         hasher.write(b">>");
         self.signature.hash(hasher);
     }
