@@ -77,7 +77,11 @@ impl Frame {
                     timing: Some(timing),
                 }
             }
-            FrameKind::Method { holder: _holder, method, .. } => {
+            FrameKind::Method {
+                holder: _holder,
+                method,
+                ..
+            } => {
                 #[cfg(feature = "profiler")]
                 let timing = {
                     let frame_name = format!(
