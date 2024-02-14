@@ -14,6 +14,9 @@ use crate::universe::Universe;
 use crate::value::Value;
 use crate::SOMRef;
 
+#[cfg(feature = "profiler")]
+use crate::profiler::Profiler;
+
 const INT_0: Value = Value::Integer(0);
 const INT_1: Value = Value::Integer(1);
 
@@ -89,7 +92,10 @@ impl Interpreter {
     }
 
     pub fn pop_frame(&mut self) {
-        self.frames.pop();
+        if let Some(_frame) = self.frames.pop() {
+            #[cfg(feature = "profiler")]
+            Profiler::global().finish_detached_event(_frame.borrow_mut().timing.take().unwrap());
+        }
     }
 
     pub fn current_frame(&self) -> Option<&SOMRef<Frame>> {
