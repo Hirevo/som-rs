@@ -173,12 +173,12 @@ impl Interpreter {
                 }
                 Bytecode::PushConstant(idx) => {
                     let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
-                    let value = convert_literal(frame, literal).unwrap(); // TODO there may be a way to avoid converting the literal to a value?
+                    let value = convert_literal(frame, literal).unwrap();
                     self.stack.push(value);
                 }
                 Bytecode::PushConstant0 => {
                     let literal = frame.borrow().lookup_constant(0).unwrap();
-                    let value = convert_literal(frame, literal).unwrap(); // duplication removable but see above to do, which may need to be handled first
+                    let value = convert_literal(frame, literal).unwrap();
                     self.stack.push(value);
                 }
                 Bytecode::PushConstant1 => {
