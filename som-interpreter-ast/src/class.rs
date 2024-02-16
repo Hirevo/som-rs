@@ -6,7 +6,7 @@ use indexmap::IndexMap;
 
 use som_core::ast::{ClassDef, MethodBody};
 
-use crate::method::{Method, MethodKind};
+use crate::method::{Method, MethodEnv, MethodKind};
 use crate::primitives;
 use crate::value::Value;
 use crate::{SOMRef, SOMWeakRef};
@@ -90,9 +90,13 @@ impl Class {
             .iter()
             .map(|method| {
                 let signature = method.signature.clone();
-                let kind = match method.body {
+                let kind = match &method.body {
                     MethodBody::Primitive => MethodKind::NotImplemented(signature.clone()),
-                    MethodBody::Body { .. } => MethodKind::Defined(method.clone()),
+                    MethodBody::Body { body, .. } => MethodKind::Defined(MethodEnv {
+                        ast: method.clone(),
+                        inline_cache: vec![None; body.exprs.len()]
+                        // inline_cache: RefCell::new(vec![None; body.exprs.len()])
+                    }),
                 };
                 let method = Method {
                     kind,
@@ -126,9 +130,12 @@ impl Class {
             .iter()
             .map(|method| {
                 let signature = method.signature.clone();
-                let kind = match method.body {
+                let kind = match &method.body {
                     MethodBody::Primitive => MethodKind::NotImplemented(signature.clone()),
-                    MethodBody::Body { .. } => MethodKind::Defined(method.clone()),
+                    MethodBody::Body { body, .. } => MethodKind::Defined(MethodEnv {
+                        ast: method.clone(),
+                        inline_cache: vec![None; body.exprs.len()]
+                    }),
                 };
                 let method = Method {
                     kind,

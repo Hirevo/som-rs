@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use som_core::ast;
 
 use crate::class::Class;
@@ -5,11 +7,18 @@ use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::{SOMRef, SOMWeakRef};
 
+#[derive(Clone)]
+pub struct MethodEnv {
+    pub ast: ast::MethodDef,
+    pub inline_cache: Vec<Option<(*const Class, Rc<Method>)>>
+    // pub inline_cache: RefCell<Vec<Option<(*const Class, Rc<Method>)>>>
+}
+
 /// The kind of a class method.
 #[derive(Clone)]
 pub enum MethodKind {
     /// A user-defined method from the AST.
-    Defined(ast::MethodDef),
+    Defined(MethodEnv),
     /// An interpreter primitive.
     Primitive(PrimitiveFn),
     /// A non-implemented primitive.

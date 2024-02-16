@@ -1,12 +1,14 @@
+use std::ptr;
 use std::rc::Rc;
 
 use som_core::ast;
 
 use crate::block::Block;
-use crate::evaluate::Evaluate;
+use crate::class::Class;
+use crate::evaluate::{Evaluate, EvaluateWithCache};
 use crate::frame::Frame;
 use crate::frame::FrameKind;
-use crate::method::{Method, MethodKind};
+use crate::method::{Method, MethodEnv, MethodKind};
 use crate::universe::Universe;
 use crate::value::Value;
 use crate::SOMRef;
@@ -39,7 +41,7 @@ impl Invoke for Method {
                     let receiver = match iter.next() {
                         Some(receiver) => receiver,
                         None => {
-                            return Return::Exception("missing receiver for invocation".to_string())
+                            return Return::Exception("missing receiver for invocation".to_string());
                         }
                     };
                     (receiver, iter.collect::<Vec<_>>())
@@ -50,17 +52,20 @@ impl Invoke for Method {
                         return Return::Exception(
                             "cannot invoke this method because its holder has been collected"
                                 .to_string(),
-                        )
+                        );
                     }
                 };
                 let signature = universe.intern_symbol(&self.signature);
+
                 universe.with_frame(
                     FrameKind::Method {
                         holder,
                         signature,
                         self_value,
                     },
-                    |universe| method.invoke(universe, params),
+                    |universe| {
+                        method.invoke(universe, params)
+                    },
                 )
             }
             MethodKind::Primitive(func) => func(universe, args),
@@ -80,10 +85,10 @@ impl Invoke for Method {
     }
 }
 
-impl Invoke for ast::MethodDef {
+impl Invoke for MethodEnv {
     fn invoke(&self, universe: &mut Universe, args: Vec<Value>) -> Return {
         let current_frame = universe.current_frame().clone();
-        match &self.kind {
+        match &self.ast.kind {
             ast::MethodKind::Unary => {}
             ast::MethodKind::Positional { parameters } => current_frame
                 .borrow_mut()
@@ -105,14 +110,14 @@ impl Invoke for ast::MethodDef {
                     .insert(rhs.clone(), rhs_value);
             }
         }
-        match &self.body {
+        match &self.ast.body {
             ast::MethodBody::Body { locals, body } => {
                 current_frame
                     .borrow_mut()
                     .bindings
                     .extend(locals.iter().cloned().zip(std::iter::repeat(Value::Nil)));
                 loop {
-                    match body.evaluate(universe) {
+                    match body.evaluate_with_cache(universe, &self.inline_cache) {
                         Return::NonLocal(value, frame) => {
                             if Rc::ptr_eq(&current_frame, &frame) {
                                 break Return::Local(value);
@@ -134,7 +139,7 @@ impl Invoke for ast::MethodDef {
                     .class(universe)
                     .borrow()
                     .name(),
-                self.signature,
+                self.ast.signature,
             )),
         }
     }

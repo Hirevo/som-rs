@@ -4,8 +4,10 @@ use std::rc::Rc;
 use som_core::ast;
 
 use crate::block::Block;
+use crate::class::Class;
 use crate::frame::FrameKind;
 use crate::invokable::{Invoke, Return};
+use crate::method::Method;
 use crate::universe::Universe;
 use crate::value::Value;
 
@@ -248,6 +250,21 @@ impl Evaluate for ast::Message {
 
 impl Evaluate for ast::Body {
     fn evaluate(&self, universe: &mut Universe) -> Return {
+        let mut last_value = Value::Nil;
+        for expr in &self.exprs {
+            last_value = propagate!(expr.evaluate(universe));
+        }
+        Return::Local(last_value)
+    }
+}
+
+// TODO this kinda sucks, right? surely we can do better
+pub trait EvaluateWithCache {
+    fn evaluate_with_cache(&self, universe: &mut Universe, inline_cache: &Vec<Option<(*const Class, Rc<Method>)>>) -> Return;
+}
+
+impl EvaluateWithCache for ast::Body {
+    fn evaluate_with_cache(&self, universe: &mut Universe, inline_cache: &Vec<Option<(*const Class, Rc<Method>)>>) -> Return {
         let mut last_value = Value::Nil;
         for expr in &self.exprs {
             last_value = propagate!(expr.evaluate(universe));
