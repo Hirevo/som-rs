@@ -1,5 +1,8 @@
 use std::rc::Rc;
 
+#[cfg(feature = "profiler")]
+use measureme::DetachedTiming;
+
 use som_core::bytecode::Bytecode;
 
 use crate::block::Block;
@@ -8,6 +11,9 @@ use crate::compiler::Literal;
 use crate::method::{Method, MethodKind};
 use crate::value::Value;
 use crate::SOMRef;
+
+#[cfg(feature = "profiler")]
+use crate::profiler::Profiler;
 
 /// The kind of a given frame.
 #[derive(Clone)]
@@ -38,6 +44,8 @@ pub struct Frame {
     pub locals: Vec<Value>,
     /// Bytecode index.
     pub bytecode_idx: usize,
+    #[cfg(feature = "profiler")]
+    pub timing: Option<DetachedTiming>,
 }
 
 impl Frame {
@@ -46,21 +54,53 @@ impl Frame {
         match &kind {
             FrameKind::Block { block } => {
                 let locals = block.blk_info.locals.iter().map(|_| Value::Nil).collect();
+
+                #[cfg(feature = "profiler")]
+                let timing = {
+                    let frame = block.frame.clone().unwrap();
+                    let method_frame = Frame::method_frame(&frame);
+                    let holder = method_frame.borrow().get_method_holder();
+                    let frame_name = format!(
+                        "{holder}>>#{signature}$block",
+                        holder = holder.borrow().name(),
+                        signature = method_frame.borrow().get_method().signature(),
+                    );
+                    Profiler::global().start_detached_event(&frame_name, "block frame")
+                };
+
                 Self {
                     kind,
                     locals,
                     args: vec![],
                     bytecode_idx: 0,
+                    #[cfg(feature = "profiler")]
+                    timing: Some(timing),
                 }
             }
-            FrameKind::Method { method, .. } => {
-                if let MethodKind::Defined(env) = method.kind() {
+            FrameKind::Method {
+                holder: _holder,
+                method,
+                ..
+            } => {
+                #[cfg(feature = "profiler")]
+                let timing = {
+                    let frame_name = format!(
+                        "{holder}>>#{signature}",
+                        holder = _holder.borrow().name(),
+                        signature = method.signature(),
+                    );
+                    Profiler::global().start_detached_event(&frame_name, "method frame")
+                };
+
+                if let MethodKind::Defined(env) = &method.kind {
                     let locals = env.locals.iter().map(|_| Value::Nil).collect();
                     Self {
                         kind,
                         locals,
                         args: vec![],
                         bytecode_idx: 0,
+                        #[cfg(feature = "profiler")]
+                        timing: Some(timing),
                     }
                 } else {
                     Self {
@@ -68,6 +108,8 @@ impl Frame {
                         locals: vec![],
                         args: vec![],
                         bytecode_idx: 0,
+                        #[cfg(feature = "profiler")]
+                        timing: Some(timing),
                     }
                 }
             }

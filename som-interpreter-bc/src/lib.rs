@@ -32,6 +32,10 @@ pub mod universe;
 /// Facilities for manipulating values.
 pub mod value;
 
+/// Facilities for profiling the SOM VM during execution.
+#[cfg(feature = "profiler")]
+pub mod profiler;
+
 /// A strong and owning reference to an object.
 pub type SOMRef<T> = Rc<RefCell<T>>;
 /// A weak reference to an object.
