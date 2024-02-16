@@ -60,7 +60,10 @@ fn disassemble_body(
                 disassemble_body(universe, class, level + 1, env);
                 env.pop();
             }
-            Bytecode::PushConstant(_) | Bytecode::PushConstant0 | Bytecode::PushConstant1 | Bytecode::PushConstant2 => {
+            Bytecode::PushConstant(_)
+            | Bytecode::PushConstant0
+            | Bytecode::PushConstant1
+            | Bytecode::PushConstant2 => {
                 let idx = match bytecode {
                     Bytecode::PushConstant(c_idx) => c_idx,
                     Bytecode::PushConstant0 => 0,
@@ -82,7 +85,7 @@ fn disassemble_body(
                         println!(" ({literal:?})");
                     }
                 }
-            },
+            }
             Bytecode::PushGlobal(idx) => {
                 print!(" {idx}");
                 let Some(Literal::Symbol(signature)) = current.resolve_literal(idx) else {
@@ -105,8 +108,14 @@ fn disassemble_body(
                 // };
                 // println!(" (`{0}`)", universe.lookup_symbol(argument));
             }
-            Bytecode::Send1(idx) | Bytecode::Send2(idx) | Bytecode::Send3(idx) | Bytecode::SendN(idx) |
-            Bytecode::SuperSend1(idx) | Bytecode::SuperSend2(idx) | Bytecode::SuperSend3(idx) | Bytecode::SuperSendN(idx) => {
+            Bytecode::Send1(idx)
+            | Bytecode::Send2(idx)
+            | Bytecode::Send3(idx)
+            | Bytecode::SendN(idx)
+            | Bytecode::SuperSend1(idx)
+            | Bytecode::SuperSend2(idx)
+            | Bytecode::SuperSend3(idx)
+            | Bytecode::SuperSendN(idx) => {
                 print!(" {idx}");
                 let Some(Literal::Symbol(signature)) = current.resolve_literal(idx) else {
                     println!(" (invalid signature)");

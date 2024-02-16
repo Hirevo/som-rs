@@ -41,7 +41,10 @@ macro_rules! send {
 
 macro_rules! super_send {
     ($interp:expr, $universe:expr, $frame_expr:expr, $lit_idx:expr, $nb_params:expr, $bytecode_idx:expr) => {{
-        let literal = $frame_expr.borrow().lookup_constant($lit_idx as usize).unwrap();
+        let literal = $frame_expr
+            .borrow()
+            .lookup_constant($lit_idx as usize)
+            .unwrap();
         let Literal::Symbol(symbol) = literal else {
             return None;
         };
@@ -53,9 +56,9 @@ macro_rules! super_send {
             }
         };
         let method = {
-             let holder = $frame_expr.borrow().get_method_holder();
-             let super_class = holder.borrow().super_class().unwrap();
-             resolve_method($frame_expr, &super_class, symbol, $bytecode_idx)
+            let holder = $frame_expr.borrow().get_method_holder();
+            let super_class = holder.borrow().super_class().unwrap();
+            resolve_method($frame_expr, &super_class, symbol, $bytecode_idx)
         };
         do_send($interp, $universe, method, symbol, nb_params as usize);
     }};
@@ -260,28 +263,28 @@ impl Interpreter {
                     }
                 }
                 Bytecode::Send1(idx) => {
-                    send!{self, universe, frame, idx, Some(0), bytecode_idx} // Send1 => receiver + 0 args, so we pass Some(0)
+                    send! {self, universe, frame, idx, Some(0), bytecode_idx} // Send1 => receiver + 0 args, so we pass Some(0)
                 }
                 Bytecode::Send2(idx) => {
-                    send!{self, universe, frame, idx, Some(1), bytecode_idx}
+                    send! {self, universe, frame, idx, Some(1), bytecode_idx}
                 }
                 Bytecode::Send3(idx) => {
-                    send!{self, universe, frame, idx, Some(2), bytecode_idx}
+                    send! {self, universe, frame, idx, Some(2), bytecode_idx}
                 }
                 Bytecode::SendN(idx) => {
-                    send!{self, universe, frame, idx, None, bytecode_idx}
+                    send! {self, universe, frame, idx, None, bytecode_idx}
                 }
                 Bytecode::SuperSend1(idx) => {
-                    super_send!{self, universe, frame, idx, Some(0), bytecode_idx}
+                    super_send! {self, universe, frame, idx, Some(0), bytecode_idx}
                 }
                 Bytecode::SuperSend2(idx) => {
-                    super_send!{self, universe, frame, idx, Some(1), bytecode_idx}
+                    super_send! {self, universe, frame, idx, Some(1), bytecode_idx}
                 }
                 Bytecode::SuperSend3(idx) => {
-                    super_send!{self, universe, frame, idx, Some(2), bytecode_idx}
+                    super_send! {self, universe, frame, idx, Some(2), bytecode_idx}
                 }
                 Bytecode::SuperSendN(idx) => {
-                    super_send!{self, universe, frame, idx, None, bytecode_idx}
+                    super_send! {self, universe, frame, idx, None, bytecode_idx}
                 }
                 Bytecode::ReturnLocal => {
                     let value = self.stack.pop().unwrap();

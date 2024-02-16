@@ -1,6 +1,6 @@
-use std::path::PathBuf;
 use som_core::bytecode::Bytecode;
 use som_core::bytecode::Bytecode::*;
+use std::path::PathBuf;
 
 use som_interpreter_bc::compiler;
 use som_interpreter_bc::method::MethodKind;
@@ -21,7 +21,9 @@ fn get_bytecodes_from_method(class_txt: &str, method_name: &str) -> Vec<Bytecode
 
     let method_name_interned = universe.intern_symbol(method_name);
 
-    let mut lexer = Lexer::new(class_txt).skip_comments(true).skip_whitespace(true);
+    let mut lexer = Lexer::new(class_txt)
+        .skip_comments(true)
+        .skip_whitespace(true);
     let tokens: Vec<Token> = lexer.by_ref().collect();
     assert!(
         lexer.text().is_empty(),
@@ -42,12 +44,14 @@ fn get_bytecodes_from_method(class_txt: &str, method_name: &str) -> Vec<Bytecode
 
     match &method.as_ref().kind {
         MethodKind::Defined(m) => m.body.clone(),
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 }
 
 fn expect_bytecode_sequence(bytecodes: &Vec<Bytecode>, expected_bc_sequence: &[Bytecode]) {
-    assert!(bytecodes.windows(expected_bc_sequence.len()).any(|window| window == expected_bc_sequence))
+    assert!(bytecodes
+        .windows(expected_bc_sequence.len())
+        .any(|window| window == expected_bc_sequence))
 }
 
 #[test]
@@ -61,14 +65,17 @@ fn push_0_1_nil_bytecodes() {
     ";
 
     let bytecodes = get_bytecodes_from_method(class_txt, "run");
-    expect_bytecode_sequence(&bytecodes, &[
-        Push0,
-        PopLocal(0, 0),
-        Push1,
-        PopLocal(0, 1),
-        PushNil,
-        PopLocal(0, 2)
-    ]);
+    expect_bytecode_sequence(
+        &bytecodes,
+        &[
+            Push0,
+            PopLocal(0, 0),
+            Push1,
+            PopLocal(0, 1),
+            PushNil,
+            PopLocal(0, 2),
+        ],
+    );
 }
 
 #[test]
@@ -85,18 +92,21 @@ fn push_constant_bytecodes() {
     ";
 
     let bytecodes = get_bytecodes_from_method(class_txt, "run");
-    expect_bytecode_sequence(&bytecodes, &[
-        PushConstant0,
-        PopLocal(0, 0),
-        PushConstant1,
-        PopLocal(0, 1),
-        PushConstant2,
-        PopLocal(0, 2),
-        PushConstant0,
-        PopLocal(0, 3),
-        PushConstant1,
-        PopLocal(0, 4),
-        PushConstant2,
-        PopLocal(0, 5)
-    ]);
+    expect_bytecode_sequence(
+        &bytecodes,
+        &[
+            PushConstant0,
+            PopLocal(0, 0),
+            PushConstant1,
+            PopLocal(0, 1),
+            PushConstant2,
+            PopLocal(0, 2),
+            PushConstant0,
+            PopLocal(0, 3),
+            PushConstant1,
+            PopLocal(0, 4),
+            PushConstant2,
+            PopLocal(0, 5),
+        ],
+    );
 }

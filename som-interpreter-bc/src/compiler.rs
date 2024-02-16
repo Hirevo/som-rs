@@ -175,9 +175,13 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
         let mut indices_to_remove: Vec<usize> = vec![];
 
         for (idx, bytecode_win) in body.windows(3).enumerate() {
-            if matches!(bytecode_win[0], Bytecode::Dup) &&
-                matches!(bytecode_win[1], Bytecode::PopField(..) | Bytecode::PopLocal(..) | Bytecode::PopArgument(..)) &&
-                matches!(bytecode_win[2], Bytecode::Pop) {
+            if matches!(bytecode_win[0], Bytecode::Dup)
+                && matches!(
+                    bytecode_win[1],
+                    Bytecode::PopField(..) | Bytecode::PopLocal(..) | Bytecode::PopArgument(..)
+                )
+                && matches!(bytecode_win[2], Bytecode::Pop)
+            {
                 indices_to_remove.push(idx);
                 indices_to_remove.push(idx + 2);
             }
@@ -321,14 +325,14 @@ impl MethodCodegen for ast::Expression {
                         0 => ctxt.push_instr(Bytecode::SuperSend1(idx as u8)), // TODO: are those supersends all actually used in practice, really?
                         1 => ctxt.push_instr(Bytecode::SuperSend2(idx as u8)),
                         2 => ctxt.push_instr(Bytecode::SuperSend3(idx as u8)),
-                        _ => ctxt.push_instr(Bytecode::SuperSendN(idx as u8))
+                        _ => ctxt.push_instr(Bytecode::SuperSendN(idx as u8)),
                     }
                 } else {
                     match nb_params {
                         0 => ctxt.push_instr(Bytecode::Send1(idx as u8)),
                         1 => ctxt.push_instr(Bytecode::Send2(idx as u8)),
                         2 => ctxt.push_instr(Bytecode::Send3(idx as u8)),
-                        _ => ctxt.push_instr(Bytecode::SendN(idx as u8))
+                        _ => ctxt.push_instr(Bytecode::SendN(idx as u8)),
                     }
                 }
                 Some(())
@@ -388,7 +392,7 @@ impl MethodCodegen for ast::Expression {
                             0 => ctxt.push_instr(Bytecode::PushConstant0),
                             1 => ctxt.push_instr(Bytecode::PushConstant1),
                             2 => ctxt.push_instr(Bytecode::PushConstant2),
-                            _ => ctxt.push_instr(Bytecode::PushConstant(idx as u8))
+                            _ => ctxt.push_instr(Bytecode::PushConstant(idx as u8)),
                         }
                     }
                 }
