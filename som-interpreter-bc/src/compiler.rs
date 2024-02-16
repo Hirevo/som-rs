@@ -164,13 +164,17 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
     }
 
     fn remove_dup_popx_pop_sequences(&mut self) {
-        if self.body.is_none() || self.body.as_ref().unwrap().len() < 3 {
+        let Some(body) = self.body.as_mut() else {
+            return;
+        };
+
+        if body.len() < 3 {
             return;
         }
 
         let mut indices_to_remove: Vec<usize> = vec![];
 
-        for (idx, bytecode_win) in self.body.as_ref().unwrap().windows(3).enumerate() {
+        for (idx, bytecode_win) in body.windows(3).enumerate() {
             if matches!(bytecode_win[0], Bytecode::Dup) &&
                 matches!(bytecode_win[1], Bytecode::PopField(..) | Bytecode::PopLocal(..) | Bytecode::PopArgument(..)) &&
                 matches!(bytecode_win[2], Bytecode::Pop) {
