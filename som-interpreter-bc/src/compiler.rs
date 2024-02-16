@@ -187,14 +187,12 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
             return;
         }
 
-        self.body = Some(self.body.as_ref().unwrap().iter().enumerate()
-            .filter_map(|(idx, bc)|
-                if indices_to_remove.contains(&idx) {
-                    None
-                } else {
-                    Some(bc.clone())
-                }
-            ).collect::<Vec<Bytecode>>());
+        let mut index = 0;
+        body.retain(|_| {
+            let is_kept = !indices_to_remove.contains(&index);
+            index += 1;
+            is_kept
+        });
     }
 }
 

@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Instant;
-use std::usize;
 
 use som_core::bytecode::Bytecode;
 

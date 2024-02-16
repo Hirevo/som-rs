@@ -108,13 +108,6 @@ fn disassemble_body(
             Bytecode::Send1(idx) | Bytecode::Send2(idx) | Bytecode::Send3(idx) | Bytecode::SendN(idx) |
             Bytecode::SuperSend1(idx) | Bytecode::SuperSend2(idx) | Bytecode::SuperSend3(idx) | Bytecode::SuperSendN(idx) => {
                 print!(" {idx}");
-                match bytecode {
-                    Bytecode::Send1(_) | Bytecode::SuperSend1(_) => print!("_1"),
-                    Bytecode::Send2(_) | Bytecode::SuperSend2(_) => print!("_2"),
-                    Bytecode::Send3(_) | Bytecode::SuperSend3(_) => print!("_3"),
-                    Bytecode::SendN(_) | Bytecode::SuperSendN(_) => print!("_N"),
-                    _ => panic!("Unreachable.")
-                }
                 let Some(Literal::Symbol(signature)) = current.resolve_literal(idx) else {
                     println!(" (invalid signature)");
                     continue;
