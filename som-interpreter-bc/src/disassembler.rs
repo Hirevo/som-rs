@@ -66,7 +66,7 @@ fn disassemble_body(
                     Bytecode::PushConstant0 => 0,
                     Bytecode::PushConstant1 => 1,
                     Bytecode::PushConstant2 => 2,
-                    _ => panic!("Obviously unreachable")
+                    _ => unreachable!(),
                 };
 
                 print!(" {idx}");
