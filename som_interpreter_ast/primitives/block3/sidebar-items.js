@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_class_primitive","get_instance_primitive"],"static":["CLASS_PRIMITIVES","INSTANCE_PRIMITIVES"]};
