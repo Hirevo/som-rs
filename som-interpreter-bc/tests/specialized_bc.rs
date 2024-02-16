@@ -110,3 +110,36 @@ fn push_constant_bytecodes() {
         ],
     );
 }
+
+#[test]
+fn send_bytecodes() {
+    let class_txt = "Foo = (
+        send: a three: b = (
+            ^ false
+        )
+
+        send: a with: b four: c = (
+            ^ false
+        )
+
+        run = (
+            1 abs.
+            1 + 1.
+            self send: 1 three: 1.
+            self send: 1 with: 1 four: 1.
+        )
+    )
+    ";
+
+    let bytecodes = get_bytecodes_from_method(class_txt, "run");
+    expect_bytecode_sequence(&bytecodes, &[Push1, Send1(0)]);
+
+    expect_bytecode_sequence(&bytecodes, &[Push1, Push1, Send2(1)]);
+
+    expect_bytecode_sequence(&bytecodes, &[PushArgument(0, 0), Push1, Push1, Send3(2)]);
+
+    expect_bytecode_sequence(
+        &bytecodes,
+        &[PushArgument(0, 0), Push1, Push1, Push1, SendN(3)],
+    );
+}
