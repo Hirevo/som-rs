@@ -143,3 +143,32 @@ fn send_bytecodes() {
         &[PushArgument(0, 0), Push1, Push1, Push1, SendN(3)],
     );
 }
+
+#[test]
+fn super_send_bytecodes() {
+    let class_txt = "Foo = (
+        run = (
+            super send1.
+            super sendtwo: 1.
+            super send: 1 three: 1.
+            super send: 1 with: 1 four: 1.
+        )
+    )
+    ";
+
+    let bytecodes = get_bytecodes_from_method(class_txt, "run");
+
+    expect_bytecode_sequence(&bytecodes, &[PushArgument(0, 0), SuperSend1(0)]);
+
+    expect_bytecode_sequence(&bytecodes, &[PushArgument(0, 0), Push1, SuperSend2(1)]);
+
+    expect_bytecode_sequence(
+        &bytecodes,
+        &[PushArgument(0, 0), Push1, Push1, SuperSend3(2)],
+    );
+
+    expect_bytecode_sequence(
+        &bytecodes,
+        &[PushArgument(0, 0), Push1, Push1, Push1, SuperSendN(3)],
+    );
+}
