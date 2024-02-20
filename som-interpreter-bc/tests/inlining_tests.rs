@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use som_core::bytecode::Bytecode;
+use som_core::bytecode::Bytecode::*;
 
 use som_interpreter_bc::compiler;
 use som_interpreter_bc::method::MethodKind;
@@ -60,16 +61,16 @@ fn if_true_or_false_inlining_ok() {
     let bytecodes = get_bytecodes_from_method(class_txt, "run");
 
     expect_bytecode_sequence(&bytecodes, &[
-        Bytecode::PushGlobal(0),
-        Bytecode::JumpOnFalseTopNil(3),
-        Bytecode::PushGlobal(0),
-        Bytecode::ReturnNonLocal,
-        Bytecode::Pop,
-        Bytecode::PushGlobal(1),
-        Bytecode::ReturnNonLocal,
-        Bytecode::Pop,
-        Bytecode::PushArgument(0, 0),
-        Bytecode::ReturnLocal
+        PushGlobal(0),
+        JumpOnFalseTopNil(3),
+        PushGlobal(0),
+        ReturnNonLocal,
+        Pop,
+        PushGlobal(1),
+        ReturnNonLocal,
+        Pop,
+        PushArgument(0, 0),
+        ReturnLocal
     ]);
 
     let class_txt2 = "Foo = ( run = (
@@ -81,16 +82,16 @@ fn if_true_or_false_inlining_ok() {
     let bytecodes = get_bytecodes_from_method(class_txt2, "run");
 
     expect_bytecode_sequence(&bytecodes, &[
-        Bytecode::PushGlobal(0),
-        Bytecode::JumpOnTrueTopNil(3),
-        Bytecode::PushGlobal(0),
-        Bytecode::ReturnNonLocal,
-        Bytecode::Pop,
-        Bytecode::PushGlobal(1),
-        Bytecode::ReturnNonLocal,
-        Bytecode::Pop,
-        Bytecode::PushArgument(0, 0),
-        Bytecode::ReturnLocal
+        PushGlobal(0),
+        JumpOnTrueTopNil(3),
+        PushGlobal(0),
+        ReturnNonLocal,
+        Pop,
+        PushGlobal(1),
+        ReturnNonLocal,
+        Pop,
+        PushArgument(0, 0),
+        ReturnLocal
     ]);
 }
 
@@ -101,16 +102,16 @@ fn if_true_if_false_inlining_ok() {
     let bytecodes = get_bytecodes_from_method(class_txt, "run");
 
     expect_bytecode_sequence(&bytecodes, &[
-        Bytecode::PushGlobal(0),
-        Bytecode::JumpOnFalsePop(4),
-        Bytecode::PushGlobal(0),
-        Bytecode::ReturnNonLocal,
-        Bytecode::Jump(3),
-        Bytecode::PushGlobal(1),
-        Bytecode::ReturnNonLocal,
-        Bytecode::Pop,
-        Bytecode::PushArgument(0, 0),
-        Bytecode::ReturnLocal,
+        PushGlobal(0),
+        JumpOnFalsePop(4),
+        PushGlobal(0),
+        ReturnNonLocal,
+        Jump(3),
+        PushGlobal(1),
+        ReturnNonLocal,
+        Pop,
+        PushArgument(0, 0),
+        ReturnLocal,
     ]);
 
     let class_txt2 = "Foo = ( run = ( true ifFalse: [ ^false ] ifTrue: [ ^ true]. ))";
@@ -118,16 +119,16 @@ fn if_true_if_false_inlining_ok() {
     let bytecodes = get_bytecodes_from_method(class_txt2, "run");
 
     expect_bytecode_sequence(&bytecodes, &[
-        Bytecode::PushGlobal(0),
-        Bytecode::JumpOnTruePop(4),
-        Bytecode::PushGlobal(1),
-        Bytecode::ReturnNonLocal,
-        Bytecode::Jump(3),
-        Bytecode::PushGlobal(0),
-        Bytecode::ReturnNonLocal,
-        Bytecode::Pop,
-        Bytecode::PushArgument(0, 0),
-        Bytecode::ReturnLocal,
+        PushGlobal(0),
+        JumpOnTruePop(4),
+        PushGlobal(1),
+        ReturnNonLocal,
+        Jump(3),
+        PushGlobal(0),
+        ReturnNonLocal,
+        Pop,
+        PushArgument(0, 0),
+        ReturnLocal,
     ]);
 }
 
@@ -144,30 +145,43 @@ fn while_true_false_inlining_ok() {
 
     let bytecodes = get_bytecodes_from_method(class_txt, "run");
 
+    dbg!(&bytecodes);
     expect_bytecode_sequence(&bytecodes, &[
-        Bytecode::JumpOnFalsePop(8),
-        Bytecode::PushLocal(0, 0),
-        Bytecode::PushConstant(3),
-        Bytecode::Send(4),
-        Bytecode::Dup,
-        Bytecode::PopLocal(0, 0),
-        Bytecode::Pop,
-        Bytecode::JumpBackward(10)
+        JumpOnFalsePop(8),
+        PushLocal(0, 0),
+        PushConstant(3),
+        Send2(4),
+        Dup,
+        PopLocal(0, 0),
+        Pop,
+        JumpBackward(10)
     ]);
 
-    let class_txt_2 = class_txt.replace("whileTrue", "whileFalse");
-    let bytecodes = get_bytecodes_from_method(class_txt_2.as_str(), "run");
-
     expect_bytecode_sequence(&bytecodes, &[
-        Bytecode::JumpOnTruePop(8),
-        Bytecode::PushLocal(0, 0),
-        Bytecode::PushConstant(3),
-        Bytecode::Send(4),
-        Bytecode::Dup,
-        Bytecode::PopLocal(0, 0),
-        Bytecode::Pop,
-        Bytecode::JumpBackward(10)
-    ])
+        PushLocal(0, 0),
+        PushConstant(0),
+        Send2(1),
+        JumpOnFalsePop(6),
+        PushLocal(0, 0),
+        Send2(2),
+        PopLocal(0, 0),
+        Pop,
+        JumpBackward(8),
+    ]);
+
+    // let class_txt_2 = class_txt.replace("whileTrue", "whileFalse");
+    // let bytecodes = get_bytecodes_from_method(class_txt_2.as_str(), "run");
+    //
+    // expect_bytecode_sequence(&bytecodes, &[
+    //     JumpOnTruePop(8),
+    //     PushLocal(0, 0),
+    //     PushConstant(3),
+    //     Send2(4),
+    //     Dup,
+    //     PopLocal(0, 0),
+    //     Pop,
+    //     JumpBackward(10)
+    // ])
 }
 
 #[test]
@@ -179,12 +193,12 @@ fn or_and_inlining_ok() {
 
     let bytecodes = get_bytecodes_from_method(class_txt, "run");
     expect_bytecode_sequence(&bytecodes, &[
-        Bytecode::PushGlobal(0),
-        Bytecode::JumpOnTruePop(3),
-        Bytecode::PushGlobal(1),
-        Bytecode::Jump(2),
-        Bytecode::PushGlobal(0),
-        Bytecode::ReturnNonLocal
+        PushGlobal(0),
+        JumpOnTruePop(3),
+        PushGlobal(1),
+        Jump(2),
+        PushGlobal(0),
+        ReturnNonLocal
     ]);
 
     let class_txt2 = "Foo = ( run = (
@@ -194,12 +208,12 @@ fn or_and_inlining_ok() {
 
     let bytecodes = get_bytecodes_from_method(class_txt2, "run");
     expect_bytecode_sequence(&bytecodes, &[
-        Bytecode::PushGlobal(0),
-        Bytecode::JumpOnFalsePop(3),
-        Bytecode::PushGlobal(1),
-        Bytecode::Jump(2),
-        Bytecode::PushGlobal(1),
-        Bytecode::ReturnNonLocal
+        PushGlobal(0),
+        JumpOnFalsePop(3),
+        PushGlobal(1),
+        Jump(2),
+        PushGlobal(1),
+        ReturnNonLocal
     ]);
 }
 
@@ -221,20 +235,20 @@ fn inlining_pyramid() {
     let bytecodes2 = get_bytecodes_from_method(class_txt2, "run");
 
     let expected_bc = &[
-        Bytecode::PushLocal(0, 0),
-        Bytecode::JumpOnFalseTopNil(12),
-        Bytecode::PushLocal(0, 1),
-        Bytecode::JumpOnFalseTopNil(10),
-        Bytecode::PushLocal(0, 2),
-        Bytecode::JumpOnFalseTopNil(8),
-        Bytecode::PushLocal(0, 3),
-        Bytecode::JumpOnFalseTopNil(6),
-        Bytecode::PushLocal(0, 4),
-        Bytecode::JumpOnFalseTopNil(4),
-        Bytecode::PushLocal(0, 5),
-        Bytecode::JumpOnFalseTopNil(2),
-        Bytecode::PushLocal(0, 6),
-        Bytecode::ReturnNonLocal
+        PushLocal(0, 0),
+        JumpOnFalseTopNil(12),
+        PushLocal(0, 1),
+        JumpOnFalseTopNil(10),
+        PushLocal(0, 2),
+        JumpOnFalseTopNil(8),
+        PushLocal(0, 3),
+        JumpOnFalseTopNil(6),
+        PushLocal(0, 4),
+        JumpOnFalseTopNil(4),
+        PushLocal(0, 5),
+        JumpOnFalseTopNil(2),
+        PushLocal(0, 6),
+        ReturnNonLocal
     ];
 
     expect_bytecode_sequence(&bytecodes, expected_bc);

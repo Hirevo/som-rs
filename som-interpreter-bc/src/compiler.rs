@@ -237,18 +237,30 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
             };
     }
 
-    /// NEVER CALLED. TODO should be made faster and actually invoked, most likely by storing the last four bytecodes for faster checking.
+    fn get_nbr_locals(&self) -> usize {
+        self.locals.len()
+    }
+
     fn remove_dup_popx_pop_sequences(&mut self) {
-        if self.body.is_none() || self.body.as_ref().unwrap().len() < 3 {
+        todo!("not functional yet with inlining");
+        let Some(body) = self.body.as_mut() else {
+            return;
+        };
+
+        if body.len() < 3 {
             return;
         }
 
         let mut indices_to_remove: Vec<usize> = vec![];
 
-        for (idx, bytecode_win) in self.body.as_ref().unwrap().windows(3).enumerate() {
-            if matches!(bytecode_win[0], Bytecode::Dup) &&
-                matches!(bytecode_win[1], Bytecode::PopField(..) | Bytecode::PopLocal(..) | Bytecode::PopArgument(..)) &&
-                matches!(bytecode_win[2], Bytecode::Pop) {
+        for (idx, bytecode_win) in body.windows(3).enumerate() {
+            if matches!(bytecode_win[0], Bytecode::Dup)
+                && matches!(
+                    bytecode_win[1],
+                    Bytecode::PopField(..) | Bytecode::PopLocal(..) | Bytecode::PopArgument(..)
+                )
+                && matches!(bytecode_win[2], Bytecode::Pop)
+            {
                 indices_to_remove.push(idx);
                 indices_to_remove.push(idx + 2);
             }
@@ -258,44 +270,12 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
             return;
         }
 
-        let mut jumps_to_patch = vec![];
-        for (cur_idx, bc) in self.body.as_ref().unwrap().iter().enumerate() {
-            match bc {
-                Bytecode::Jump(jump_offset) | Bytecode::JumpOnTrueTopNil(jump_offset) | Bytecode::JumpOnFalseTopNil(jump_offset) |
-                Bytecode::JumpOnTruePop(jump_offset) | Bytecode::JumpOnFalsePop(jump_offset) => {
-                    if indices_to_remove.contains(&(cur_idx + jump_offset)) {
-                        let lol = indices_to_remove.iter().position(|&v| v == cur_idx + jump_offset).unwrap();
-                        indices_to_remove.remove(lol);
-                        indices_to_remove.remove(lol - 1);
-                    }
-
-                    let nbr_to_adjust = indices_to_remove.iter().filter(|&&v| cur_idx < v && v <= cur_idx + jump_offset).count();
-                    jumps_to_patch.push((cur_idx, jump_offset - nbr_to_adjust));
-                },
-                Bytecode::JumpBackward(jump_offset) => {
-                    let nbr_to_adjust = indices_to_remove.iter().filter(|&&v| cur_idx > v && v > cur_idx - jump_offset).count();
-                    jumps_to_patch.push((cur_idx, jump_offset - nbr_to_adjust));
-                },
-                _ => {}
-            }
-        }
-
-        for (jump_idx, jump_val) in jumps_to_patch {
-            self.patch_jump(jump_idx, jump_val);
-        }
-
-        self.body = Some(self.body.as_ref().unwrap().iter().enumerate()
-            .filter_map(|(idx, bc)|
-                if indices_to_remove.contains(&idx) {
-                    None
-                } else {
-                    Some(bc.clone())
-                }
-            ).collect::<Vec<Bytecode>>());
-    }
-
-    fn get_nbr_locals(&self) -> usize {
-        self.locals.len()
+        let mut index = 0;
+        body.retain(|_| {
+            let is_kept = !indices_to_remove.contains(&index);
+            index += 1;
+            is_kept
+        });
     }
 }
 
@@ -412,11 +392,14 @@ impl MethodCodegen for ast::Expression {
                         ctxt.push_instr(Bytecode::PushArgument(up_idx, idx))
                     }
                     Some(FoundVar::Field(idx)) => ctxt.push_instr(Bytecode::PushField(idx)),
-                    None => {
-                        let name = ctxt.intern_symbol(name);
-                        let idx = ctxt.push_literal(Literal::Symbol(name));
-                        ctxt.push_instr(Bytecode::PushGlobal(idx as u8));
-                    }
+                    None => match name.as_str() {
+                        "nil" => ctxt.push_instr(Bytecode::PushNil),
+                        _ => {
+                            let name = ctxt.intern_symbol(name);
+                            let idx = ctxt.push_literal(Literal::Symbol(name));
+                            ctxt.push_instr(Bytecode::PushGlobal(idx as u8));
+                        }
+                    },
                 }
                 Some(())
             }
@@ -449,15 +432,29 @@ impl MethodCodegen for ast::Expression {
                 message
                     .values
                     .iter()
-                    .try_for_each(|value|
-                        value.codegen(ctxt)
-                    )?;
+                    .try_for_each(|value| value.codegen(ctxt))?;
+
+                let nb_params = match message.signature.chars().nth(0) {
+                    Some(ch) if !ch.is_alphabetic() => 1,
+                    _ => message.signature.chars().filter(|ch| *ch == ':').count(),
+                };
+
                 let sym = ctxt.intern_symbol(message.signature.as_str());
                 let idx = ctxt.push_literal(Literal::Symbol(sym));
                 if super_send {
-                    ctxt.push_instr(Bytecode::SuperSend(idx as u8))
+                    match nb_params {
+                        0 => ctxt.push_instr(Bytecode::SuperSend1(idx as u8)),
+                        1 => ctxt.push_instr(Bytecode::SuperSend2(idx as u8)),
+                        2 => ctxt.push_instr(Bytecode::SuperSend3(idx as u8)),
+                        _ => ctxt.push_instr(Bytecode::SuperSendN(idx as u8)),
+                    }
                 } else {
-                    ctxt.push_instr(Bytecode::Send(idx as u8))
+                    match nb_params {
+                        0 => ctxt.push_instr(Bytecode::Send1(idx as u8)),
+                        1 => ctxt.push_instr(Bytecode::Send2(idx as u8)),
+                        2 => ctxt.push_instr(Bytecode::Send3(idx as u8)),
+                        _ => ctxt.push_instr(Bytecode::SendN(idx as u8)),
+                    }
                 }
                 Some(())
             }
@@ -471,9 +468,9 @@ impl MethodCodegen for ast::Expression {
                 let sym = ctxt.intern_symbol(message.op.as_str());
                 let idx = ctxt.push_literal(Literal::Symbol(sym));
                 if super_send {
-                    ctxt.push_instr(Bytecode::Send(idx as u8));
+                    ctxt.push_instr(Bytecode::SuperSend2(idx as u8));
                 } else {
-                    ctxt.push_instr(Bytecode::Send(idx as u8));
+                    ctxt.push_instr(Bytecode::Send2(idx as u8));
                 }
                 Some(())
             }
@@ -506,8 +503,20 @@ impl MethodCodegen for ast::Expression {
                 }
 
                 let literal = convert_literal(ctxt, literal);
-                let idx = ctxt.push_literal(literal);
-                ctxt.push_instr(Bytecode::PushConstant(idx as u8));
+
+                match literal {
+                    Literal::Integer(0) => ctxt.push_instr(Bytecode::Push0),
+                    Literal::Integer(1) => ctxt.push_instr(Bytecode::Push1),
+                    _ => {
+                        let idx = ctxt.push_literal(literal);
+                        match idx {
+                            0 => ctxt.push_instr(Bytecode::PushConstant0),
+                            1 => ctxt.push_instr(Bytecode::PushConstant1),
+                            2 => ctxt.push_instr(Bytecode::PushConstant2),
+                            _ => ctxt.push_instr(Bytecode::PushConstant(idx as u8)),
+                        }
+                    }
+                }
 
                 Some(())
             }
@@ -519,12 +528,6 @@ impl MethodCodegen for ast::Expression {
                 ctxt.push_instr(Bytecode::PushBlock(idx as u8));
                 Some(())
             }
-            // TODO: should that go?
-            // ast::Expression::Term(term) => term
-            //     .body
-            //     .exprs
-            //     .iter()
-            //     .try_for_each(|expr| expr.codegen(ctxt)),
         }
     }
 }
@@ -665,7 +668,7 @@ pub(crate) fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Optio
         last.codegen(&mut ctxt)?;
         ctxt.push_instr(Bytecode::ReturnLocal);
     }
-    // ctxt.remove_dup_popx_pop_sequences();
+    // ctxt.remove_dup_popx_pop_sequences(); // todo check no redundant calls for this guy
 
     let frame = None;
     let locals = {

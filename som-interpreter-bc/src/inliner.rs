@@ -73,12 +73,19 @@ impl PrimMessageInliner for ast::Expression {
                     },
                     Bytecode::PushArgument(up_idx, idx) => ctxt.push_instr(Bytecode::PushArgument(*up_idx - 1, *idx)), // not 100% sure i need to adjust the up_idx there and for pop
                     Bytecode::PopArgument(up_idx, idx) => ctxt.push_instr(Bytecode::PopArgument(*up_idx - 1, *idx)),
-                    Bytecode::Send(lit_idx) => {
+                    Bytecode::Send1(lit_idx) | Bytecode::Send2(lit_idx) | Bytecode::Send3(lit_idx) | Bytecode::SendN(lit_idx) => {
                         match block.literals.get(*lit_idx as usize)? {
                             Literal::Symbol(interned) => {
-                                // does this push duplicate literals? I think it doesn't?
+                                // TODO does this push duplicate literals? I think it doesn't?
                                 let idx = ctxt.push_literal(Literal::Symbol(*interned));
-                                ctxt.push_instr(Bytecode::Send(idx as u8));
+
+                                match block_bc {
+                                    Bytecode::Send1(_) => ctxt.push_instr(Bytecode::Send1(idx as u8)),
+                                    Bytecode::Send2(_) => ctxt.push_instr(Bytecode::Send2(idx as u8)),
+                                    Bytecode::Send3(_) => ctxt.push_instr(Bytecode::Send3(idx as u8)),
+                                    Bytecode::SendN(_) => ctxt.push_instr(Bytecode::SendN(idx as u8)),
+                                    _ => unreachable!()
+                                }
                             },
                             _ => panic!("Unexpected block literal type, not yet implemented")
                         }
@@ -101,11 +108,19 @@ impl PrimMessageInliner for ast::Expression {
                             }
                         };
                     },
-                    Bytecode::PushConstant(constant_idx) => {
-                        match block.literals.get(*constant_idx as usize)? {
+                    Bytecode::PushConstant(_) | Bytecode::PushConstant0 | Bytecode::PushConstant1 | Bytecode::PushConstant2 => {
+                        let constant_idx = match block_bc {
+                            Bytecode::PushConstant(idx) => *idx,
+                            Bytecode::PushConstant0 => 0,
+                            Bytecode::PushConstant1 => 1,
+                            Bytecode::PushConstant2 => 2,
+                            _ => unreachable!(),
+                        };
+
+                        match block.literals.get(constant_idx as usize)? {
                             lit => {
                                 let lit_idx = ctxt.push_literal(lit.clone());
-                                ctxt.push_instr(Bytecode::PushConstant(lit_idx as u8));
+                                ctxt.push_instr(Bytecode::PushConstant(lit_idx as u8)); // TODO: if 0/1/2, push specialized one
                             }
                         };
                     },
@@ -129,7 +144,9 @@ impl PrimMessageInliner for ast::Expression {
                     Bytecode::JumpOnFalsePop(idx) => ctxt.push_instr(Bytecode::JumpOnFalsePop(*idx)),
                     Bytecode::JumpOnTrueTopNil(idx) => ctxt.push_instr(Bytecode::JumpOnTrueTopNil(*idx)),
                     Bytecode::JumpOnFalseTopNil(idx) => ctxt.push_instr(Bytecode::JumpOnFalseTopNil(*idx)),
-                    _ => ctxt.push_instr(*block_bc) // I *think* the rest are all fine..
+                    Bytecode::Halt | Bytecode::Dup | Bytecode::Push0 | Bytecode::Push1 | Bytecode::PushNil |
+                    Bytecode::Pop | Bytecode::PushField(_) | Bytecode::PopField(_) |
+                    Bytecode::SuperSend1(_) | Bytecode::SuperSend2(_) | Bytecode::SuperSend3(_) | Bytecode::SuperSendN(_) => {} // explicitly listing them out to account for the fact that new BC could be introduced and mess things up if we handled it with a _ case
                 }
             }
         }
