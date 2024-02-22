@@ -249,18 +249,13 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
     }
 
     fn remove_dup_popx_pop_sequences(&mut self) {
-        todo!("not functional yet with inlining");
-        let Some(body) = self.body.as_mut() else {
-            return;
-        };
-
-        if body.len() < 3 {
+        if self.body.is_none() || self.body.as_ref().unwrap().len() < 3 { // TODO once behavior is fixed, change to only one mutable borrow at the start like in the old code
             return;
         }
 
         let mut indices_to_remove: Vec<usize> = vec![];
 
-        for (idx, bytecode_win) in body.windows(3).enumerate() {
+        for (idx, bytecode_win) in self.body.as_ref().unwrap().windows(3).enumerate() {
             if matches!(bytecode_win[0], Bytecode::Dup)
                 && matches!(
                     bytecode_win[1],
@@ -277,12 +272,43 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
             return;
         }
 
+        let mut jumps_to_patch = vec![];
+        for (cur_idx, bc) in self.body.as_ref().unwrap().iter().enumerate() {
+            match bc {
+                Bytecode::Jump(jump_offset) | Bytecode::JumpOnTrueTopNil(jump_offset) | Bytecode::JumpOnFalseTopNil(jump_offset) |
+                Bytecode::JumpOnTruePop(jump_offset) | Bytecode::JumpOnFalsePop(jump_offset) => {
+                    if indices_to_remove.contains(&(cur_idx + jump_offset)) {
+                        let idx = indices_to_remove.iter().position(|&v| v == cur_idx + jump_offset).unwrap();
+                        indices_to_remove.remove(idx);
+                        indices_to_remove.remove(idx - 1);
+                    }
+
+                    let nbr_to_adjust = indices_to_remove.iter().filter(|&&v| cur_idx < v && v <= cur_idx + jump_offset).count();
+                    jumps_to_patch.push((cur_idx, jump_offset - nbr_to_adjust));
+                },
+                Bytecode::JumpBackward(jump_offset) => {
+                    let nbr_to_adjust = indices_to_remove.iter().filter(|&&v| cur_idx > v && v > cur_idx - jump_offset).count();
+                    jumps_to_patch.push((cur_idx, jump_offset - nbr_to_adjust));
+                },
+                _ => {}
+            }
+        }
+
+        for (jump_idx, jump_val) in jumps_to_patch {
+            self.patch_jump(jump_idx, jump_val);
+        }
+
+        // dbg!("Before:");
+        // dbg!(self.body.as_ref().unwrap());
         let mut index = 0;
-        body.retain(|_| {
+        self.body.as_mut().unwrap().retain(|_| {
             let is_kept = !indices_to_remove.contains(&index);
             index += 1;
             is_kept
         });
+        // dbg!("After:");
+        // dbg!(self.body.as_ref().unwrap());
+        // dbg!("---");
     }
 }
 
@@ -617,9 +643,10 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
             }
             ctxt.push_instr(Bytecode::PushArgument(0, 0));
             ctxt.push_instr(Bytecode::ReturnLocal); // TODO that returnlocal isn't necessary if there's already a return before
+
+            ctxt.remove_dup_popx_pop_sequences();// TODO enable me
         }
     }
-    // ctxt.remove_dup_popx_pop_sequences();
 
     let method = Method {
         kind: match &defn.body {
@@ -682,7 +709,7 @@ pub(crate) fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Optio
         last.codegen(&mut ctxt)?;
         ctxt.push_instr(Bytecode::ReturnLocal);
     }
-    // ctxt.remove_dup_popx_pop_sequences(); // todo check no redundant calls for this guy
+    ctxt.remove_dup_popx_pop_sequences();
 
     let frame = None;
     let locals = {

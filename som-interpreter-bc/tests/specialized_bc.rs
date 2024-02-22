@@ -172,3 +172,43 @@ fn super_send_bytecodes() {
         &[PushArgument(0, 0), Push1, Push1, Push1, SuperSendN(3)],
     );
 }
+
+#[test]
+fn tmp_popx_pop_whatever_bug() {
+    let class_txt = "Foo = (
+        resolve: a = (
+                (a == nil) ifFalse: [ ^ a ].
+            )
+
+        run = ( ^ [:a | a - 1] value: 43 )
+    )
+    ";
+
+    let bytecodes = get_bytecodes_from_method(class_txt, "resolve:");
+    dbg!(&bytecodes);
+
+    let actual_wrong_bc = &[
+        PushArgument(
+            0,
+            1,
+        ),
+        PushNil,
+        Send2(
+            0,
+        ),
+        JumpOnTrueTopNil(
+            3,
+        ),
+        PushArgument(
+            0,
+            1,
+        ),
+        ReturnNonLocal,
+        Pop,
+        PushArgument(
+            0,
+            0,
+        ),
+        ReturnLocal,
+    ];
+}
