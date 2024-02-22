@@ -187,7 +187,7 @@ impl fmt::Display for Method {
                         Bytecode::JumpOnTrueTopNil(idx) => {
                             write!(f, "index: {}", idx)?;
                         }
-                        _ => write!(f, "No display for this bytecode, TODO.")? // I am lazy
+                        _ => write!(f, "No display for this bytecode, TODO.")?, // I am lazy
                     }
                 }
                 Ok(())

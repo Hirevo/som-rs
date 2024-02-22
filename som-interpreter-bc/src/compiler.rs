@@ -14,12 +14,12 @@ use som_core::bytecode::Bytecode;
 
 use crate::block::{Block, BlockInfo};
 use crate::class::{Class, MaybeWeak};
+use crate::inliner::PrimMessageInliner;
 use crate::interner::{Interned, Interner};
 use crate::method::{Method, MethodEnv, MethodKind};
 use crate::primitives;
 use crate::value::Value;
 use crate::SOMRef;
-use crate::inliner::PrimMessageInliner;
 
 #[derive(Debug, Clone)]
 pub enum Literal {
@@ -134,17 +134,24 @@ impl GenCtxt for BlockGenCtxt<'_> {
         // first check the locals in this scope, then check the locals that were inlined into the scope (i.e. have a different original scope)
         // needed because when you inline a block, it can contain some PUSH_BLOCKs where we recompile the block, therefore scope info gets out of whack
         // it's not a great solution, pretty slow. a better one would be that when we recompile the blocks, we adjust their bytecode directly which -should- circumvent the issue?
-        (self.locals.iter().position(|(local_name, local_scope)| { local_name == name && (*local_scope == self.current_scope()) }))
-            .map(|idx| FoundVar::Local(0, idx as u8))
-            .or_else(|| self.locals.iter().position(|(local_name, _)| local_name == name).map(|idx| FoundVar::Local(0, idx as u8)))
-            .or_else(|| (self.args.get_index_of(name)).map(|idx| FoundVar::Argument(0, idx as u8)))
-            .or_else(|| {
-                self.outer.find_var(name).map(|found| match found {
-                    FoundVar::Local(up_idx, idx) => FoundVar::Local(up_idx + 1, idx),
-                    FoundVar::Argument(up_idx, idx) => FoundVar::Argument(up_idx + 1, idx),
-                    FoundVar::Field(idx) => FoundVar::Field(idx),
-                })
+        (self.locals.iter().position(|(local_name, local_scope)| {
+            local_name == name && (*local_scope == self.current_scope())
+        }))
+        .map(|idx| FoundVar::Local(0, idx as u8))
+        .or_else(|| {
+            self.locals
+                .iter()
+                .position(|(local_name, _)| local_name == name)
+                .map(|idx| FoundVar::Local(0, idx as u8))
+        })
+        .or_else(|| (self.args.get_index_of(name)).map(|idx| FoundVar::Argument(0, idx as u8)))
+        .or_else(|| {
+            self.outer.find_var(name).map(|found| match found {
+                FoundVar::Local(up_idx, idx) => FoundVar::Local(up_idx + 1, idx),
+                FoundVar::Argument(up_idx, idx) => FoundVar::Argument(up_idx + 1, idx),
+                FoundVar::Field(idx) => FoundVar::Field(idx),
             })
+        })
     }
 
     fn intern_symbol(&mut self, name: &str) -> Interned {
@@ -220,8 +227,8 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
                 Bytecode::JumpOnFalseTopNil(_) => Bytecode::JumpOnFalseTopNil(jump_offset),
                 Bytecode::JumpOnTruePop(_) => Bytecode::JumpOnTruePop(jump_offset),
                 Bytecode::JumpOnFalsePop(_) => Bytecode::JumpOnFalsePop(jump_offset),
-                _ => panic!("Attempting to backpatch a bytecode non jump")
-        };
+                _ => panic!("Attempting to backpatch a bytecode non jump"),
+            };
     }
 
     fn patch_jump(&mut self, idx_to_backpatch: usize, new_val: usize) {
@@ -233,7 +240,7 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
                 Bytecode::JumpOnFalseTopNil(_) => Bytecode::JumpOnFalseTopNil(new_val),
                 Bytecode::JumpOnTruePop(_) => Bytecode::JumpOnTruePop(new_val),
                 Bytecode::JumpOnFalsePop(_) => Bytecode::JumpOnFalsePop(new_val),
-                _ => panic!("Attempting to patch a bytecode non jump")
+                _ => panic!("Attempting to patch a bytecode non jump"),
             };
     }
 
@@ -309,7 +316,6 @@ impl GenCtxt for MethodGenCtxt<'_> {
 }
 
 impl InnerGenCtxt for MethodGenCtxt<'_> {
-
     fn as_gen_ctxt(&mut self) -> &mut dyn GenCtxt {
         self
     }
@@ -560,7 +566,9 @@ impl GenCtxt for ClassGenCtxt<'_> {
     }
 
     fn current_scope(&self) -> usize {
-        panic!("Asking for the current scope of a class, and not a block/method, makes little sense.")
+        panic!(
+            "Asking for the current scope of a class, and not a block/method, makes little sense."
+        )
     }
 }
 
@@ -578,11 +586,13 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
             },
             locals: match &defn.body {
                 ast::MethodBody::Primitive => IndexSet::new(),
-                ast::MethodBody::Body { locals, .. } => locals.iter().cloned().map(|s| (s, 0)).collect(),
+                ast::MethodBody::Body { locals, .. } => {
+                    locals.iter().cloned().map(|s| (s, 0)).collect()
+                }
             },
             literals: IndexSet::new(),
             body: None,
-            scope: 0
+            scope: 0,
         },
     };
 
@@ -613,7 +623,6 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
 
     let method = Method {
         kind: match &defn.body {
-
             ast::MethodBody::Primitive => MethodKind::NotImplemented(defn.signature.clone()),
             ast::MethodBody::Body { .. } => {
                 let locals = {
@@ -653,10 +662,15 @@ pub(crate) fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Optio
     let mut ctxt = BlockGenCtxt {
         outer,
         args: defn.parameters.iter().cloned().collect(),
-        locals: defn.locals.iter().cloned().map(|s| (s, block_scope)).collect(),
+        locals: defn
+            .locals
+            .iter()
+            .cloned()
+            .map(|s| (s, block_scope))
+            .collect(),
         literals: IndexSet::new(),
         body: None,
-        scope: block_scope
+        scope: block_scope,
     };
 
     let splitted = defn.body.exprs.split_last();
@@ -692,7 +706,7 @@ pub(crate) fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Optio
             nb_params,
             inline_cache,
         }),
-        ast_body: defn.clone() // not a fan of this, only needed during parsing and cloning feels needless... TODO
+        ast_body: defn.clone(), // not a fan of this, only needed during parsing and cloning feels needless... TODO
     };
 
     // println!("(system) compiled block !");
