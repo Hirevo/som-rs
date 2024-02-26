@@ -56,7 +56,7 @@ impl PrimMessageInliner for ast::Expression {
         ctxt: &mut dyn InnerGenCtxt,
         message: &ast::Message,
     ) -> Option<()> {
-        match message.signature.as_str() {
+        let has_inlined = match message.signature.as_str() {
             "ifTrue:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnFalse),
             "ifFalse:" => self.inline_if_true_or_if_false(ctxt, message, JumpOnTrue),
             "ifTrue:ifFalse:" => self.inline_if_true_if_false(ctxt, message, JumpOnFalse),
@@ -67,7 +67,11 @@ impl PrimMessageInliner for ast::Expression {
             "and:" => self.inline_or_and(ctxt, message, And),
             // TODO: to:do, maybe others i'm forgetting
             _ => None,
-        }
+        };
+        // if has_inlined.is_some() { // todo maybe? probably unneeded
+        //     ctxt.remove_dup_popx_pop_sequences();
+        // }
+        has_inlined
     }
 
     fn inline_compiled_block(&self, ctxt: &mut dyn InnerGenCtxt, block: &BlockInfo) -> Option<()> {
@@ -166,7 +170,8 @@ impl PrimMessageInliner for ast::Expression {
                         match block.literals.get(constant_idx as usize)? {
                             lit => {
                                 let lit_idx = ctxt.push_literal(lit.clone());
-                                match lit_idx { // maybe create a function just for translating "constant_id (usize) <-> Bytecode" that to avoid duplication
+                                match lit_idx {
+                                    // maybe create a function just for translating "constant_id (usize) <-> Bytecode" that to avoid duplication
                                     0 => ctxt.push_instr(Bytecode::PushConstant0),
                                     1 => ctxt.push_instr(Bytecode::PushConstant1),
                                     2 => ctxt.push_instr(Bytecode::PushConstant2),

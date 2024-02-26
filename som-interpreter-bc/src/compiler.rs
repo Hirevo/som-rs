@@ -106,7 +106,8 @@ pub trait InnerGenCtxt: GenCtxt {
     fn push_arg(&mut self, name: String) -> usize;
     fn push_local(&mut self, name: String, original_scope: usize) -> usize;
     fn get_nbr_locals(&self) -> usize;
-    fn get_literal(&self, idx: usize) -> Option<&Literal>; // is this needed?
+    fn get_literal(&self, idx: usize) -> Option<&Literal>;
+    // is this needed?
     fn push_literal(&mut self, literal: Literal) -> usize;
     fn remove_literal(&mut self, idx: usize) -> Option<Literal>;
     fn get_cur_instr_idx(&self) -> usize;
@@ -137,21 +138,21 @@ impl GenCtxt for BlockGenCtxt<'_> {
         (self.locals.iter().position(|(local_name, local_scope)| {
             local_name == name && (*local_scope == self.current_scope())
         }))
-        .map(|idx| FoundVar::Local(0, idx as u8))
-        .or_else(|| {
-            self.locals
-                .iter()
-                .position(|(local_name, _)| local_name == name)
-                .map(|idx| FoundVar::Local(0, idx as u8))
-        })
-        .or_else(|| (self.args.get_index_of(name)).map(|idx| FoundVar::Argument(0, idx as u8)))
-        .or_else(|| {
-            self.outer.find_var(name).map(|found| match found {
-                FoundVar::Local(up_idx, idx) => FoundVar::Local(up_idx + 1, idx),
-                FoundVar::Argument(up_idx, idx) => FoundVar::Argument(up_idx + 1, idx),
-                FoundVar::Field(idx) => FoundVar::Field(idx),
+            .map(|idx| FoundVar::Local(0, idx as u8))
+            .or_else(|| {
+                self.locals
+                    .iter()
+                    .position(|(local_name, _)| local_name == name)
+                    .map(|idx| FoundVar::Local(0, idx as u8))
             })
-        })
+            .or_else(|| (self.args.get_index_of(name)).map(|idx| FoundVar::Argument(0, idx as u8)))
+            .or_else(|| {
+                self.outer.find_var(name).map(|found| match found {
+                    FoundVar::Local(up_idx, idx) => FoundVar::Local(up_idx + 1, idx),
+                    FoundVar::Argument(up_idx, idx) => FoundVar::Argument(up_idx + 1, idx),
+                    FoundVar::Field(idx) => FoundVar::Field(idx),
+                })
+            })
     }
 
     fn intern_symbol(&mut self, name: &str) -> Interned {
@@ -249,7 +250,8 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
     }
 
     fn remove_dup_popx_pop_sequences(&mut self) {
-        if self.body.is_none() || self.body.as_ref().unwrap().len() < 3 { // TODO once behavior is fixed, change to only one mutable borrow at the start like in the old code
+        if self.body.is_none() || self.body.as_ref().unwrap().len() < 3 {
+            // TODO once behavior is fixed, change to only one mutable borrow at the start like in the old code
             return;
         }
 
@@ -263,6 +265,22 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
                 )
                 && matches!(bytecode_win[2], Bytecode::Pop)
             {
+                let are_bc_jump_targets = self.body.as_ref().unwrap().iter().enumerate().any(|(maybe_jump_idx, bc)| match bc {
+                    Bytecode::Jump(jump_offset)
+                    | Bytecode::JumpOnTrueTopNil(jump_offset)
+                    | Bytecode::JumpOnFalseTopNil(jump_offset)
+                    | Bytecode::JumpOnTruePop(jump_offset)
+                    | Bytecode::JumpOnFalsePop(jump_offset) => {
+                        let bc_target_idx = maybe_jump_idx + *jump_offset;
+                        bc_target_idx == idx || bc_target_idx == idx + 2
+                    },
+                    _ => {false}
+                });
+
+                if are_bc_jump_targets {
+                    continue
+                }
+
                 indices_to_remove.push(idx);
                 indices_to_remove.push(idx + 2);
             }
@@ -275,21 +293,44 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
         let mut jumps_to_patch = vec![];
         for (cur_idx, bc) in self.body.as_ref().unwrap().iter().enumerate() {
             match bc {
-                Bytecode::Jump(jump_offset) | Bytecode::JumpOnTrueTopNil(jump_offset) | Bytecode::JumpOnFalseTopNil(jump_offset) |
-                Bytecode::JumpOnTruePop(jump_offset) | Bytecode::JumpOnFalsePop(jump_offset) => {
+                Bytecode::Jump(jump_offset)
+                | Bytecode::JumpOnTrueTopNil(jump_offset)
+                | Bytecode::JumpOnFalseTopNil(jump_offset)
+                | Bytecode::JumpOnTruePop(jump_offset)
+                | Bytecode::JumpOnFalsePop(jump_offset) => {
                     if indices_to_remove.contains(&(cur_idx + jump_offset)) {
-                        let idx = indices_to_remove.iter().position(|&v| v == cur_idx + jump_offset).unwrap();
-                        indices_to_remove.remove(idx);
-                        indices_to_remove.remove(idx - 1);
+                        panic!("should be unreachable");
+                        // let jump_target_in_removes_idx = indices_to_remove
+                        //     .iter()
+                        //     .position(|&v| v == cur_idx + jump_offset)
+                        //     .unwrap();
+                        // indices_to_remove.remove(jump_target_in_removes_idx);
+                        // // indices_to_remove.remove(jump_target_in_removes_idx - 1);
+                        // let to_remove = (jump_target_in_removes_idx,
+                        //                  match jump_target_in_removes_idx % 2 {
+                        //                      0 => jump_target_in_removes_idx + 1,
+                        //                      1 => jump_target_in_removes_idx - 1,
+                        //                      _ => unreachable!()
+                        //                  });
+                        //
+                        // indices_to_remove.retain(|v| *v != to_remove.0 && *v != to_remove.1);
+                        // continue;
                     }
 
-                    let nbr_to_adjust = indices_to_remove.iter().filter(|&&v| cur_idx < v && v <= cur_idx + jump_offset).count();
+                    let nbr_to_adjust = indices_to_remove
+                        .iter()
+                        .filter(|&&idx| cur_idx < idx && idx <= cur_idx + jump_offset)
+                        .count();
                     jumps_to_patch.push((cur_idx, jump_offset - nbr_to_adjust));
-                },
+                }
                 Bytecode::JumpBackward(jump_offset) => {
-                    let nbr_to_adjust = indices_to_remove.iter().filter(|&&v| cur_idx > v && v > cur_idx - jump_offset).count();
+                    let nbr_to_adjust = indices_to_remove
+                        .iter()
+                        .filter(|&&idx| cur_idx > idx && idx > cur_idx - jump_offset)
+                        .count();
                     jumps_to_patch.push((cur_idx, jump_offset - nbr_to_adjust));
-                },
+                    // It's impossible for a JumpBackward to be generated to point to a duplicated dup/pop/pox sequence, as it stands, and as far as I know.
+                }
                 _ => {}
             }
         }
@@ -644,7 +685,7 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
             ctxt.push_instr(Bytecode::PushArgument(0, 0));
             ctxt.push_instr(Bytecode::ReturnLocal); // TODO that returnlocal isn't necessary if there's already a return before
 
-            ctxt.remove_dup_popx_pop_sequences();// TODO enable me
+            ctxt.remove_dup_popx_pop_sequences();
         }
     }
 
