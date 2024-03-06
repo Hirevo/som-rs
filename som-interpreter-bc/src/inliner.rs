@@ -1,6 +1,6 @@
-use crate::block::BlockInfo;
+use crate::block::{Block, BlockInfo};
 use crate::compiler::MethodCodegen;
-use crate::compiler::{compile_block, InnerGenCtxt, Literal};
+use crate::compiler::{InnerGenCtxt, Literal};
 use crate::inliner::JumpType::{JumpOnFalse, JumpOnTrue};
 use crate::inliner::OrAndChoice::{And, Or};
 use rand::Rng;
@@ -21,7 +21,8 @@ pub enum OrAndChoice {
 // TODO some of those should return Result types and throw errors instead, most likely.
 pub trait PrimMessageInliner {
     fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message)
-        -> Option<()>;
+                          -> Option<()>;
+    fn adapt_block_after_outer_inlined(&self, ctxt: &mut dyn InnerGenCtxt, block_body: &Block, adjust_scope_by: usize) -> Block;
     fn inline_compiled_block(&self, ctxt: &mut dyn InnerGenCtxt, block: &BlockInfo) -> Option<()>;
     fn inline_last_push_block_bc(&self, ctxt: &mut dyn InnerGenCtxt) -> Option<()>;
     fn inline_if_true_or_if_false(
@@ -139,8 +140,8 @@ impl PrimMessageInliner for ast::Expression {
                     Bytecode::PushBlock(block_idx) => {
                         match block.literals.get(*block_idx as usize)? {
                             Literal::Block(inner_block) => {
-                                let new_block =
-                                    compile_block(ctxt.as_gen_ctxt(), &inner_block.ast_body)?;
+                                // let new_block = inner_block.as_ref().clone();
+                                let new_block = self.adapt_block_after_outer_inlined(ctxt, &inner_block, 1);
                                 let idx = ctxt.push_literal(Literal::Block(Rc::from(new_block)));
                                 ctxt.push_instr(Bytecode::PushBlock(idx as u8));
                             }
@@ -243,6 +244,59 @@ impl PrimMessageInliner for ast::Expression {
         match self.inline_compiled_block(ctxt, cond_block_ref.as_ref().blk_info.as_ref()) {
             None => panic!("Inlining a compiled block failed!"),
             _ => Some(()),
+        }
+    }
+
+    fn adapt_block_after_outer_inlined(&self, _ctxt: &mut dyn InnerGenCtxt, orig_block: &Block, adjust_scope_by: usize) -> Block {
+        let new_body = orig_block.blk_info.body.iter().map(|b|
+            match b {
+                Bytecode::PushLocal(up_idx, _) | Bytecode::PopLocal(up_idx, _) |
+                Bytecode::PushArgument(up_idx, _) | Bytecode::PopArgument(up_idx, _) => {
+                    let new_up_idx: u8 = match *up_idx as isize - adjust_scope_by as isize {
+                        diff if diff < 0 => 0,
+                        diff => diff as u8
+                    };
+                    match b {
+                        Bytecode::PushLocal(_, idx) => Bytecode::PushLocal(new_up_idx, *idx),
+                        Bytecode::PopLocal(_, idx) => Bytecode::PushLocal(new_up_idx, *idx),
+                        Bytecode::PushArgument(_, idx) => Bytecode::PushArgument(new_up_idx, *idx),
+                        Bytecode::PopArgument(_, idx) => Bytecode::PopArgument(new_up_idx, *idx),
+                        _ => unreachable!()
+                    }
+                },
+                Bytecode::PushBlock(_block_idx) => {
+                    todo!();
+                    // match orig_block.blk_info.literals.get(*block_idx as usize) {
+                    //     Some(Literal::Block(inner_block)) => {
+                    //         // can't just clone the inner_block because the body to be modified is behind an Rc (not Rc<RefCell<>>), so immutable
+                    //         // though if we ever want to do some runtime bytecode rewriting, it'll have to be an Rc<RefCell<>> and this code will be refactorable
+                    //         // let new_block = inner_block.as_ref().clone();
+                    //         let new_block = self.adapt_block_after_outer_inlined(ctxt, inner_block.clone().as_ref(), adjust_scope_by + 1);
+                    //
+                    //         todo!()
+                    //         // Bytecode::PushBlock(idx as u8)
+                    //     }
+                    //     None => panic!("PushBlock is associated with no literal whatsoever?"),
+                    //     _ => panic!("PushBlock is not actually pushing a block somehow"),
+                    // };
+                },
+
+                // Bytecode::ReturnNonLocal => Bytecode::ReturnNonLocal,
+                _ => b.clone()
+            }
+        ).collect();
+
+        // can't just clone the inner_block then modify the body because the body is behind an Rc (not Rc<RefCell<>>), so immutable
+        // though if we ever want to do some runtime bytecode rewriting, it'll have to be an Rc<RefCell<>> and this code will be refactorable (not so many individual calls to .clone())
+        Block {
+            frame: orig_block.frame.clone(),
+            blk_info: Rc::new(BlockInfo {
+                locals: orig_block.blk_info.locals.clone(),
+                literals: orig_block.blk_info.literals.clone(),
+                body: new_body,
+                nb_params: orig_block.blk_info.nb_params,
+                inline_cache: orig_block.blk_info.inline_cache.clone(),
+            }),
         }
     }
 
