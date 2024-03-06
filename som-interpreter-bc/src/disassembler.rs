@@ -151,7 +151,9 @@ fn disassemble_body(
             Bytecode::JumpBackward(idx) => {
                 println!(" {} (jump to bytecode index {})", idx, cur_idx - idx);
             }
-            Bytecode::Push0 | Bytecode::Push1 | Bytecode::PushNil => {}
+            Bytecode::Push0 | Bytecode::Push1 | Bytecode::PushNil => {
+                println!();
+            }
         }
     }
 }
