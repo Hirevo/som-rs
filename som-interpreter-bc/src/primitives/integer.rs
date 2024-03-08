@@ -492,7 +492,7 @@ fn lt(interpreter: &mut Interpreter, _: &mut Universe) {
         (Value::Double(a), Value::Integer(b)) => Value::Boolean(a < (b as f64)),
         (Value::BigInteger(a), Value::Integer(b)) => Value::Boolean(a < BigInt::from(b)),
         (Value::Integer(a), Value::BigInteger(b)) => Value::Boolean(BigInt::from(a) < b),
-        _ => panic!("'{}': wrong types", SIGNATURE),
+        (t1, t2) => panic!("'{}': wrong types: {:?} and {:?}", SIGNATURE, t1, t2),
     };
 
     interpreter.stack.push(value);
