@@ -182,7 +182,11 @@ impl PrimMessageInliner for ast::Expression {
                         };
                     }
                     Bytecode::ReturnNonLocal => {
-                        // TODO: this is incomplete, but I don't *think* this affects performance?
+                        // TODO: this is incomplete, but it doesn't seem to affect performance?
+                        // Incomplete because Send{1|2|..} get turned to ReturnNonLocal when in 99% of cases, they should be "ReturnLocal"s
+                        // and maybe some other cases that I forget
+                        // But I don't observe any speedup from turning those nonlocal rets to local rets and deactivating the ONE broken benchmark, so... who cares, I guess?
+                        // TODO: also if ReturnNonLocal ever gets a scope as argument (as it should) this code should be super simplifiable ("ReturnNonLocal(scope - 1), or ReturnLocal if scope is 1")
                         match ctxt.get_instructions().last()? {
                             Bytecode::Push0 | Bytecode::Push1 | Bytecode::PushNil | Bytecode::PushGlobal(_) => ctxt.push_instr(Bytecode::ReturnNonLocal),
                             Bytecode::PushLocal(up_idx, _) | Bytecode::PopLocal(up_idx, _) |
@@ -199,7 +203,7 @@ impl PrimMessageInliner for ast::Expression {
                                 }
                             },
                             _ => {
-                                ctxt.push_instr(Bytecode::ReturnLocal) // TODO nonlocal instead
+                                ctxt.push_instr(Bytecode::ReturnNonLocal)
                             }
                         }
                     }
