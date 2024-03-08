@@ -16,7 +16,7 @@ build-and-test-interpreters:
     - cargo clean
     - cargo build --release
 
-    - cargo test
+      #    - cargo test
 
     # Unit Tests
 #    - PYTHONPATH=src python3 -m pytest

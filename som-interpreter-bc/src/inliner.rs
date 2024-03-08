@@ -185,12 +185,31 @@ impl PrimMessageInliner for ast::Expression {
                         // TODO; if the new context level is 0 (check prev bytecode emitted?), gotta emit a RETURNLOCAL instead!
                         // as far as i understand... this still works? and is just slower? TODO fix though obviously
 
-                        // dbg!(&ctxt.get_instructions().last());
-                        // match ctxt.get_instructions().last().unwrap() {
-                        //     Bytecode::PushGlobal(_) => ctxt.push_instr(Bytecode::ReturnLocal),
-                        //     _ => ctxt.push_instr(Bytecode::ReturnNonLocal)
-                        // }
-                        ctxt.push_instr(Bytecode::ReturnNonLocal)
+                        match ctxt.get_instructions().last()? {
+                            Bytecode::Push0 | Bytecode::Push1 | Bytecode::PushNil | Bytecode::PushGlobal(_) => ctxt.push_instr(Bytecode::ReturnNonLocal),
+                            Bytecode::PushLocal(up_idx, _) | Bytecode::PopLocal(up_idx, _) |
+                            Bytecode::PushArgument(up_idx, _) | Bytecode::PopArgument(up_idx, _) => {
+                                match up_idx {
+                                    0 => ctxt.push_instr(Bytecode::ReturnLocal),
+                                    _ => ctxt.push_instr(Bytecode::ReturnNonLocal)
+                                }
+                            },
+                            Bytecode::Send1(_) | Bytecode::Send2(_) | Bytecode::Send3(_) | Bytecode::SendN(_) => {ctxt.push_instr(Bytecode::ReturnNonLocal)},
+                            Bytecode::PushField(_) | Bytecode::PopField(_) => {
+                                match ctxt.current_scope() {
+                                    0 => ctxt.push_instr(Bytecode::ReturnLocal),
+                                    _ => ctxt.push_instr(Bytecode::ReturnNonLocal)
+                                }
+                            },
+                            // Bytecode::PushConstant(_) | Bytecode::PushConstant0 | Bytecode::PushConstant1 | Bytecode::PushConstant2 => ctxt.push_instr(Bytecode::ReturnNonLocal),
+                            _ => {
+                                // dbg!(ctxt.get_instructions().last()?);
+                                ctxt.push_instr(Bytecode::ReturnLocal)
+                            }
+                        }
+                        // dbg!(ctxt.get_instructions().last());
+                        ctxt.push_instr(Bytecode::ReturnLocal)
+                        // ctxt.push_instr(Bytecode::ReturnNonLocal)
                     }
                     Bytecode::ReturnLocal => {}
                     // todo: hmm... do we? if so, add these to the _ case i guess.
