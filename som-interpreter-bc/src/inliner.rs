@@ -21,8 +21,13 @@ pub enum OrAndChoice {
 // TODO some of those should return Result types and throw errors instead, most likely.
 pub trait PrimMessageInliner {
     fn inline_if_possible(&self, ctxt: &mut dyn InnerGenCtxt, message: &ast::Message)
-                          -> Option<()>;
-    fn adapt_block_after_outer_inlined(&self, ctxt: &mut dyn InnerGenCtxt, block_body: &Block, adjust_scope_by: usize) -> Block;
+        -> Option<()>;
+    fn adapt_block_after_outer_inlined(
+        &self,
+        ctxt: &mut dyn InnerGenCtxt,
+        block_body: &Block,
+        adjust_scope_by: usize,
+    ) -> Block;
     fn inline_compiled_block(&self, ctxt: &mut dyn InnerGenCtxt, block: &BlockInfo) -> Option<()>;
     fn inline_last_push_block_bc(&self, ctxt: &mut dyn InnerGenCtxt) -> Option<()>;
     fn inline_if_true_or_if_false(
@@ -141,7 +146,8 @@ impl PrimMessageInliner for ast::Expression {
                         match block.literals.get(*block_idx as usize)? {
                             Literal::Block(inner_block) => {
                                 // let new_block = inner_block.as_ref().clone();
-                                let new_block = self.adapt_block_after_outer_inlined(ctxt, &inner_block, 1);
+                                let new_block =
+                                    self.adapt_block_after_outer_inlined(ctxt, &inner_block, 1);
                                 let idx = ctxt.push_literal(Literal::Block(Rc::from(new_block)));
                                 ctxt.push_instr(Bytecode::PushBlock(idx as u8));
                             }
@@ -266,16 +272,26 @@ impl PrimMessageInliner for ast::Expression {
         }
     }
 
-    fn adapt_block_after_outer_inlined(&self, ctxt: &mut dyn InnerGenCtxt, orig_block: &Block, adjust_scope_by: usize) -> Block {
+    fn adapt_block_after_outer_inlined(
+        &self,
+        ctxt: &mut dyn InnerGenCtxt,
+        orig_block: &Block,
+        adjust_scope_by: usize,
+    ) -> Block {
         let mut block_literals_to_patch = vec![];
-        let new_body = orig_block.blk_info.body.iter().map(|b|
-            match b {
-                Bytecode::PushLocal(up_idx, _) | Bytecode::PopLocal(up_idx, _) |
-                Bytecode::PushArgument(up_idx, _) | Bytecode::PopArgument(up_idx, _) => {
+        let new_body = orig_block
+            .blk_info
+            .body
+            .iter()
+            .map(|b| match b {
+                Bytecode::PushLocal(up_idx, _)
+                | Bytecode::PopLocal(up_idx, _)
+                | Bytecode::PushArgument(up_idx, _)
+                | Bytecode::PopArgument(up_idx, _) => {
                     let new_up_idx = match *up_idx {
                         0 => 0, // local var/arg, not affected by inlining, stays the same
                         d if d > adjust_scope_by as u8 => *up_idx - 1,
-                        _ => *up_idx
+                        _ => *up_idx,
                     };
 
                     match b {
@@ -283,27 +299,36 @@ impl PrimMessageInliner for ast::Expression {
                         Bytecode::PopLocal(_, idx) => Bytecode::PopLocal(new_up_idx, *idx),
                         Bytecode::PushArgument(_, idx) => Bytecode::PushArgument(new_up_idx, *idx),
                         Bytecode::PopArgument(_, idx) => Bytecode::PopArgument(new_up_idx, *idx),
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     }
-                },
+                }
                 Bytecode::PushBlock(block_idx) => {
-                    let inner_lit = orig_block.blk_info.literals.get(*block_idx as usize)
-                        .unwrap_or_else(|| panic!("PushBlock is associated with no literal whatsoever?"));
+                    let inner_lit = orig_block
+                        .blk_info
+                        .literals
+                        .get(*block_idx as usize)
+                        .unwrap_or_else(|| {
+                            panic!("PushBlock is associated with no literal whatsoever?")
+                        });
                     let inner_block = match inner_lit {
                         Literal::Block(inner_blk) => inner_blk,
-                        _ => panic!("PushBlock is not actually pushing a block somehow")
+                        _ => panic!("PushBlock is not actually pushing a block somehow"),
                     };
 
-                    let new_block = self.adapt_block_after_outer_inlined(ctxt, inner_block.clone().as_ref(), adjust_scope_by);
+                    let new_block = self.adapt_block_after_outer_inlined(
+                        ctxt,
+                        inner_block.clone().as_ref(),
+                        adjust_scope_by,
+                    );
 
                     block_literals_to_patch.push((block_idx, Rc::from(new_block)));
 
                     Bytecode::PushBlock(*block_idx)
-                },
+                }
                 // Bytecode::ReturnNonLocal => Bytecode::ReturnNonLocal,
-                _ => b.clone()
-            }
-        ).collect();
+                _ => b.clone(),
+            })
+            .collect();
 
         // can't just clone the inner_block then modify the body/literals because the body is behind an Rc (not Rc<RefCell<>>), so immutable
         // though if we ever want to do some runtime bytecode rewriting, it'll have to be an Rc<RefCell<>> and this code will be refactorable (not so many individual calls to .clone())
@@ -311,11 +336,15 @@ impl PrimMessageInliner for ast::Expression {
             frame: orig_block.frame.clone(),
             blk_info: Rc::new(BlockInfo {
                 locals: orig_block.blk_info.locals.clone(),
-                literals: orig_block.blk_info.literals.iter().enumerate()
+                literals: orig_block
+                    .blk_info
+                    .literals
+                    .iter()
+                    .enumerate()
                     .map(|(idx, l)| {
                         let a = block_literals_to_patch
                             .iter()
-                            .find_map(|(block_idx, blk)| {(**block_idx == idx as u8).then(|| blk)});
+                            .find_map(|(block_idx, blk)| (**block_idx == idx as u8).then(|| blk));
 
                         if a.is_some() {
                             Literal::Block(Rc::clone(a.unwrap()))

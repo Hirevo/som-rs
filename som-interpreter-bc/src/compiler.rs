@@ -138,21 +138,21 @@ impl GenCtxt for BlockGenCtxt<'_> {
         (self.locals.iter().position(|(local_name, local_scope)| {
             local_name == name && (*local_scope == self.current_scope())
         }))
-            .map(|idx| FoundVar::Local(0, idx as u8))
-            .or_else(|| {
-                self.locals
-                    .iter()
-                    .position(|(local_name, _)| local_name == name)
-                    .map(|idx| FoundVar::Local(0, idx as u8))
+        .map(|idx| FoundVar::Local(0, idx as u8))
+        .or_else(|| {
+            self.locals
+                .iter()
+                .position(|(local_name, _)| local_name == name)
+                .map(|idx| FoundVar::Local(0, idx as u8))
+        })
+        .or_else(|| (self.args.get_index_of(name)).map(|idx| FoundVar::Argument(0, idx as u8)))
+        .or_else(|| {
+            self.outer.find_var(name).map(|found| match found {
+                FoundVar::Local(up_idx, idx) => FoundVar::Local(up_idx + 1, idx),
+                FoundVar::Argument(up_idx, idx) => FoundVar::Argument(up_idx + 1, idx),
+                FoundVar::Field(idx) => FoundVar::Field(idx),
             })
-            .or_else(|| (self.args.get_index_of(name)).map(|idx| FoundVar::Argument(0, idx as u8)))
-            .or_else(|| {
-                self.outer.find_var(name).map(|found| match found {
-                    FoundVar::Local(up_idx, idx) => FoundVar::Local(up_idx + 1, idx),
-                    FoundVar::Argument(up_idx, idx) => FoundVar::Argument(up_idx + 1, idx),
-                    FoundVar::Field(idx) => FoundVar::Field(idx),
-                })
-            })
+        })
     }
 
     fn intern_symbol(&mut self, name: &str) -> Interned {
@@ -265,20 +265,26 @@ impl InnerGenCtxt for BlockGenCtxt<'_> {
                 )
                 && matches!(bytecode_win[2], Bytecode::Pop)
             {
-                let are_bc_jump_targets = self.body.as_ref().unwrap().iter().enumerate().any(|(maybe_jump_idx, bc)| match bc {
-                    Bytecode::Jump(jump_offset)
-                    | Bytecode::JumpOnTrueTopNil(jump_offset)
-                    | Bytecode::JumpOnFalseTopNil(jump_offset)
-                    | Bytecode::JumpOnTruePop(jump_offset)
-                    | Bytecode::JumpOnFalsePop(jump_offset) => {
-                        let bc_target_idx = maybe_jump_idx + *jump_offset;
-                        bc_target_idx == idx || bc_target_idx == idx + 2
-                    },
-                    _ => {false}
-                });
+                let are_bc_jump_targets =
+                    self.body
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .enumerate()
+                        .any(|(maybe_jump_idx, bc)| match bc {
+                            Bytecode::Jump(jump_offset)
+                            | Bytecode::JumpOnTrueTopNil(jump_offset)
+                            | Bytecode::JumpOnFalseTopNil(jump_offset)
+                            | Bytecode::JumpOnTruePop(jump_offset)
+                            | Bytecode::JumpOnFalsePop(jump_offset) => {
+                                let bc_target_idx = maybe_jump_idx + *jump_offset;
+                                bc_target_idx == idx || bc_target_idx == idx + 2
+                            }
+                            _ => false,
+                        });
 
                 if are_bc_jump_targets {
-                    continue
+                    continue;
                 }
 
                 indices_to_remove.push(idx);
@@ -773,7 +779,7 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
             body,
             nb_params,
             inline_cache,
-        })
+        }),
     };
 
     // println!("(system) compiled block !");

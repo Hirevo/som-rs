@@ -26,7 +26,7 @@ pub struct BlockInfo {
 pub struct Block {
     /// Reference to the captured stack frame.
     pub frame: Option<SOMRef<Frame>>,
-    pub blk_info: Rc<BlockInfo>
+    pub blk_info: Rc<BlockInfo>,
 }
 
 impl Block {
