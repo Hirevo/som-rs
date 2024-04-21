@@ -15,7 +15,7 @@ som-parser = { package = "som-parser-symbols", path = "../som-parser-symbols", v
 # som-parser = { package = "som-parser-text", path = "../som-parser-text", version = "0.1.0" }
 
 # CLI interface
-structopt = "0.3.25"
+clap = { version = "3.0", features = ["derive"] }
 
 # error handling
 anyhow = "1.0.51"

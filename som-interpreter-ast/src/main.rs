@@ -7,9 +7,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use anyhow::anyhow;
+use clap::Parser;
 #[cfg(feature = "jemalloc")]
 use jemallocator::Jemalloc;
-use structopt::StructOpt;
 
 mod shell;
 
@@ -21,22 +21,22 @@ use som_interpreter_ast::value::Value;
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
-#[derive(Debug, Clone, PartialEq, StructOpt)]
+#[derive(Debug, Clone, PartialEq, clap::StructOpt)]
 #[structopt(about, author)]
 struct Options {
     /// Files to evaluate.
-    #[structopt(name = "FILE")]
+    #[clap(name = "FILE")]
     file: Option<PathBuf>,
 
-    #[structopt(name = "ARGS")]
+    #[clap(name = "ARGS")]
     args: Vec<String>,
 
     /// Set search path for application classes.
-    #[structopt(short, long)]
+    #[clap(short, long, multiple_values(true))]
     classpath: Vec<PathBuf>,
 
     /// Enable verbose output (with timing information).
-    #[structopt(short = "v")]
+    #[clap(short = 'v')]
     verbose: bool,
 }
 
