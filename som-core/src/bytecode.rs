@@ -31,8 +31,15 @@ pub enum Bytecode {
     SuperSendN(u8),
     ReturnLocal,
     ReturnNonLocal,
+    Jump(usize),
+    JumpBackward(usize),
+    JumpOnTrueTopNil(usize),
+    JumpOnFalseTopNil(usize),
+    JumpOnTruePop(usize),
+    JumpOnFalsePop(usize),
 }
 
+// TODO check case, padding, for pull request
 impl Bytecode {
     /// Get the instruction's name.
     #[rustfmt::skip]
@@ -67,6 +74,12 @@ impl Bytecode {
             Self::SuperSendN(_)       => "SUPER_SEND_N",
             Self::ReturnLocal        => "RETURN_LOCAL",
             Self::ReturnNonLocal     => "RETURN_NON_LOCAL",
+            Self::Jump(_)              => "JUMP",
+            Self::JumpBackward(_)      => "JUMP_BACKWARD",
+            Self::JumpOnTrueTopNil(_)  => "JUMP_ON_TRUE_TOP_NIL",
+            Self::JumpOnFalseTopNil(_) => "JUMP_ON_FALSE_TOP_NIL",
+            Self::JumpOnTruePop(_)     => "JUMP_ON_TRUE_POP",
+            Self::JumpOnFalsePop(_)    => "JUMP_ON_FALSE_POP"
         }
     }
 
@@ -103,6 +116,12 @@ impl Bytecode {
             Self::SuperSendN(_)      => "SUPER_SEND_N    ",
             Self::ReturnLocal        => "RETURN_LOCAL    ",
             Self::ReturnNonLocal     => "RETURN_NON_LOCAL",
+            Self::Jump(_)              => "JUMP                   ",
+            Self::JumpBackward(_)      => "JUMP_BACKWARD          ",
+            Self::JumpOnTrueTopNil(_)  => "JUMP_ON_TRUE_TOP_NIL   ",
+            Self::JumpOnFalseTopNil(_) => "JUMP_ON_FALSE_TOP_NIL  ",
+            Self::JumpOnTruePop(_)     => "JUMP_ON_TRUE_POP       ",
+            Self::JumpOnFalsePop(_)    => "JUMP_ON_FALSE_POP      "
         }
     }
 }
@@ -201,6 +220,12 @@ impl fmt::Display for Bytecode {
             Self::SuperSendN(idx)            => write!(f, "SUPER_SEND_N {}", idx),
             Self::ReturnLocal               => write!(f, "RETURN_LOCAL", ),
             Self::ReturnNonLocal            => write!(f, "RETURN_NON_LOCAL", ),
+            Self::Jump(idx)             => write!(f, "JUMP {}", idx),
+            Self::JumpBackward(idx)             => write!(f, "JUMP_BACKWARD {}", idx),
+            Self::JumpOnFalseTopNil(idx) => write!(f, "JUMP_ON_FALSE_TOP_NIL {}", idx),
+            Self::JumpOnFalsePop(idx) => write!(f, "JUMP_ON_FALSE_POP {}", idx),
+            Self::JumpOnTrueTopNil(idx) => write!(f, "JUMP_ON_TRUE_TOP_NIL {}", idx),
+            Self::JumpOnTruePop(idx) => write!(f, "JUMP_ON_TRUE_POP {}", idx),
         }
     }
 }

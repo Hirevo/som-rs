@@ -166,7 +166,7 @@ impl Interpreter {
                     let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
                     let mut block = match literal {
                         Literal::Block(blk) => Block::clone(&blk),
-                        _ => return None,
+                        _ => panic!("PushBlock expected a block, but got another invalid literal"),
                     };
                     block.frame.replace(Rc::clone(&frame));
                     self.stack.push(Value::Block(Rc::new(block)));
@@ -195,7 +195,7 @@ impl Interpreter {
                     let literal = frame.borrow().lookup_constant(idx as usize).unwrap();
                     let symbol = match literal {
                         Literal::Symbol(sym) => sym,
-                        _ => return None,
+                        _ => panic!("Global is not a symbol."),
                     };
                     if let Some(value) = universe.lookup_global(symbol) {
                         self.stack.push(value);
@@ -322,10 +322,72 @@ impl Interpreter {
                         );
                     }
                 }
+                Bytecode::Jump(offset) => {
+                    let frame = self.current_frame()?;
+                    frame.clone().borrow_mut().bytecode_idx += offset - 1;
+                }
+                Bytecode::JumpBackward(offset) => {
+                    let frame = self.current_frame()?;
+                    frame.clone().borrow_mut().bytecode_idx -= offset + 1;
+                }
+                Bytecode::JumpOnTrueTopNil(offset) => {
+                    let condition_result = self.stack.last()?;
+
+                    match condition_result {
+                        Value::Boolean(true) => {
+                            let frame = self.current_frame()?;
+                            frame.clone().borrow_mut().bytecode_idx += offset - 1; // minus one because it gets incremented by one already every loop
+                            *self.stack.last_mut()? = Value::Nil;
+                        }
+                        Value::Boolean(false) => {
+                            self.stack.pop();
+                        }
+                        _ => panic!("Jump condition did not evaluate to boolean"),
+                    }
+                }
+                Bytecode::JumpOnFalseTopNil(offset) => {
+                    let condition_result = self.stack.last()?;
+
+                    match condition_result {
+                        Value::Boolean(false) => {
+                            let frame = self.current_frame()?;
+                            frame.clone().borrow_mut().bytecode_idx += offset - 1;
+                            *self.stack.last_mut()? = Value::Nil;
+                        }
+                        Value::Boolean(true) => {
+                            self.stack.pop();
+                        }
+                        _ => panic!("Jump condition did not evaluate to boolean"),
+                    }
+                }
+                Bytecode::JumpOnTruePop(offset) => {
+                    let condition_result = self.stack.pop()?;
+
+                    match condition_result {
+                        Value::Boolean(true) => {
+                            let frame = self.current_frame()?;
+                            frame.clone().borrow_mut().bytecode_idx += offset - 1;
+                        }
+                        Value::Boolean(false) => {}
+                        _ => panic!("Jump condition did not evaluate to boolean"),
+                    }
+                }
+                Bytecode::JumpOnFalsePop(offset) => {
+                    let condition_result = self.stack.pop()?;
+
+                    match condition_result {
+                        Value::Boolean(false) => {
+                            let frame = self.current_frame()?;
+                            frame.clone().borrow_mut().bytecode_idx += offset - 1;
+                        }
+                        Value::Boolean(true) => {}
+                        _ => panic!("Jump condition did not evaluate to boolean"),
+                    }
+                }
             }
         }
 
-        fn do_send(
+        pub fn do_send(
             interpreter: &mut Interpreter,
             universe: &mut Universe,
             method: Option<Rc<Method>>,

@@ -172,3 +172,54 @@ fn super_send_bytecodes() {
         &[PushArgument(0, 0), Push1, Push1, Push1, SuperSendN(3)],
     );
 }
+
+#[ignore]
+#[test]
+fn something_jump_bug_popx() {
+    // todo: this test is about jump BC pointing to redundant dup/popx/pop sequences...
+    // ...therefore breaking when they're optimized and the jump doesn't know what to do.
+    // this issue is currently being circumvented by straight up not removing the sequence when it's a jump target.
+    // but this needs to be changed in the future. there's likely an underlying issue that this test right there exemplifies?
+
+    let class_txt = "Foo = (
+        testIfTrueTrueResult = (
+          | result |
+          result := true ifTrue: [ 1 ].
+          ^ result class
+        )
+    )
+    ";
+
+    let bytecodes = get_bytecodes_from_method(class_txt, "testIfTrueTrueResult");
+    dbg!(&bytecodes);
+
+    let _bc_no_removal = &[
+        PushGlobal(0),
+        JumpOnFalseTopNil(2),
+        Push1,
+        Dup,
+        PopLocal(0, 0),
+        Pop,
+        PushLocal(0, 0),
+        Send1(1),
+        ReturnNonLocal,
+        Pop,
+        PushArgument(0, 0),
+        ReturnLocal,
+    ];
+
+    let expected_bytecodes: &[Bytecode] = &[
+        PushGlobal(0),
+        JumpOnFalseTopNil(2),
+        Push1,
+        PopLocal(0, 0),
+        PushLocal(0, 0),
+        Send1(1),
+        ReturnNonLocal,
+        Pop,
+        PushArgument(0, 0),
+        ReturnLocal,
+    ];
+
+    expect_bytecode_sequence(&bytecodes, expected_bytecodes);
+}

@@ -19,8 +19,20 @@ fn disassemble_body(
 ) {
     let padding = "  |".repeat(level);
     let current = env.last().copied().unwrap();
-    for bytecode in current.get_body().into_iter().copied() {
-        print!("{padding} {0}", bytecode.padded_name());
+    for (cur_idx, bytecode) in current.get_body().into_iter().copied().enumerate() {
+        let extra_spaces_nbr = if cur_idx >= 100 {
+            0
+        } else if (10..=99).contains(&cur_idx) {
+            1
+        } else {
+            2
+        };
+        print!(
+            "{cur_idx} {0} {padding} {1}",
+            " ".repeat(extra_spaces_nbr),
+            bytecode.padded_name()
+        );
+        // print!("{padding} {0}", bytecode.padded_name());
 
         match bytecode {
             Bytecode::Halt => {
@@ -129,7 +141,19 @@ fn disassemble_body(
             Bytecode::ReturnNonLocal => {
                 println!();
             }
-            Bytecode::Push0 | Bytecode::Push1 | Bytecode::PushNil => {}
+            Bytecode::Jump(idx)
+            | Bytecode::JumpOnFalsePop(idx)
+            | Bytecode::JumpOnTruePop(idx)
+            | Bytecode::JumpOnFalseTopNil(idx)
+            | Bytecode::JumpOnTrueTopNil(idx) => {
+                println!(" {} (jump to bytecode index {})", idx, cur_idx + idx);
+            }
+            Bytecode::JumpBackward(idx) => {
+                println!(" {} (jump to bytecode index {})", idx, cur_idx - idx);
+            }
+            Bytecode::Push0 | Bytecode::Push1 | Bytecode::PushNil => {
+                println!();
+            }
         }
     }
 }
