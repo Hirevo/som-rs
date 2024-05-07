@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["combinators"],"struct":["And","AndLeft","AndRight","Map","Or"],"trait":["Parser"]};

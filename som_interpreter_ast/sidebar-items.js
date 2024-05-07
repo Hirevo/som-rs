@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["expect_args"],"mod":["block","class","evaluate","frame","hashcode","instance","interner","invokable","method","primitives","universe","value"],"type":["SOMRef","SOMWeakRef"]};

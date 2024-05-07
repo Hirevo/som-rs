@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Expression","Literal","MethodBody","MethodKind"],"struct":["BinaryOp","Block","Body","ClassDef","Message","MethodDef","Term"]};
