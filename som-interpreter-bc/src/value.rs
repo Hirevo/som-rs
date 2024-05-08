@@ -315,9 +315,9 @@ impl Value {
     pub const FALSE: Self = Self::new(BOOLEAN_TAG, 0);
 
     /// The integer `0` value.
-    pub const INTEGER_ZERO: SOMValue = SOMValue::new(INTEGER_TAG, 0);
+    pub const INTEGER_ZERO: Self = Self::new(INTEGER_TAG, 0);
     /// The integer `1` value.
-    pub const INTEGER_ONE: SOMValue = SOMValue::new(INTEGER_TAG, 1);
+    pub const INTEGER_ONE: Self = Self::new(INTEGER_TAG, 1);
 
     /// Returns a new boolean value.
     #[inline(always)]

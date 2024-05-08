@@ -299,13 +299,13 @@ impl Interpreter {
                     self.stack.push(value);
                 }
                 Bytecode::Push0 => {
-                    self.stack.push(SOMValue::INTEGER_ZERO);
+                    self.stack.push(Value::INTEGER_ZERO);
                 }
                 Bytecode::Push1 => {
-                    self.stack.push(SOMValue::INTEGER_ONE);
+                    self.stack.push(Value::INTEGER_ONE);
                 }
                 Bytecode::PushNil => {
-                    self.stack.push(SOMValue::NIL);
+                    self.stack.push(Value::NIL);
                 }
                 Bytecode::Pop => {
                     self.stack.pop().context("POP with missing value")?;
