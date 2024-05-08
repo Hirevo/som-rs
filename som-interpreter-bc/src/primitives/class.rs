@@ -38,8 +38,7 @@ fn new(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
         Value::Class(class) => class,
     ]);
 
-    let instance = Instance::from_class(class);
-    let instance = heap.allocate(RefCell::new(instance));
+    let instance = Instance::from_class(heap, class);
     interpreter.stack.push(Value::Instance(instance));
 }
 

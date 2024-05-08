@@ -83,7 +83,7 @@ impl Hash for Class {
 impl Hash for Instance {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
         self.class.borrow().hash(hasher);
-        self.locals.iter().for_each(|value| {
+        self.fields_iter().for_each(|value| {
             value.hash(hasher);
         });
     }

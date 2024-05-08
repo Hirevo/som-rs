@@ -1,3 +1,4 @@
+use std::alloc::Layout;
 use std::cell::Cell;
 use std::ptr::NonNull;
 use std::time::{Duration, Instant};
@@ -78,14 +79,65 @@ impl GcHeap {
     /// Allocates an object on the GC heap, returning its handle.
     pub fn allocate<T: Trace + 'static>(&mut self, value: T) -> Gc<T> {
         // TODO: trigger `collect_garbage`
-        let allocated = Box::new(GcBox::new(value));
-        // SAFETY: `self.head` is guaranteed to be properly aligned and non-null by `Box::into_raw`.
-        let ptr = unsafe { NonNull::new_unchecked(Box::into_raw(allocated)) };
+        let (allocated, layout) = {
+            let layout = Layout::new::<GcBox<T>>();
+            assert_ne!(layout.size(), 0, "GC: unable to allocate 0 bytes");
+            let Some(ptr) = NonNull::<GcBox<T>>::new(unsafe { std::alloc::alloc(layout) }.cast())
+            else {
+                panic!("GC: got null pointer from `alloc`");
+            };
+            let value = std::mem::ManuallyDrop::new(GcBox::new(layout, value));
+            unsafe { std::ptr::copy(std::ptr::from_ref(&*value), ptr.as_ptr(), 1) };
+            (ptr, layout)
+        };
         self.objects
-            .push(ptr as NonNull<GcBox<dyn Trace + 'static>>);
-        self.stats.bytes_allocated += std::mem::size_of::<GcBox<T>>();
+            .push(allocated as NonNull<GcBox<dyn Trace + 'static>>);
+        self.stats.bytes_allocated += layout.size();
         Gc {
-            ptr: Cell::new(ptr),
+            ptr: Cell::new(allocated),
+        }
+    }
+
+    /// Allocates an object on the GC heap, returning its handle.
+    pub fn allocate_with_additional_size<T: Trace + 'static>(
+        &mut self,
+        value: T,
+        size: usize,
+    ) -> Gc<T> {
+        // TODO: trigger `collect_garbage`
+        let (allocated, layout) = {
+            let layout = Layout::new::<GcBox<T>>();
+            assert_ne!(layout.size(), 0, "GC: unable to allocate 0 bytes");
+            // TODO: is this next assert actually accurate (are alignments other than 8 a problem ?).
+            assert_eq!(
+                layout.align(),
+                8,
+                "GC: only supported alignment for additional size is 8",
+            );
+            assert_eq!(
+                layout.size() % layout.align(),
+                0,
+                "GC: layout is not aligned",
+            );
+            let (extended_layout, _) = layout
+                .extend(Layout::from_size_align(size, 8).unwrap())
+                .unwrap();
+            // println!("EXTENDED SIZE: {}", extended_layout.size());
+            assert_eq!(extended_layout.size(), layout.size() + size);
+            let Some(ptr) =
+                NonNull::<GcBox<T>>::new(unsafe { std::alloc::alloc(extended_layout) }.cast())
+            else {
+                panic!("GC: got null pointer from `alloc`");
+            };
+            let value = std::mem::ManuallyDrop::new(GcBox::new(extended_layout, value));
+            unsafe { std::ptr::copy(std::ptr::from_ref(&*value), ptr.as_ptr(), 1) };
+            (ptr, extended_layout)
+        };
+        self.objects
+            .push(allocated as NonNull<GcBox<dyn Trace + 'static>>);
+        self.stats.bytes_allocated += layout.size();
+        Gc {
+            ptr: Cell::new(allocated),
         }
     }
 
@@ -104,9 +156,9 @@ impl GcHeap {
             // SAFETY: we don't access that reference again after we drop it.
             let is_retained = unsafe { obj.as_ref() }.marked.replace(false);
             if !is_retained {
-                let value = unsafe { Box::from_raw(obj.as_ptr()) };
-                self.stats.bytes_allocated -= std::mem::size_of_val::<GcBox<_>>(&*value);
-                drop(value);
+                let layout = unsafe { obj.as_ref() }.layout;
+                unsafe { std::alloc::dealloc(obj.as_ptr().cast(), layout) };
+                self.stats.bytes_allocated -= layout.size();
             }
             is_retained
         });

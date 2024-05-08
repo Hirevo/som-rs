@@ -9,6 +9,7 @@ use crate::gc_box::GcBox;
 use crate::trace::Trace;
 
 /// Represent a handle to a GC-allocated value.
+#[repr(C)]
 pub struct Gc<T>
 where
     T: Trace + 'static,

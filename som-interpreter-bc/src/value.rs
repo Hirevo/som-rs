@@ -13,6 +13,7 @@ use crate::SOMRef;
 
 /// Represents an SOM value.
 #[derive(Clone)]
+#[repr(C)]
 pub enum Value {
     /// The **nil** value.
     Nil,

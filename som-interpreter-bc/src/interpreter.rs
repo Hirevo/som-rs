@@ -113,8 +113,8 @@ impl Interpreter {
     }
 
     pub fn push_frame(&mut self, heap: &mut GcHeap, kind: FrameKind) -> SOMRef<Frame> {
-        let frame = heap.allocate(RefCell::new(Frame::from_kind(kind)));
-        self.frames.push(frame.clone());
+        let frame = Frame::from_kind(heap, kind);
+        self.frames.push(Gc::clone(&frame));
         frame
     }
 

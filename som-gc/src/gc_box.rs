@@ -1,3 +1,4 @@
+use std::alloc::Layout;
 use std::cell::Cell;
 use std::ops::{Deref, DerefMut};
 
@@ -5,6 +6,7 @@ use std::ops::{Deref, DerefMut};
 #[repr(C)]
 pub(crate) struct GcBox<T: ?Sized> {
     /// Pointer to next value in the GC chain.  
+    pub(crate) layout: Layout,
     pub(crate) marked: Cell<bool>,
     pub(crate) value: T,
 }
@@ -12,9 +14,10 @@ pub(crate) struct GcBox<T: ?Sized> {
 impl<T> GcBox<T> {
     /// Creates a singleton `GcBox` value (which isn't part of any chain yet).
     #[inline]
-    pub fn new(value: T) -> Self {
+    pub fn new(layout: Layout, value: T) -> Self {
         Self {
             marked: Cell::new(false),
+            layout,
             value,
         }
     }
@@ -45,6 +48,7 @@ impl<T: Default> Default for GcBox<T> {
     fn default() -> Self {
         Self {
             marked: Cell::new(false),
+            layout: Layout::new::<T>(),
             value: T::default(),
         }
     }
