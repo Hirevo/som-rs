@@ -1,8 +1,8 @@
 use std::cell::RefCell;
 use std::fmt;
-use std::rc::Rc;
 
 use som_core::bytecode::Bytecode;
+use som_gc::{Gc, GcHeap, Trace};
 
 use crate::class::Class;
 use crate::compiler::Literal;
@@ -12,14 +12,14 @@ use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
-use crate::{SOMRef, SOMWeakRef};
+use crate::SOMRef;
 
 #[derive(Clone)]
 pub struct MethodEnv {
     pub locals: Vec<Interned>,
     pub literals: Vec<Literal>,
     pub body: Vec<Bytecode>,
-    pub inline_cache: RefCell<Vec<Option<(*const Class, Rc<Method>)>>>,
+    pub inline_cache: RefCell<Vec<Option<(*const RefCell<Class>, Gc<Method>)>>>,
 }
 
 /// The kind of a class method.
@@ -44,8 +44,35 @@ impl MethodKind {
 #[derive(Clone)]
 pub struct Method {
     pub kind: MethodKind,
-    pub holder: SOMWeakRef<Class>,
+    pub holder: SOMRef<Class>,
     pub signature: String,
+}
+
+impl Trace for MethodKind {
+    #[inline]
+    fn trace(&self) {
+        match self {
+            MethodKind::Defined(env) => env.trace(),
+            MethodKind::Primitive(_) => {}
+            MethodKind::NotImplemented(_) => {}
+        }
+    }
+}
+
+impl Trace for MethodEnv {
+    #[inline]
+    fn trace(&self) {
+        self.literals.trace();
+        self.inline_cache.trace();
+    }
+}
+
+impl Trace for Method {
+    #[inline]
+    fn trace(&self) {
+        self.kind.trace();
+        self.holder.trace();
+    }
 }
 
 impl Method {
@@ -55,14 +82,6 @@ impl Method {
         } else {
             universe.method_class()
         }
-    }
-
-    pub fn kind(&self) -> &MethodKind {
-        &self.kind
-    }
-
-    pub fn holder(&self) -> &SOMWeakRef<Class> {
-        &self.holder
     }
 
     pub fn signature(&self) -> &str {
@@ -75,29 +94,29 @@ impl Method {
     }
 
     pub fn invoke(
-        self: Rc<Self>,
+        this: Gc<Self>,
         interpreter: &mut Interpreter,
+        heap: &mut GcHeap,
         universe: &mut Universe,
         receiver: Value,
         mut args: Vec<Value>,
     ) {
-        match self.kind() {
+        match &this.kind {
             MethodKind::Defined(_) => {
-                let holder = self.holder().upgrade().unwrap();
                 let kind = FrameKind::Method {
-                    method: self,
-                    holder,
+                    holder: this.holder.clone(),
+                    method: this,
                     self_value: receiver.clone(),
                 };
 
-                let frame = interpreter.push_frame(kind);
+                let frame = interpreter.push_frame(heap, kind);
                 frame.borrow_mut().args.push(receiver);
                 frame.borrow_mut().args.append(&mut args);
             }
             MethodKind::Primitive(func) => {
                 interpreter.stack.push(receiver);
                 interpreter.stack.append(&mut args);
-                func(interpreter, universe)
+                func(interpreter, heap, universe)
             }
             MethodKind::NotImplemented(_) => todo!(),
         }
@@ -109,8 +128,8 @@ impl fmt::Display for Method {
         write!(
             f,
             "#{}>>#{} = ",
-            self.holder.upgrade().unwrap().borrow().name(),
-            self.signature
+            self.holder.borrow().name(),
+            self.signature,
         )?;
         match &self.kind {
             MethodKind::Defined(env) => {

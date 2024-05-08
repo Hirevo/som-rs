@@ -19,13 +19,16 @@ pub mod symbol;
 /// Primitives for the **System** class.
 pub mod system;
 
+use som_gc::GcHeap;
+
 pub use self::blocks::{block1, block2, block3};
 
 use crate::interpreter::Interpreter;
 use crate::universe::Universe;
 
 /// A interpreter primitive (just a bare function pointer).
-pub type PrimitiveFn = fn(interpreter: &mut Interpreter, universe: &mut Universe);
+pub type PrimitiveFn =
+    fn(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Universe);
 
 #[macro_export]
 macro_rules! reverse {

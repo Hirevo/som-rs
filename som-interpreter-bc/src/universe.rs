@@ -3,9 +3,12 @@ use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 
 use anyhow::{anyhow, Error};
+
+use som_gc::Gc;
+use som_gc::GcHeap;
+use som_gc::Trace;
 
 use crate::block::Block;
 use crate::class::Class;
@@ -65,6 +68,34 @@ pub struct CoreClasses {
     pub false_class: SOMRef<Class>,
 }
 
+impl Trace for CoreClasses {
+    #[inline]
+    fn trace(&self) {
+        self.object_class.trace();
+        self.class_class.trace();
+        self.metaclass_class.trace();
+
+        self.nil_class.trace();
+        self.integer_class.trace();
+        self.double_class.trace();
+        self.array_class.trace();
+        self.method_class.trace();
+        self.primitive_class.trace();
+        self.symbol_class.trace();
+        self.string_class.trace();
+        self.system_class.trace();
+
+        self.block_class.trace();
+        self.block1_class.trace();
+        self.block2_class.trace();
+        self.block3_class.trace();
+
+        self.boolean_class.trace();
+        self.true_class.trace();
+        self.false_class.trace();
+    }
+}
+
 /// The central data structure for the interpreter.
 ///
 /// It represents the complete state of the interpreter, like the known class definitions,
@@ -80,38 +111,62 @@ pub struct Universe {
     pub core: CoreClasses,
 }
 
+impl Trace for Universe {
+    #[inline]
+    fn trace(&self) {
+        for it in self.globals.values() {
+            it.trace();
+        }
+        self.core.trace();
+    }
+}
+
 impl Universe {
     /// Initialize the universe from the given classpath.
-    pub fn with_classpath(classpath: Vec<PathBuf>) -> Result<Self, Error> {
+    pub fn with_classpath(heap: &mut GcHeap, classpath: Vec<PathBuf>) -> Result<Self, Error> {
         let mut interner = Interner::with_capacity(100);
         let mut globals = HashMap::new();
 
-        let object_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Object")?;
-        let class_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Class")?;
+        let object_class =
+            Self::load_system_class(heap, &mut interner, classpath.as_slice(), "Object")?;
+        let class_class =
+            Self::load_system_class(heap, &mut interner, classpath.as_slice(), "Class")?;
         let metaclass_class =
-            Self::load_system_class(&mut interner, classpath.as_slice(), "Metaclass")?;
+            Self::load_system_class(heap, &mut interner, classpath.as_slice(), "Metaclass")?;
 
-        let nil_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Nil")?;
+        let nil_class = Self::load_system_class(heap, &mut interner, classpath.as_slice(), "Nil")?;
         let integer_class =
-            Self::load_system_class(&mut interner, classpath.as_slice(), "Integer")?;
-        let array_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Array")?;
-        let method_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Method")?;
-        let symbol_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Symbol")?;
+            Self::load_system_class(heap, &mut interner, classpath.as_slice(), "Integer")?;
+        let array_class =
+            Self::load_system_class(heap, &mut interner, classpath.as_slice(), "Array")?;
+        let method_class =
+            Self::load_system_class(heap, &mut interner, classpath.as_slice(), "Method")?;
+        let symbol_class =
+            Self::load_system_class(heap, &mut interner, classpath.as_slice(), "Symbol")?;
         let primitive_class =
-            Self::load_system_class(&mut interner, classpath.as_slice(), "Primitive")?;
-        let string_class = Self::load_system_class(&mut interner, classpath.as_slice(), "String")?;
-        let system_class = Self::load_system_class(&mut interner, classpath.as_slice(), "System")?;
-        let double_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Double")?;
+            Self::load_system_class(heap, &mut interner, classpath.as_slice(), "Primitive")?;
+        let string_class =
+            Self::load_system_class(heap, &mut interner, classpath.as_slice(), "String")?;
+        let system_class =
+            Self::load_system_class(heap, &mut interner, classpath.as_slice(), "System")?;
+        let double_class =
+            Self::load_system_class(heap, &mut interner, classpath.as_slice(), "Double")?;
 
-        let block_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Block")?;
-        let block1_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Block1")?;
-        let block2_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Block2")?;
-        let block3_class = Self::load_system_class(&mut interner, classpath.as_slice(), "Block3")?;
+        let block_class =
+            Self::load_system_class(heap, &mut interner, classpath.as_slice(), "Block")?;
+        let block1_class =
+            Self::load_system_class(heap, &mut interner, classpath.as_slice(), "Block1")?;
+        let block2_class =
+            Self::load_system_class(heap, &mut interner, classpath.as_slice(), "Block2")?;
+        let block3_class =
+            Self::load_system_class(heap, &mut interner, classpath.as_slice(), "Block3")?;
 
         let boolean_class =
-            Self::load_system_class(&mut interner, classpath.as_slice(), "Boolean")?;
-        let true_class = Self::load_system_class(&mut interner, classpath.as_slice(), "True")?;
-        let false_class = Self::load_system_class(&mut interner, classpath.as_slice(), "False")?;
+            Self::load_system_class(heap, &mut interner, classpath.as_slice(), "Boolean")?;
+        let true_class =
+            Self::load_system_class(heap, &mut interner, classpath.as_slice(), "True")?;
+        let false_class =
+            Self::load_system_class(heap, &mut interner, classpath.as_slice(), "False")?;
 
         // initializeSystemClass(objectClass, null, "Object");
         // set_super_class(&object_class, &nil_class, &metaclass_class);
@@ -119,12 +174,12 @@ impl Universe {
             .borrow()
             .class()
             .borrow_mut()
-            .set_class(&metaclass_class);
+            .set_class(metaclass_class.clone());
         object_class
             .borrow()
             .class()
             .borrow_mut()
-            .set_super_class(&class_class);
+            .set_super_class(class_class.clone());
         // initializeSystemClass(classClass, objectClass, "Class");
         set_super_class(&class_class, &object_class, &metaclass_class);
         // initializeSystemClass(metaclassClass, classClass, "Metaclass");
@@ -214,6 +269,7 @@ impl Universe {
 
     /// Load a system class (with an incomplete hierarchy).
     pub fn load_system_class(
+        heap: &mut GcHeap,
         interner: &mut Interner,
         classpath: &[impl AsRef<Path>],
         class_name: impl Into<String>,
@@ -248,7 +304,7 @@ impl Universe {
                     path.display(),
                 ));
             }
-            let class = compiler::compile_class(interner, &defn, None)
+            let class = compiler::compile_class(heap, interner, &defn, None)
                 .ok_or_else(|| Error::msg(format!("")))?;
 
             return Ok(class);
@@ -258,7 +314,11 @@ impl Universe {
     }
 
     /// Load a class from its name into this universe.
-    pub fn load_class(&mut self, class_name: impl Into<String>) -> Result<SOMRef<Class>, Error> {
+    pub fn load_class(
+        &mut self,
+        heap: &mut GcHeap,
+        class_name: impl Into<String>,
+    ) -> Result<SOMRef<Class>, Error> {
         let class_name = class_name.into();
         for path in self.classpath.iter() {
             let mut path = path.join(class_name.as_str());
@@ -293,14 +353,15 @@ impl Universe {
                 let symbol = self.intern_symbol(super_class.as_str());
                 match self.lookup_global(symbol) {
                     Some(Value::Class(super_class)) => super_class,
-                    _ => self.load_class(super_class)?,
+                    _ => self.load_class(heap, super_class)?,
                 }
             } else {
                 self.core.object_class.clone()
             };
 
-            let class = compiler::compile_class(&mut self.interner, &defn, Some(&super_class))
-                .ok_or_else(|| Error::msg(format!("")))?;
+            let class =
+                compiler::compile_class(heap, &mut self.interner, &defn, Some(&super_class))
+                    .ok_or_else(|| Error::msg(format!("")))?;
             set_super_class(&class, &super_class, &self.core.metaclass_class);
 
             // fn has_duplicated_field(class: &SOMRef<Class>) -> Option<(String, (String, String))> {
@@ -349,7 +410,11 @@ impl Universe {
     }
 
     /// Load a class from its path into this universe.
-    pub fn load_class_from_path(&mut self, path: impl AsRef<Path>) -> Result<SOMRef<Class>, Error> {
+    pub fn load_class_from_path(
+        &mut self,
+        heap: &mut GcHeap,
+        path: impl AsRef<Path>,
+    ) -> Result<SOMRef<Class>, Error> {
         let path = path.as_ref();
         let file_stem = path
             .file_stem()
@@ -384,13 +449,13 @@ impl Universe {
             let symbol = self.intern_symbol(super_class);
             match self.lookup_global(symbol) {
                 Some(Value::Class(class)) => class,
-                _ => self.load_class(super_class)?,
+                _ => self.load_class(heap, super_class)?,
             }
         } else {
             self.core.object_class.clone()
         };
 
-        let class = compiler::compile_class(&mut self.interner, &defn, Some(&super_class))
+        let class = compiler::compile_class(heap, &mut self.interner, &defn, Some(&super_class))
             .ok_or_else(|| Error::msg(format!("")))?;
         set_super_class(&class, &super_class, &self.core.metaclass_class);
 
@@ -506,20 +571,20 @@ impl Universe {
     pub fn escaped_block(
         &mut self,
         interpreter: &mut Interpreter,
+        heap: &mut GcHeap,
         value: Value,
-        block: Rc<Block>,
+        block: Gc<Block>,
     ) -> Option<()> {
         let method_name = self.intern_symbol("escapedBlock:");
         let method = value.lookup_method(self, method_name)?;
 
-        let holder = method.holder().upgrade().unwrap();
         let kind = FrameKind::Method {
+            holder: method.holder.clone(),
             method,
-            holder,
             self_value: value.clone(),
         };
 
-        let frame = interpreter.push_frame(kind);
+        let frame = interpreter.push_frame(heap, kind);
         frame.borrow_mut().args.push(value);
         frame.borrow_mut().args.push(Value::Block(block));
 
@@ -530,6 +595,7 @@ impl Universe {
     pub fn does_not_understand(
         &mut self,
         interpreter: &mut Interpreter,
+        heap: &mut GcHeap,
         value: Value,
         symbol: Interned,
         args: Vec<Value>,
@@ -537,17 +603,16 @@ impl Universe {
         let method_name = self.intern_symbol("doesNotUnderstand:arguments:");
         let method = value.lookup_method(self, method_name)?;
 
-        let holder = method.holder().upgrade().unwrap();
         let kind = FrameKind::Method {
+            holder: method.holder.clone(),
             method,
-            holder,
             self_value: value.clone(),
         };
 
-        let frame = interpreter.push_frame(kind);
+        let frame = interpreter.push_frame(heap, kind);
         frame.borrow_mut().args.push(value);
         frame.borrow_mut().args.push(Value::Symbol(symbol));
-        let args = Value::Array(Rc::new(RefCell::new(args)));
+        let args = Value::Array(heap.allocate(RefCell::new(args)));
         frame.borrow_mut().args.push(args);
 
         Some(())
@@ -557,20 +622,20 @@ impl Universe {
     pub fn unknown_global(
         &mut self,
         interpreter: &mut Interpreter,
+        heap: &mut GcHeap,
         value: Value,
         name: Interned,
     ) -> Option<()> {
         let method_name = self.intern_symbol("unknownGlobal:");
         let method = value.lookup_method(self, method_name)?;
 
-        let holder = method.holder().upgrade().unwrap();
         let kind = FrameKind::Method {
+            holder: method.holder.clone(),
             method,
-            holder,
             self_value: value.clone(),
         };
 
-        let frame = interpreter.push_frame(kind);
+        let frame = interpreter.push_frame(heap, kind);
         frame.borrow_mut().args.push(value);
         frame.borrow_mut().args.push(Value::Symbol(name));
 
@@ -578,7 +643,12 @@ impl Universe {
     }
 
     /// Call `System>>#initialize:` with the given name, if it is defined.
-    pub fn initialize(&mut self, interpreter: &mut Interpreter, args: Vec<Value>) -> Option<()> {
+    pub fn initialize(
+        &mut self,
+        heap: &mut GcHeap,
+        interpreter: &mut Interpreter,
+        args: Vec<Value>,
+    ) -> Option<()> {
         let method_name = self.interner.intern("initialize:");
         let method = Value::System.lookup_method(self, method_name)?;
 
@@ -588,9 +658,9 @@ impl Universe {
             self_value: Value::System,
         };
 
-        let frame = interpreter.push_frame(kind);
+        let frame = interpreter.push_frame(heap, kind);
         frame.borrow_mut().args.push(Value::System);
-        let args = Value::Array(Rc::new(RefCell::new(args)));
+        let args = Value::Array(heap.allocate(RefCell::new(args)));
         frame.borrow_mut().args.push(args);
 
         Some(())
@@ -602,15 +672,15 @@ fn set_super_class(
     super_class: &SOMRef<Class>,
     metaclass_class: &SOMRef<Class>,
 ) {
-    class.borrow_mut().set_super_class(super_class);
+    class.borrow_mut().set_super_class(super_class.clone());
     class
         .borrow()
         .class()
         .borrow_mut()
-        .set_super_class(&super_class.borrow().class());
+        .set_super_class(super_class.borrow().class());
     class
         .borrow()
         .class()
         .borrow_mut()
-        .set_class(metaclass_class);
+        .set_class(metaclass_class.clone());
 }
