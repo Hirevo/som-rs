@@ -307,7 +307,7 @@ impl Iterator for Lexer {
                             for _ in 0..int_part_len {
                                 self.chars.pop()?;
                             }
-                            if let Ok(number) = repr.parse::<i64>() {
+                            if let Ok(number) = repr.parse() {
                                 Some(Token::LitInteger(number))
                             } else {
                                 Some(Token::LitBigInteger(repr))

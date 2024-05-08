@@ -233,7 +233,7 @@ pub enum Literal {
     /// Represents a decimal number literal (eg. `3.14`).
     Double(f64),
     /// Represents a integer number literal (eg. `42`).
-    Integer(i64),
+    Integer(i32),
     /// Represents a big integer (bigger than a 64-bit signed integer can represent).
     BigInteger(String),
     /// Represents an array literal (eg. `$(1 2 3)`)

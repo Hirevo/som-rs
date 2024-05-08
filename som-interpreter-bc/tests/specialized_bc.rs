@@ -1,23 +1,26 @@
-use som_core::bytecode::Bytecode;
-use som_core::bytecode::Bytecode::*;
 use std::path::PathBuf;
+
+use som_core::bytecode::Bytecode::{self, *};
+use som_lexer::{Lexer, Token};
+use som_parser::lang;
+
+use som_gc::GcHeap;
 
 use som_interpreter_bc::compiler;
 use som_interpreter_bc::method::MethodKind;
 use som_interpreter_bc::universe::Universe;
-use som_lexer::{Lexer, Token};
-use som_parser::lang;
 
-fn setup_universe() -> Universe {
+fn setup_universe(heap: &mut GcHeap) -> Universe {
     let classpath = vec![
         PathBuf::from("../core-lib/Smalltalk"),
         PathBuf::from("../core-lib/TestSuite/BasicInterpreterTests"),
     ];
-    Universe::with_classpath(classpath).expect("could not setup test universe")
+    Universe::with_classpath(heap, classpath).expect("could not setup test universe")
 }
 
 fn get_bytecodes_from_method(class_txt: &str, method_name: &str) -> Vec<Bytecode> {
-    let mut universe = setup_universe();
+    let mut heap = GcHeap::new();
+    let mut universe = setup_universe(&mut heap);
 
     let method_name_interned = universe.intern_symbol(method_name);
 
@@ -33,7 +36,12 @@ fn get_bytecodes_from_method(class_txt: &str, method_name: &str) -> Vec<Bytecode
     let class_def = som_parser::apply(lang::class_def(), tokens.as_slice()).unwrap();
 
     let object_class = universe.object_class();
-    let class = compiler::compile_class(&mut universe.interner, &class_def, Some(&object_class));
+    let class = compiler::compile_class(
+        &mut heap,
+        &mut universe.interner,
+        &class_def,
+        Some(&object_class),
+    );
     assert!(class.is_some(), "could not compile test expression");
 
     let class = class.unwrap();

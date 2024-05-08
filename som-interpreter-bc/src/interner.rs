@@ -13,7 +13,7 @@ use std::mem;
 ///
 /// This is fast to move, clone and compare.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub struct Interned(u32);
+pub struct Interned(pub u32);
 
 /// A string interner.
 ///

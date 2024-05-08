@@ -1,55 +1,72 @@
+use anyhow::Error;
+use once_cell::sync::Lazy;
+
+use som_gc::{Gc, GcHeap};
+
+use crate::class::Class;
+use crate::convert::Primitive;
+use crate::interner::Interned;
 use crate::interpreter::Interpreter;
+use crate::method::Method;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
-use crate::{expect_args, reverse};
+use crate::SOMRef;
 
-pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
-    ("holder", self::holder, true),
-    ("signature", self::signature, true),
-    ("invokeOn:with:", self::invoke_on_with, true),
-];
-pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
+pub static INSTANCE_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> = Lazy::new(|| {
+    Box::new([
+        ("holder", self::holder.into_func(), true),
+        ("signature", self::signature.into_func(), true),
+        ("invokeOn:with:", self::invoke_on_with.into_func(), true),
+    ])
+});
+pub static CLASS_PRIMITIVES: Lazy<Box<[(&str, &'static PrimitiveFn, bool)]>> =
+    Lazy::new(|| Box::new([]));
 
-fn holder(interpreter: &mut Interpreter, _: &mut Universe) {
-    const SIGNATURE: &str = "Method>>#holder";
+fn holder(
+    _: &mut Interpreter,
+    _: &mut GcHeap,
+    _: &mut Universe,
+    invokable: Gc<Method>,
+) -> Result<SOMRef<Class>, Error> {
+    const _: &str = "Method>>#holder";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::Invokable(invokable) => invokable,
-    ]);
-
-    match invokable.holder().upgrade() {
-        Some(holder) => interpreter.stack.push(Value::Class(holder)),
-        None => panic!("'{}': method sholder has been collected", SIGNATURE),
-    }
+    Ok(Gc::clone(&invokable.holder))
 }
 
-fn signature(interpreter: &mut Interpreter, universe: &mut Universe) {
-    const SIGNATURE: &str = "Method>>#signature";
+fn signature(
+    _: &mut Interpreter,
+    _: &mut GcHeap,
+    universe: &mut Universe,
+    invokable: Gc<Method>,
+) -> Result<Interned, Error> {
+    const _: &str = "Method>>#signature";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::Invokable(invokable) => invokable,
-    ]);
-
-    let sym = universe.intern_symbol(invokable.signature());
-    interpreter.stack.push(Value::Symbol(sym))
+    Ok(universe.intern_symbol(invokable.signature()))
 }
 
-fn invoke_on_with(interpreter: &mut Interpreter, universe: &mut Universe) {
-    const SIGNATURE: &str = "Method>>#invokeOn:with:";
+fn invoke_on_with(
+    interpreter: &mut Interpreter,
+    heap: &mut GcHeap,
+    universe: &mut Universe,
+    invokable: Gc<Method>,
+    receiver: Value,
+    arguments: SOMRef<Vec<Value>>,
+) -> Result<(), Error> {
+    const _: &str = "Method>>#invokeOn:with:";
 
-    expect_args!(SIGNATURE, interpreter, [
-        Value::Invokable(invokable) => invokable,
-        receiver => receiver,
-        Value::Array(args) => args,
-    ]);
-
-    let args = args.borrow().iter().cloned().collect();
-    invokable.invoke(interpreter, universe, receiver, args);
+    Method::invoke(
+        invokable,
+        interpreter,
+        heap,
+        universe,
+        receiver,
+        arguments.take(),
+    )
 }
 
 /// Search for an instance primitive matching the given signature.
-pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
+pub fn get_instance_primitive(signature: &str) -> Option<&'static PrimitiveFn> {
     INSTANCE_PRIMITIVES
         .iter()
         .find(|it| it.0 == signature)
@@ -57,7 +74,7 @@ pub fn get_instance_primitive(signature: &str) -> Option<PrimitiveFn> {
 }
 
 /// Search for a class primitive matching the given signature.
-pub fn get_class_primitive(signature: &str) -> Option<PrimitiveFn> {
+pub fn get_class_primitive(signature: &str) -> Option<&'static PrimitiveFn> {
     CLASS_PRIMITIVES
         .iter()
         .find(|it| it.0 == signature)

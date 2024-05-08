@@ -54,7 +54,7 @@ pub enum Token {
     /// The separator sequence (`-------`).
     Separator,
     /// An integer literal (`10`).
-    LitInteger(i64),
+    LitInteger(i32),
     /// A big integer literal (`1542252643255252434`).
     LitBigInteger(String),
     /// A floating-point literal (`10.6`).

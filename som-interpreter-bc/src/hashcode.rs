@@ -4,30 +4,30 @@ use crate::block::Block;
 use crate::class::Class;
 use crate::instance::Instance;
 use crate::method::Method;
-use crate::value::Value;
+use crate::value::ValueEnum;
 
-impl Hash for Value {
+impl Hash for ValueEnum {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
         match self {
-            Value::Nil => {
+            ValueEnum::Nil => {
                 hasher.write(b"#nil#");
             }
-            Value::System => {
+            ValueEnum::System => {
                 hasher.write(b"#system#");
             }
-            Value::Boolean(value) => {
+            ValueEnum::Boolean(value) => {
                 hasher.write(b"#bool#");
                 value.hash(hasher);
             }
-            Value::Integer(value) => {
+            ValueEnum::Integer(value) => {
                 hasher.write(b"#int#");
                 value.hash(hasher);
             }
-            Value::BigInteger(value) => {
+            ValueEnum::BigInteger(value) => {
                 hasher.write(b"#bigint#");
                 value.hash(hasher);
             }
-            Value::Double(value) => {
+            ValueEnum::Double(value) => {
                 hasher.write(b"#double#");
                 let raw_bytes: &[u8] = unsafe {
                     std::slice::from_raw_parts(
@@ -37,33 +37,33 @@ impl Hash for Value {
                 };
                 hasher.write(raw_bytes);
             }
-            Value::Symbol(value) => {
+            ValueEnum::Symbol(value) => {
                 hasher.write(b"#sym#");
                 value.hash(hasher);
             }
-            Value::String(value) => {
+            ValueEnum::String(value) => {
                 hasher.write(b"#string#");
                 value.hash(hasher);
             }
-            Value::Array(value) => {
+            ValueEnum::Array(value) => {
                 hasher.write(b"#arr#");
                 for value in value.borrow().iter() {
                     value.hash(hasher);
                 }
             }
-            Value::Block(value) => {
+            ValueEnum::Block(value) => {
                 hasher.write(b"#blk#");
                 value.hash(hasher);
             }
-            Value::Class(value) => {
+            ValueEnum::Class(value) => {
                 hasher.write(b"#cls#");
                 value.borrow().hash(hasher);
             }
-            Value::Instance(value) => {
+            ValueEnum::Instance(value) => {
                 hasher.write(b"#inst#");
                 value.borrow().hash(hasher);
             }
-            Value::Invokable(value) => {
+            ValueEnum::Invokable(value) => {
                 hasher.write(b"#mthd#");
                 value.hash(hasher);
             }
@@ -100,11 +100,7 @@ impl Hash for Block {
 
 impl Hash for Method {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
-        if let Some(holder) = self.holder().upgrade() {
-            holder.borrow().hash(hasher);
-        } else {
-            hasher.write(b"??");
-        }
+        self.holder.borrow().hash(hasher);
         hasher.write(b">>");
         self.signature.hash(hasher);
     }

@@ -78,7 +78,7 @@ pub fn spacing<'a>() -> impl Parser<(), &'a [char]> {
     whitespace().map(|_| ()).or(comment().map(|_| ()))
 }
 
-pub fn digit<'a>() -> impl Parser<i64, &'a [char]> {
+pub fn digit<'a>() -> impl Parser<i32, &'a [char]> {
     move |input: &'a [char]| {
         let (head, tail) = input.split_first()?;
         match head {
@@ -97,7 +97,7 @@ pub fn digit<'a>() -> impl Parser<i64, &'a [char]> {
     }
 }
 
-pub fn integer<'a>() -> impl Parser<i64, &'a [char]> {
+pub fn integer<'a>() -> impl Parser<i32, &'a [char]> {
     optional(exact('-'))
         .and(some(digit()))
         .map(|(sign, digits)| {

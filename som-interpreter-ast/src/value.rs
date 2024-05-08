@@ -21,7 +21,7 @@ pub enum Value {
     /// A boolean value (**true** or **false**).
     Boolean(bool),
     /// An integer value.
-    Integer(i64),
+    Integer(i32),
     /// A big integer value (arbitrarily big).
     BigInteger(BigInt),
     /// An floating-point value.

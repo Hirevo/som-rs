@@ -7,6 +7,7 @@ members = [
     "som-parser-core",
     "som-parser-symbols",
     "som-parser-text",
+    "som-gc",
 ]
 
 [profile.release]

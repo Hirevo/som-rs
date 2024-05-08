@@ -1,6 +1,5 @@
-use std::rc::Rc;
-
 use som_core::bytecode::Bytecode;
+use som_gc::{Gc, Trace};
 
 use crate::block::Block;
 use crate::class::Class;
@@ -15,14 +14,14 @@ pub enum FrameKind {
     /// A frame created from a block evaluation.
     Block {
         /// The block instance for the current frame.
-        block: Rc<Block>,
+        block: Gc<Block>,
     },
     /// A frame created from a method invocation.
     Method {
         /// The holder of the current method (used for lexical self/super).
         holder: SOMRef<Class>,
         /// The current method.
-        method: Rc<Method>,
+        method: Gc<Method>,
         /// The self value.
         self_value: Value,
     },
@@ -40,12 +39,39 @@ pub struct Frame {
     pub bytecode_idx: usize,
 }
 
+impl Trace for FrameKind {
+    #[inline]
+    fn trace(&self) {
+        match self {
+            FrameKind::Block { block } => block.trace(),
+            FrameKind::Method {
+                holder,
+                method,
+                self_value,
+            } => {
+                holder.trace();
+                method.trace();
+                self_value.trace();
+            }
+        }
+    }
+}
+
+impl Trace for Frame {
+    #[inline]
+    fn trace(&self) {
+        self.kind.trace();
+        self.args.trace();
+        self.locals.trace();
+    }
+}
+
 impl Frame {
     /// Construct a new empty frame from its kind.
     pub fn from_kind(kind: FrameKind) -> Self {
         match &kind {
             FrameKind::Block { block } => {
-                let locals = block.blk_info.locals.iter().map(|_| Value::Nil).collect();
+                let locals = block.blk_info.locals.iter().map(|_| Value::NIL).collect();
                 Self {
                     kind,
                     locals,
@@ -54,8 +80,8 @@ impl Frame {
                 }
             }
             FrameKind::Method { method, .. } => {
-                if let MethodKind::Defined(env) = method.kind() {
-                    let locals = env.locals.iter().map(|_| Value::Nil).collect();
+                if let MethodKind::Defined(env) = &method.kind {
+                    let locals = env.locals.iter().map(|_| Value::NIL).collect();
                     Self {
                         kind,
                         locals,
@@ -98,7 +124,7 @@ impl Frame {
     }
 
     /// Get the current method itself.
-    pub fn get_method(&self) -> Rc<Method> {
+    pub fn get_method(&self) -> Gc<Method> {
         match &self.kind {
             FrameKind::Method { method, .. } => method.clone(),
             FrameKind::Block { block, .. } => block.frame.as_ref().unwrap().borrow().get_method(),
@@ -108,7 +134,7 @@ impl Frame {
     /// Get the bytecode at the specified index for the current method.
     pub fn get_bytecode(&self, idx: usize) -> Option<Bytecode> {
         match &self.kind {
-            FrameKind::Method { method, .. } => match method.kind() {
+            FrameKind::Method { method, .. } => match &method.kind {
                 MethodKind::Defined(env) => env.body.get(idx).copied(),
                 MethodKind::Primitive(_) => None,
                 MethodKind::NotImplemented(_) => None,
@@ -122,11 +148,11 @@ impl Frame {
         self.get_bytecode(self.bytecode_idx)
     }
 
-    pub fn lookup_constant(&self, idx: usize) -> Option<Literal> {
+    pub fn lookup_constant(&self, idx: usize) -> Option<&Literal> {
         match self.kind() {
-            FrameKind::Block { block } => block.blk_info.literals.get(idx).cloned(),
-            FrameKind::Method { method, .. } => match method.kind() {
-                MethodKind::Defined(env) => env.literals.get(idx).cloned(),
+            FrameKind::Block { block } => block.blk_info.literals.get(idx),
+            FrameKind::Method { method, .. } => match &method.kind {
+                MethodKind::Defined(env) => env.literals.get(idx),
                 MethodKind::Primitive(_) => None,
                 MethodKind::NotImplemented(_) => None,
             },

@@ -3,16 +3,17 @@
 //!
 use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
-use std::rc::{Rc, Weak};
 
 use indexmap::{IndexMap, IndexSet};
 use num_bigint::BigInt;
+use num_traits::ToPrimitive;
 
 use som_core::ast;
 use som_core::bytecode::Bytecode;
+use som_gc::{Gc, GcHeap, Trace};
 
 use crate::block::{Block, BlockInfo};
-use crate::class::{Class, MaybeWeak};
+use crate::class::Class;
 use crate::interner::{Interned, Interner};
 use crate::method::{Method, MethodEnv, MethodKind};
 use crate::primitives;
@@ -22,12 +23,33 @@ use crate::SOMRef;
 #[derive(Debug, Clone)]
 pub enum Literal {
     Symbol(Interned),
-    String(Rc<String>),
+    String(Gc<String>),
     Double(f64),
-    Integer(i64),
-    BigInteger(BigInt),
+    Integer(i32),
+    BigInteger(Gc<BigInt>),
     Array(Vec<u8>),
-    Block(Rc<Block>),
+    Block(Gc<Block>),
+}
+
+impl Trace for Literal {
+    #[inline]
+    fn trace(&self) {
+        match self {
+            Literal::Symbol(_) => {}
+            Literal::String(string) => {
+                string.trace();
+            }
+            Literal::Double(_) => {}
+            Literal::Integer(_) => {}
+            Literal::BigInteger(value) => {
+                value.trace();
+            }
+            Literal::Array(_) => {}
+            Literal::Block(block) => {
+                block.trace();
+            }
+        }
+    }
 }
 
 impl PartialEq for Literal {
@@ -39,7 +61,7 @@ impl PartialEq for Literal {
             (Literal::Integer(val1), Literal::Integer(val2)) => val1.eq(val2),
             (Literal::BigInteger(val1), Literal::BigInteger(val2)) => val1.eq(val2),
             (Literal::Array(val1), Literal::Array(val2)) => val1.eq(val2),
-            (Literal::Block(val1), Literal::Block(val2)) => Rc::ptr_eq(val1, val2),
+            (Literal::Block(val1), Literal::Block(val2)) => Gc::ptr_eq(val1, val2),
             _ => false,
         }
     }
@@ -92,6 +114,7 @@ trait GenCtxt {
     fn find_var(&mut self, name: &str) -> Option<FoundVar>;
     fn intern_symbol(&mut self, name: &str) -> Interned;
     fn class_name(&self) -> &str;
+    fn heap(&mut self) -> &mut GcHeap;
 }
 
 trait InnerGenCtxt: GenCtxt {
@@ -135,6 +158,10 @@ impl GenCtxt for BlockGenCtxt<'_> {
 
     fn class_name(&self) -> &str {
         self.outer.class_name()
+    }
+
+    fn heap(&mut self) -> &mut GcHeap {
+        self.outer.heap()
     }
 }
 
@@ -218,6 +245,10 @@ impl GenCtxt for MethodGenCtxt<'_> {
 
     fn class_name(&self) -> &str {
         self.inner.class_name()
+    }
+
+    fn heap(&mut self) -> &mut GcHeap {
+        self.inner.heap()
     }
 }
 
@@ -359,10 +390,18 @@ impl MethodCodegen for ast::Expression {
                         ast::Literal::Symbol(val) => {
                             Literal::Symbol(ctxt.intern_symbol(val.as_str()))
                         }
-                        ast::Literal::String(val) => Literal::String(Rc::new(val.clone())),
+                        ast::Literal::String(val) => {
+                            Literal::String(ctxt.heap().allocate(val.clone()))
+                        }
                         ast::Literal::Double(val) => Literal::Double(*val),
                         ast::Literal::Integer(val) => Literal::Integer(*val),
-                        ast::Literal::BigInteger(val) => Literal::BigInteger(val.parse().unwrap()),
+                        ast::Literal::BigInteger(val) => {
+                            let value: BigInt = val.parse().unwrap();
+                            match value.to_i32() {
+                                Some(value) => Literal::Integer(value),
+                                None => Literal::BigInteger(ctxt.heap().allocate(value)),
+                            }
+                        }
                         ast::Literal::Array(val) => {
                             let literals = val
                                 .iter()
@@ -396,7 +435,7 @@ impl MethodCodegen for ast::Expression {
             }
             ast::Expression::Block(val) => {
                 let block = compile_block(ctxt.as_gen_ctxt(), val)?;
-                let block = Rc::new(block);
+                let block = ctxt.heap().allocate(block);
                 let block = Literal::Block(block);
                 let idx = ctxt.push_literal(block);
                 ctxt.push_instr(Bytecode::PushBlock(idx as u8));
@@ -409,8 +448,9 @@ impl MethodCodegen for ast::Expression {
 struct ClassGenCtxt<'a> {
     pub name: String,
     pub fields: IndexSet<Interned>,
-    pub methods: IndexMap<Interned, Rc<Method>>,
+    pub methods: IndexMap<Interned, Gc<Method>>,
     pub interner: &'a mut Interner,
+    pub heap: &'a mut GcHeap,
 }
 
 impl GenCtxt for ClassGenCtxt<'_> {
@@ -428,9 +468,17 @@ impl GenCtxt for ClassGenCtxt<'_> {
     fn class_name(&self) -> &str {
         self.name.as_str()
     }
+
+    fn heap(&mut self) -> &mut GcHeap {
+        self.heap
+    }
 }
 
-fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Method> {
+fn compile_method(
+    outer: &mut dyn GenCtxt,
+    holder: &SOMRef<Class>,
+    defn: &ast::MethodDef,
+) -> Option<Method> {
     // println!("(method) compiling '{}' ...", defn.signature);
 
     let mut ctxt = MethodGenCtxt {
@@ -499,7 +547,7 @@ fn compile_method(outer: &mut dyn GenCtxt, defn: &ast::MethodDef) -> Option<Meth
                 })
             }
         },
-        holder: Weak::new(),
+        holder: holder.clone(),
         signature: ctxt.signature,
     };
 
@@ -529,6 +577,9 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
         ctxt.push_instr(Bytecode::ReturnLocal);
     }
 
+    let body_len = ctxt.body.as_ref().map_or(0, |body| body.len());
+    let inline_cache = RefCell::new(vec![None; body_len]);
+
     let frame = None;
     let locals = {
         let locals = std::mem::take(&mut ctxt.locals);
@@ -537,14 +588,13 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
             .map(|name| ctxt.intern_symbol(&name))
             .collect()
     };
-    let literals = ctxt.literals.into_iter().collect();
-    let body = ctxt.body.unwrap_or_default();
+    let literals = std::mem::take(&mut ctxt.literals).into_iter().collect();
+    let body = ctxt.body.take().unwrap_or_default();
     let nb_params = ctxt.args.len();
-    let inline_cache = RefCell::new(vec![None; body.len()]);
 
     let block = Block {
         frame,
-        blk_info: Rc::new(BlockInfo {
+        blk_info: ctxt.heap().allocate(BlockInfo {
             locals,
             literals,
             body,
@@ -559,6 +609,7 @@ fn compile_block(outer: &mut dyn GenCtxt, defn: &ast::Block) -> Option<Block> {
 }
 
 pub fn compile_class(
+    heap: &mut GcHeap,
     interner: &mut Interner,
     defn: &ast::ClassDef,
     super_class: Option<&SOMRef<Class>>,
@@ -591,12 +642,13 @@ pub fn compile_class(
         fields: locals,
         methods: IndexMap::new(),
         interner,
+        heap,
     };
 
-    let static_class = Rc::new(RefCell::new(Class {
+    let static_class = static_class_ctxt.heap.allocate(RefCell::new(Class {
         name: static_class_ctxt.name.clone(),
-        class: MaybeWeak::Weak(Weak::new()),
-        super_class: Weak::new(),
+        class: None,
+        super_class: None,
         locals: IndexMap::new(),
         methods: IndexMap::new(),
         is_static: true,
@@ -604,9 +656,9 @@ pub fn compile_class(
 
     for method in &defn.static_methods {
         let signature = static_class_ctxt.interner.intern(method.signature.as_str());
-        let mut method = compile_method(&mut static_class_ctxt, method)?;
-        method.holder = Rc::downgrade(&static_class);
-        static_class_ctxt.methods.insert(signature, Rc::new(method));
+        let method = compile_method(&mut static_class_ctxt, &static_class, method)?;
+        let method = static_class_ctxt.heap.allocate(method);
+        static_class_ctxt.methods.insert(signature, method);
     }
 
     if let Some(primitives) = primitives::get_class_primitives(&defn.name) {
@@ -622,10 +674,11 @@ pub fn compile_class(
             let method = Method {
                 signature: signature.to_string(),
                 kind: MethodKind::Primitive(primitive),
-                holder: Rc::downgrade(&static_class),
+                holder: static_class.clone(),
             };
             let signature = static_class_ctxt.interner.intern(signature);
-            static_class_ctxt.methods.insert(signature, Rc::new(method));
+            let method = static_class_ctxt.heap.allocate(method);
+            static_class_ctxt.methods.insert(signature, method);
         }
     }
 
@@ -633,7 +686,7 @@ pub fn compile_class(
     static_class_mut.locals = static_class_ctxt
         .fields
         .into_iter()
-        .map(|name| (name, Value::Nil))
+        .map(|name| (name, Value::NIL))
         .collect();
     static_class_mut.methods = static_class_ctxt.methods;
     drop(static_class_mut);
@@ -670,12 +723,13 @@ pub fn compile_class(
         fields: locals,
         methods: IndexMap::new(),
         interner,
+        heap,
     };
 
-    let instance_class = Rc::new(RefCell::new(Class {
+    let instance_class = instance_class_ctxt.heap.allocate(RefCell::new(Class {
         name: instance_class_ctxt.name.clone(),
-        class: MaybeWeak::Strong(static_class.clone()),
-        super_class: Weak::new(),
+        class: Some(static_class.clone()),
+        super_class: None,
         locals: IndexMap::new(),
         methods: IndexMap::new(),
         is_static: false,
@@ -685,11 +739,9 @@ pub fn compile_class(
         let signature = instance_class_ctxt
             .interner
             .intern(method.signature.as_str());
-        let mut method = compile_method(&mut instance_class_ctxt, method)?;
-        method.holder = Rc::downgrade(&instance_class);
-        instance_class_ctxt
-            .methods
-            .insert(signature, Rc::new(method));
+        let method = compile_method(&mut instance_class_ctxt, &instance_class, method)?;
+        let method = instance_class_ctxt.heap.allocate(method);
+        instance_class_ctxt.methods.insert(signature, method);
     }
 
     if let Some(primitives) = primitives::get_instance_primitives(&defn.name) {
@@ -705,12 +757,11 @@ pub fn compile_class(
             let method = Method {
                 signature: signature.to_string(),
                 kind: MethodKind::Primitive(primitive),
-                holder: Rc::downgrade(&instance_class),
+                holder: instance_class.clone(),
             };
             let signature = instance_class_ctxt.interner.intern(signature);
-            instance_class_ctxt
-                .methods
-                .insert(signature, Rc::new(method));
+            let method = instance_class_ctxt.heap.allocate(method);
+            instance_class_ctxt.methods.insert(signature, method);
         }
     }
 
@@ -718,7 +769,7 @@ pub fn compile_class(
     instance_class_mut.locals = instance_class_ctxt
         .fields
         .into_iter()
-        .map(|name| (name, Value::Nil))
+        .map(|name| (name, Value::NIL))
         .collect();
     instance_class_mut.methods = instance_class_ctxt.methods;
     drop(instance_class_mut);
