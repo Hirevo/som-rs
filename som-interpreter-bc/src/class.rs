@@ -1,21 +1,13 @@
 use std::fmt;
-use std::rc::Rc;
 
 use indexmap::IndexMap;
+
+use som_gc::{Gc, Trace};
 
 use crate::interner::Interned;
 use crate::method::Method;
 use crate::value::Value;
-use crate::{SOMRef, SOMWeakRef};
-
-/// A reference that may be either weak or owned/strong.
-#[derive(Debug, Clone)]
-pub enum MaybeWeak<A> {
-    /// An owned reference.
-    Strong(SOMRef<A>),
-    /// A weak reference.
-    Weak(SOMWeakRef<A>),
-}
+use crate::SOMRef;
 
 /// Represents a loaded class.
 #[derive(Clone)]
@@ -23,16 +15,29 @@ pub struct Class {
     /// The class' name.
     pub name: String,
     /// The class of this class.
-    pub class: MaybeWeak<Class>,
+    pub class: Option<SOMRef<Class>>,
     /// The superclass of this class.
-    // TODO: Should probably be `Option<SOMRef<Class>>`.
-    pub super_class: SOMWeakRef<Class>,
+    pub super_class: Option<SOMRef<Class>>,
     /// The class' locals.
     pub locals: IndexMap<Interned, Value>,
     /// The class' methods/invokables.
-    pub methods: IndexMap<Interned, Rc<Method>>,
+    pub methods: IndexMap<Interned, Gc<Method>>,
     /// Is this class a static one ?
     pub is_static: bool,
+}
+
+impl Trace for Class {
+    #[inline]
+    fn trace(&self) {
+        self.class.trace();
+        self.super_class.trace();
+        for it in self.locals.values() {
+            it.trace();
+        }
+        for it in self.methods.values() {
+            it.trace();
+        }
+    }
 }
 
 impl Class {
@@ -43,51 +48,40 @@ impl Class {
 
     /// Get the class of this class.
     pub fn class(&self) -> SOMRef<Self> {
-        match self.class {
-            MaybeWeak::Weak(ref weak) => weak.upgrade().unwrap_or_else(|| {
-                panic!("superclass dropped, cannot upgrade ref ({})", self.name())
-            }),
-            MaybeWeak::Strong(ref owned) => owned.clone(),
-        }
+        self.class.clone().unwrap()
     }
 
-    /// Set the class of this class (as a weak reference).
-    pub fn set_class(&mut self, class: &SOMRef<Self>) {
-        self.class = MaybeWeak::Weak(Rc::downgrade(class));
-    }
-
-    /// Set the class of this class (as a strong reference).
-    pub fn set_class_owned(&mut self, class: &SOMRef<Self>) {
-        self.class = MaybeWeak::Strong(class.clone());
+    /// Set the class of this class.
+    pub fn set_class(&mut self, class: SOMRef<Self>) {
+        self.class = Some(class);
     }
 
     /// Get the superclass of this class.
     pub fn super_class(&self) -> Option<SOMRef<Self>> {
-        self.super_class.upgrade()
+        self.super_class.clone()
     }
 
-    /// Set the superclass of this class (as a weak reference).
-    pub fn set_super_class(&mut self, class: &SOMRef<Self>) {
-        self.super_class = Rc::downgrade(class);
+    /// Set the superclass of this class.
+    pub fn set_super_class(&mut self, class: SOMRef<Self>) {
+        self.super_class = Some(class);
     }
 
     /// Search for a given method within this class.
-    pub fn lookup_method(&self, signature: Interned) -> Option<Rc<Method>> {
-        self.methods.get(&signature).cloned().or_else(|| {
-            self.super_class
-                .upgrade()?
-                .borrow()
-                .lookup_method(signature)
-        })
+    pub fn lookup_method(&self, signature: Interned) -> Option<Gc<Method>> {
+        if let Some(method) = self.methods.get(&signature).cloned() {
+            return Some(method);
+        }
+
+        self.super_class.as_ref()?.borrow().lookup_method(signature)
     }
 
     /// Search for a local binding.
     pub fn lookup_local(&self, idx: usize) -> Option<Value> {
-        self.locals.values().nth(idx).cloned().or_else(|| {
-            let super_class = self.super_class()?;
-            let local = super_class.borrow_mut().lookup_local(idx)?;
-            Some(local)
-        })
+        if let Some(local) = self.locals.values().nth(idx).cloned() {
+            return Some(local);
+        }
+
+        self.super_class.as_ref()?.borrow_mut().lookup_local(idx)
     }
 
     /// Assign a value to a local binding.
@@ -96,9 +90,11 @@ impl Class {
             *local = value;
             return Some(());
         }
-        let super_class = self.super_class()?;
-        super_class.borrow_mut().assign_local(idx, value)?;
-        Some(())
+
+        self.super_class
+            .as_ref()?
+            .borrow_mut()
+            .assign_local(idx, value)
     }
 }
 

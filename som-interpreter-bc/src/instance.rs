@@ -1,4 +1,7 @@
+use std::cell::RefCell;
 use std::fmt;
+
+use som_gc::{GcHeap, Trace};
 
 use crate::class::Class;
 use crate::value::Value;
@@ -6,16 +9,27 @@ use crate::SOMRef;
 
 /// Represents a generic (non-primitive) class instance.
 #[derive(Clone)]
+#[repr(C)]
 pub struct Instance {
     /// The class of which this is an instance from.
     pub class: SOMRef<Class>,
-    /// This instance's locals.
-    pub locals: Vec<Value>,
+    /// The number of locals this instance has.
+    pub nb_locals: usize,
+}
+
+impl Trace for Instance {
+    #[inline]
+    fn trace(&self) {
+        self.class.trace();
+        for field in self.fields_iter() {
+            field.trace();
+        }
+    }
 }
 
 impl Instance {
     /// Construct an instance for a given class.
-    pub fn from_class(class: SOMRef<Class>) -> Self {
+    pub fn from_class(heap: &mut GcHeap, class: SOMRef<Class>) -> SOMRef<Self> {
         let mut locals = Vec::new();
 
         fn collect_locals(class: &SOMRef<Class>, locals: &mut Vec<Value>) {
@@ -27,9 +41,18 @@ impl Instance {
 
         collect_locals(&class, &mut locals);
 
-        // let locals = class.borrow().locals.iter().map(|_| Value::Nil).collect();
+        let nb_locals = locals.len();
+        let instance = heap.allocate_with_additional_size(
+            RefCell::new(Self { class, nb_locals }),
+            std::mem::size_of::<Value>() * nb_locals,
+        );
 
-        Self { class, locals }
+        let ptr = unsafe { RefCell::as_ptr(&*instance).add(1) }.cast::<Value>();
+        for idx in 0..nb_locals {
+            unsafe { ptr.add(idx).write(Value::Nil) };
+        }
+
+        instance
     }
 
     /// Get the class of which this is an instance from.
@@ -44,13 +67,28 @@ impl Instance {
 
     /// Search for a local binding.
     pub fn lookup_local(&self, idx: usize) -> Option<Value> {
-        self.locals.get(idx).cloned()
+        (idx < self.nb_locals).then(|| unsafe {
+            (&*std::ptr::from_ref(self).add(1).cast::<Value>().add(idx)).clone()
+        })
     }
 
     /// Assign a value to a local binding.
     pub fn assign_local(&mut self, idx: usize, value: Value) -> Option<()> {
-        *self.locals.get_mut(idx)? = value;
-        Some(())
+        (idx < self.nb_locals).then(|| unsafe {
+            *(&mut *std::ptr::from_mut(self).add(1).cast::<Value>().add(idx)) = value;
+        })
+    }
+
+    /// Returns an iterator over the instance's fields.
+    pub fn fields_iter(&self) -> impl Iterator<Item = &Value> {
+        let ptr = unsafe { std::ptr::from_ref(self).add(1) }.cast::<Value>();
+        (0..self.nb_locals).map(move |idx| unsafe { &*ptr.add(idx) })
+    }
+
+    /// Returns a mutable iterator over the instance's fields.
+    pub fn fields_iter_mut(&mut self) -> impl Iterator<Item = &mut Value> {
+        let ptr = unsafe { std::ptr::from_mut(self).add(1) }.cast::<Value>();
+        (0..self.nb_locals).map(move |idx| unsafe { &mut *ptr.add(idx) })
     }
 }
 

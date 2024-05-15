@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use som_gc::GcHeap;
 
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
@@ -10,16 +10,16 @@ pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] =
     &[("asString", self::as_string, true)];
 pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
 
-fn as_string(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn as_string(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "Symbol>>#asString";
 
     expect_args!(SIGNATURE, interpreter, [
         Value::Symbol(sym) => sym,
     ]);
 
-    interpreter.stack.push(Value::String(Rc::new(
-        universe.lookup_symbol(sym).to_string(),
-    )));
+    interpreter.stack.push(Value::String(
+        heap.allocate(universe.lookup_symbol(sym).to_string()),
+    ));
 }
 
 /// Search for an instance primitive matching the given signature.

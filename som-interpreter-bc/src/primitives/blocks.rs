@@ -1,3 +1,5 @@
+use som_gc::GcHeap;
+
 use crate::frame::FrameKind;
 use crate::interpreter::Interpreter;
 use crate::primitives::PrimitiveFn;
@@ -15,7 +17,7 @@ pub mod block1 {
     ];
     pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
 
-    fn value(interpreter: &mut Interpreter, _: &mut Universe) {
+    fn value(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
         const SIGNATURE: &str = "Block1>>#value";
 
         expect_args!(SIGNATURE, interpreter, [
@@ -26,10 +28,10 @@ pub mod block1 {
             block: block.clone(),
         };
 
-        interpreter.push_frame(kind);
+        interpreter.push_frame(heap, kind);
     }
 
-    fn restart(interpreter: &mut Interpreter, _: &mut Universe) {
+    fn restart(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
         const SIGNATURE: &str = "Block>>#restart";
 
         expect_args!(SIGNATURE, interpreter, [Value::Block(_)]);
@@ -62,7 +64,7 @@ pub mod block2 {
     pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[("value:", self::value, true)];
     pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
 
-    fn value(interpreter: &mut Interpreter, _: &mut Universe) {
+    fn value(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
         const SIGNATURE: &str = "Block2>>#value:";
 
         expect_args!(SIGNATURE, interpreter, [
@@ -74,7 +76,7 @@ pub mod block2 {
             block: block.clone(),
         };
 
-        let frame = interpreter.push_frame(kind);
+        let frame = interpreter.push_frame(heap, kind);
         frame.borrow_mut().args.push(argument);
     }
 
@@ -103,7 +105,7 @@ pub mod block3 {
         &[("value:with:", self::value_with, true)];
     pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
 
-    fn value_with(interpreter: &mut Interpreter, _: &mut Universe) {
+    fn value_with(interpreter: &mut Interpreter, heap: &mut GcHeap, _: &mut Universe) {
         const SIGNATURE: &str = "Block3>>#value:with:";
 
         expect_args!(SIGNATURE, interpreter, [
@@ -116,7 +118,7 @@ pub mod block3 {
             block: block.clone(),
         };
 
-        let frame = interpreter.push_frame(kind);
+        let frame = interpreter.push_frame(heap, kind);
         frame.borrow_mut().args.push(argument1);
         frame.borrow_mut().args.push(argument2);
     }

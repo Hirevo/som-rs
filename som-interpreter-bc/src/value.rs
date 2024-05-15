@@ -1,7 +1,7 @@
 use std::fmt;
-use std::rc::Rc;
 
 use num_bigint::BigInt;
+use som_gc::{Gc, Trace};
 
 use crate::block::Block;
 use crate::class::Class;
@@ -13,6 +13,7 @@ use crate::SOMRef;
 
 /// Represents an SOM value.
 #[derive(Clone)]
+#[repr(C)]
 pub enum Value {
     /// The **nil** value.
     Nil,
@@ -29,17 +30,50 @@ pub enum Value {
     /// An interned symbol value.
     Symbol(Interned),
     /// A string value.
-    String(Rc<String>),
+    String(Gc<String>),
     /// An array of values.
     Array(SOMRef<Vec<Self>>),
     /// A block value, ready to be evaluated.
-    Block(Rc<Block>),
+    Block(Gc<Block>),
     /// A generic (non-primitive) class instance.
     Instance(SOMRef<Instance>),
     /// A bare class object.
     Class(SOMRef<Class>),
     /// A bare invokable.
-    Invokable(Rc<Method>),
+    Invokable(Gc<Method>),
+}
+
+impl Trace for Value {
+    #[inline]
+    fn trace(&self) {
+        match self {
+            Value::Nil => {}
+            Value::System => {}
+            Value::Boolean(_) => {}
+            Value::Integer(_) => {}
+            Value::BigInteger(_) => {}
+            Value::Double(_) => {}
+            Value::Symbol(_) => {}
+            Value::String(string) => {
+                string.trace();
+            }
+            Value::Array(array) => {
+                array.trace();
+            }
+            Value::Block(block) => {
+                block.trace();
+            }
+            Value::Instance(instance) => {
+                instance.trace();
+            }
+            Value::Class(class) => {
+                class.trace();
+            }
+            Value::Invokable(method) => {
+                method.trace();
+            }
+        }
+    }
 }
 
 impl Value {
@@ -64,7 +98,7 @@ impl Value {
     }
 
     /// Search for a given method for this value.
-    pub fn lookup_method(&self, universe: &Universe, signature: Interned) -> Option<Rc<Method>> {
+    pub fn lookup_method(&self, universe: &Universe, signature: Interned) -> Option<Gc<Method>> {
         self.class(universe).borrow().lookup_method(signature)
     }
 
@@ -119,11 +153,11 @@ impl Value {
                 instance.borrow().class().borrow().name(),
             ),
             Self::Class(class) => class.borrow().name().to_string(),
-            Self::Invokable(invokable) => invokable
-                .holder()
-                .upgrade()
-                .map(|holder| format!("{}>>#{}", holder.borrow().name(), invokable.signature()))
-                .unwrap_or_else(|| format!("??>>#{}", invokable.signature())),
+            Self::Invokable(invokable) => format!(
+                "{}>>#{}",
+                invokable.holder.borrow().name(),
+                invokable.signature(),
+            ),
         }
     }
 }
@@ -143,12 +177,12 @@ impl PartialEq for Value {
                 a.eq(&BigInt::from(*b))
             }
             (Self::Symbol(a), Self::Symbol(b)) => a.eq(b),
-            (Self::String(a), Self::String(b)) => Rc::ptr_eq(a, b),
-            (Self::Array(a), Self::Array(b)) => Rc::ptr_eq(a, b),
-            (Self::Instance(a), Self::Instance(b)) => Rc::ptr_eq(a, b),
-            (Self::Class(a), Self::Class(b)) => Rc::ptr_eq(a, b),
-            (Self::Block(a), Self::Block(b)) => Rc::ptr_eq(a, b),
-            (Self::Invokable(a), Self::Invokable(b)) => Rc::ptr_eq(a, b),
+            (Self::String(a), Self::String(b)) => Gc::ptr_eq(a, b),
+            (Self::Array(a), Self::Array(b)) => Gc::ptr_eq(a, b),
+            (Self::Instance(a), Self::Instance(b)) => Gc::ptr_eq(a, b),
+            (Self::Class(a), Self::Class(b)) => Gc::ptr_eq(a, b),
+            (Self::Block(a), Self::Block(b)) => Gc::ptr_eq(a, b),
+            (Self::Invokable(a), Self::Invokable(b)) => Gc::ptr_eq(a, b),
             _ => false,
         }
     }
@@ -164,17 +198,13 @@ impl fmt::Debug for Value {
             Self::BigInteger(val) => f.debug_tuple("BigInteger").field(val).finish(),
             Self::Double(val) => f.debug_tuple("Double").field(val).finish(),
             Self::Symbol(val) => f.debug_tuple("Symbol").field(val).finish(),
-            Self::String(val) => f.debug_tuple("String").field(val).finish(),
-            Self::Array(val) => f.debug_tuple("Array").field(&val.borrow()).finish(),
-            Self::Block(val) => f.debug_tuple("Block").field(val).finish(),
+            Self::String(val) => f.debug_tuple("String").field(val.as_ref()).finish(),
+            Self::Array(val) => f.debug_tuple("Array").field(val.as_ref()).finish(),
+            Self::Block(val) => f.debug_tuple("Block").field(val.as_ref()).finish(),
             Self::Instance(val) => f.debug_tuple("Instance").field(&val.borrow()).finish(),
-            Self::Class(val) => f.debug_tuple("Class").field(&val.borrow()).finish(),
+            Self::Class(val) => f.debug_tuple("Class").field(val.as_ref()).finish(),
             Self::Invokable(val) => {
-                let signature = val
-                    .holder()
-                    .upgrade()
-                    .map(|holder| format!("{}>>#{}", holder.borrow().name(), val.signature()))
-                    .unwrap_or_else(|| format!("??>>#{}", val.signature()));
+                let signature = format!("{}>>#{}", val.holder.borrow().name(), val.signature());
                 f.debug_tuple("Invokable").field(&signature).finish()
             }
         }
