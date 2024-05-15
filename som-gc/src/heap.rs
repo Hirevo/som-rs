@@ -1,11 +1,17 @@
 use std::cell::Cell;
 use std::ptr::NonNull;
+use std::sync::mpsc;
+use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use crate::gc_box::GcBox;
 
 use crate::gc::Gc;
 use crate::trace::Trace;
+
+struct SweepedObject(NonNull<GcBox<dyn Trace>>);
+
+unsafe impl Send for SweepedObject {}
 
 pub struct GcStats {
     pub collections_performed: usize,
@@ -24,6 +30,8 @@ pub struct GcHeap {
     stats: GcStats,
     params: GcParams,
     objects: Vec<NonNull<GcBox<dyn Trace + 'static>>>,
+    sweep_thread: JoinHandle<()>,
+    sweep_queue: mpsc::Sender<SweepedObject>,
 }
 
 impl Default for GcParams {
@@ -53,6 +61,15 @@ impl GcHeap {
 
     /// Creates a new empty GC heap, with the specified parameters.
     pub fn with_params(params: GcParams) -> Self {
+        // TODO: should we limit the channel's buffer with `sync_channel` ?
+        let (sweep_queue, rx) = mpsc::channel();
+        let sweep_thread = thread::spawn(move || {
+            while let Ok(SweepedObject(obj)) = rx.recv() {
+                // SAFETY: The object is assessed to be unreachable by the GC mark phase.
+                drop(unsafe { Box::from_raw(obj.as_ptr()) });
+            }
+        });
+
         Self {
             params,
             stats: GcStats {
@@ -62,6 +79,8 @@ impl GcHeap {
                 total_time_spent: Duration::ZERO,
             },
             objects: Vec::default(),
+            sweep_thread,
+            sweep_queue,
         }
     }
 
@@ -102,11 +121,13 @@ impl GcHeap {
     fn sweep(&mut self) {
         self.objects.retain_mut(|obj| {
             // SAFETY: we don't access that reference again after we drop it.
-            let is_retained = unsafe { obj.as_ref() }.marked.replace(false);
+            let obj_ref = unsafe { obj.as_ref() };
+            let is_retained = obj_ref.marked.replace(false);
             if !is_retained {
-                let value = unsafe { Box::from_raw(obj.as_ptr()) };
-                self.stats.bytes_allocated -= std::mem::size_of_val::<GcBox<_>>(&*value);
-                drop(value);
+                self.stats.bytes_allocated -= std::mem::size_of_val(obj_ref);
+                self.sweep_queue
+                    .send(SweepedObject(obj.clone()))
+                    .expect("GC: could not schedule object to be swept");
             }
             is_retained
         });
