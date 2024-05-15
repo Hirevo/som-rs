@@ -41,7 +41,8 @@ impl Drop for GcHeap {
     fn drop(&mut self) {
         for obj in self.objects.iter() {
             // SAFETY: we don't access that reference again after we drop it.
-            drop(unsafe { Box::from_raw(obj.as_ptr()) });
+            let layout = unsafe { obj.as_ref() }.layout;
+            unsafe { std::alloc::dealloc(obj.as_ptr().cast(), layout) };
         }
     }
 }
