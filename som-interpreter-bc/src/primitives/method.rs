@@ -1,4 +1,7 @@
+use som_gc::GcHeap;
+
 use crate::interpreter::Interpreter;
+use crate::method::Method;
 use crate::primitives::PrimitiveFn;
 use crate::universe::Universe;
 use crate::value::Value;
@@ -11,20 +14,19 @@ pub static INSTANCE_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[
 ];
 pub static CLASS_PRIMITIVES: &[(&str, PrimitiveFn, bool)] = &[];
 
-fn holder(interpreter: &mut Interpreter, _: &mut Universe) {
+fn holder(interpreter: &mut Interpreter, _: &mut GcHeap, _: &mut Universe) {
     const SIGNATURE: &str = "Method>>#holder";
 
     expect_args!(SIGNATURE, interpreter, [
         Value::Invokable(invokable) => invokable,
     ]);
 
-    match invokable.holder().upgrade() {
-        Some(holder) => interpreter.stack.push(Value::Class(holder)),
-        None => panic!("'{}': method sholder has been collected", SIGNATURE),
-    }
+    interpreter
+        .stack
+        .push(Value::Class(invokable.holder.clone()));
 }
 
-fn signature(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn signature(interpreter: &mut Interpreter, _: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "Method>>#signature";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -35,7 +37,7 @@ fn signature(interpreter: &mut Interpreter, universe: &mut Universe) {
     interpreter.stack.push(Value::Symbol(sym))
 }
 
-fn invoke_on_with(interpreter: &mut Interpreter, universe: &mut Universe) {
+fn invoke_on_with(interpreter: &mut Interpreter, heap: &mut GcHeap, universe: &mut Universe) {
     const SIGNATURE: &str = "Method>>#invokeOn:with:";
 
     expect_args!(SIGNATURE, interpreter, [
@@ -45,7 +47,8 @@ fn invoke_on_with(interpreter: &mut Interpreter, universe: &mut Universe) {
     ]);
 
     let args = args.borrow().iter().cloned().collect();
-    invokable.invoke(interpreter, universe, receiver, args);
+
+    Method::invoke(invokable, interpreter, heap, universe, receiver, args);
 }
 
 /// Search for an instance primitive matching the given signature.

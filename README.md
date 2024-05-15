@@ -22,6 +22,7 @@ Here is a rundown of these different crates (as of now, layout may change in the
 | **`som-parser-core`**     | The common foundational types for building parsers            |
 | **`som-parser-text`**     | A SOM parser that works directly with text (without a lexer). |
 | **`som-parser-symbols`**  | A SOM parser that works with **`som-lexer`**'s output.        |
+| **`som-gc`**              | The SOM mark-and-sweep garbage collector as a library.        |
 
 [**Cargo workspace**]: https://doc.rust-lang.org/cargo/reference/workspaces.html
 

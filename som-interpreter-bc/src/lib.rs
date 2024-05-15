@@ -3,7 +3,8 @@
 //!
 
 use std::cell::RefCell;
-use std::rc::{Rc, Weak};
+
+use som_gc::Gc;
 
 /// Facilities for manipulating blocks.
 pub mod block;
@@ -32,7 +33,5 @@ pub mod universe;
 /// Facilities for manipulating values.
 pub mod value;
 
-/// A strong and owning reference to an object.
-pub type SOMRef<T> = Rc<RefCell<T>>;
-/// A weak reference to an object.
-pub type SOMWeakRef<T> = Weak<RefCell<T>>;
+/// A reference to a GC-ed mutable object.
+pub type SOMRef<T> = Gc<RefCell<T>>;
